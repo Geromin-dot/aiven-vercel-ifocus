@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
 }
 
 // NextAuth Required Models
@@ -13,12 +13,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -76,8 +76,8 @@ model Deck {
 
 model Card {
   id        String   @id @default(cuid())
-  front     String
-  back      String
+  front     String   @db.Text
+  back      String   @db.Text
   deckId    String
   deck      Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
