@@ -8,6 +8,7 @@ export default function SettingsPage() {
         {/* COLUMN 1: PROFILE OVERVIEW */}
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2.5rem 2rem' }}>
           <div className="avatar-wrapper" style={{ position: 'relative', marginBottom: '1.5rem' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex&backgroundColor=c0aede" 
               alt="Avatar" 

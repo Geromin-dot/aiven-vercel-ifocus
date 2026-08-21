@@ -33,6 +33,7 @@ export default function Sidebar() {
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', marginBottom: '0.5rem' }}>
               {session.user.image ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={session.user.image} alt="User Avatar" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
               ) : (
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }}></div>
