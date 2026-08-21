@@ -22,7 +22,7 @@ export default function Sidebar() {
       </div>
       
       <nav className="nav-links">
-        <Link href="/" className={pathname === '/' ? 'active' : ''}>Home</Link>
+        <Link href="/dashboard" className={pathname === '/dashboard' ? 'active' : ''}>Home</Link>
         <Link href="/flashcards" className={pathname === '/flashcards' ? 'active' : ''}>Flashcards</Link>
         <Link href="/analytics" className={pathname === '/analytics' ? 'active' : ''}>Analytics</Link>
         <Link href="/coach" className={pathname === '/coach' ? 'active' : ''}>AI Coach</Link>
