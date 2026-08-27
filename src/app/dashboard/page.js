@@ -47,12 +47,20 @@ export default function CommandCenterPage() {
 
   const saveTodos = (newTodos) => {
     setTodos(newTodos);
-    localStorage.setItem('ifocus_tasks', JSON.stringify(newTodos));
+    try {
+      localStorage.setItem('ifocus_tasks', JSON.stringify(newTodos));
+    } catch (e) {
+      console.warn("LocalStorage failed:", e);
+    }
   };
 
   const saveHistory = (newHistory) => {
     setPastEntries(newHistory);
-    localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
+    try {
+      localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
+    } catch (e) {
+      console.warn("LocalStorage failed:", e);
+    }
   };
 
   // Pomodoro Logic
@@ -110,16 +118,27 @@ export default function CommandCenterPage() {
   };
 
   // To-Do Logic
-  const addTodo = () => {
-    if (todoInput.trim()) {
+  const addTodo = (e) => {
+    if (e) e.preventDefault();
+    if (!todoInput || !todoInput.trim()) {
+      alert("Oops! The task input is empty.");
+      return;
+    }
+    
+    try {
       const newTask = {
         id: Date.now().toString(),
         text: todoInput,
         completed: false,
         priority: todoPriority
       };
-      saveTodos([newTask, ...todos]);
+      
+      // Update state and storage
+      const updatedTodos = [newTask, ...todos];
+      saveTodos(updatedTodos);
       setTodoInput('');
+    } catch (err) {
+      alert("Error adding task: " + err.message);
     }
   };
 
@@ -217,7 +236,7 @@ export default function CommandCenterPage() {
             <option value="medium">Med</option>
             <option value="low">Low</option>
           </select>
-          <button className="btn-primary" onClick={addTodo} style={{ width: 'auto', margin: 0, padding: '0 1.5rem' }}>+ Add</button>
+          <button type="button" className="btn-primary" onClick={addTodo} style={{ width: 'auto', margin: 0, padding: '0 1.5rem' }}>+ Add</button>
         </div>
 
         <div className="todo-list" style={{ flex: 1 }}>
