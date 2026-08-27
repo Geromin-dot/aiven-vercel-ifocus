@@ -151,10 +151,10 @@ header {
     position: sticky;
     top: 0;
     flex-shrink: 0;
-    background: linear-gradient(180deg, var(--primary-accent) 0%, var(--bg-color) 100%);
+    background: #8FA37C;
     padding: 2rem 1.75rem 4.5rem 1.75rem;
     box-sizing: border-box;
-    border-right: 1px solid var(--glass-border);
+    border-right: none;
 }
 
 .logo {
@@ -386,11 +386,11 @@ textarea:focus {
 /* ===== Buttons ===== */
 .btn-primary {
     width: 100%;
-    background: linear-gradient(135deg, var(--primary-accent), var(--secondary-accent));
+    background: #8FA37C;
     color: white;
     border: none;
     padding: 1rem;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
@@ -400,7 +400,7 @@ textarea:focus {
     justify-content: center;
     gap: 0.5rem;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(95, 143, 94, 0.3);
+    box-shadow: none;
 }
 
 .btn-primary:hover {
@@ -802,6 +802,8 @@ textarea:focus {
     transition: all 0.3s ease;
     cursor: grab;
     animation: fadeIn 0.3s ease;
+    position: relative;
+    overflow: hidden;
 }
 
 .todo-item:active {
@@ -869,18 +871,18 @@ textarea:focus {
 }
 
 .todo-priority-badge.high {
-    background: rgba(239, 68, 68, 0.15);
-    color: #fca5a5;
+    background: #ffe4e6;
+    color: #e11d48;
 }
 
 .todo-priority-badge.medium {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fcd34d;
+    background: #fef3c7;
+    color: #d97706;
 }
 
 .todo-priority-badge.low {
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
+    background: #d1fae5;
+    color: #059669;
 }
 
 .todo-delete {
