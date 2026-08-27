@@ -67,10 +67,8 @@ export default function LandingPage() {
       {/* LEFT SIDE: Image & Text Overlay */}
       <div style={{ 
         flex: '1.2', 
-        position: 'relative', 
-        display: 'none', 
-        '@media (min-width: 768px)': { display: 'block' } // Hide on mobile, unfortunately inline media queries don't work in React style, so we'll use a className or just assume desktop for now. Let's use standard CSS.
-      }} className="hide-on-mobile">
+        position: 'relative'
+      }} className="hero-side">
         <div style={{ position: 'absolute', inset: 0 }}>
           <Image 
             src="/hero-bg.jpg" 
@@ -263,10 +261,10 @@ export default function LandingPage() {
         </div>
       </div>
       
-      {/* Basic responsive style since inline media queries don't work */}
       <style dangerouslySetInnerHTML={{__html: `
-        @media (max-width: 768px) {
-          .hide-on-mobile { display: none !important; }
+        .hero-side { display: none; }
+        @media (min-width: 768px) {
+          .hero-side { display: block !important; }
         }
       `}} />
     </div>
