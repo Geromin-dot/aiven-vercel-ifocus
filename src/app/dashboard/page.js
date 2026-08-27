@@ -119,9 +119,17 @@ export default function CommandCenterPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, priority })
         });
+        
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server error: ${res.status}`);
+        }
+        
         const newTodo = await res.json();
         setTodos(current => current.map(t => t.id === tempId ? newTodo : t));
       } catch (err) {
+        console.error("ADD TODO ERROR:", err);
+        alert("Failed to add task: " + err.message);
         setTodos(current => current.filter(t => t.id !== tempId));
       }
     }
