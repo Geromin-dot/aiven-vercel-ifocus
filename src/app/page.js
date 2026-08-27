@@ -117,15 +117,22 @@ export default function LandingPage() {
       </div>
 
       <style>{`
-        @keyframes movingGradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes float1 {
+          0% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(15%, 20%) scale(1.2); }
+        }
+        @keyframes float2 {
+          0% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(-15%, -20%) scale(1.1); }
+        }
+        @keyframes float3 {
+          0% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(20%, -15%) scale(1.3); }
         }
         .animated-bg-container {
-          background: linear-gradient(-45deg, #f7f6f3, #e8f0e8, #f5ecd8, #eef2eb);
-          background-size: 400% 400%;
-          animation: movingGradient 15s ease infinite;
+          background-color: var(--bg-default);
+          position: relative;
+          overflow: hidden;
         }
       `}</style>
       
@@ -140,14 +147,22 @@ export default function LandingPage() {
         maxWidth: '100%',
         zIndex: 10
       }}>
+        {/* Floating Ambient Blobs */}
+        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '60%', height: '60%', background: 'rgba(95, 143, 94, 0.25)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float1 12s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '50%', height: '50%', background: 'rgba(211, 196, 161, 0.3)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float2 14s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', top: '40%', left: '30%', width: '40%', height: '40%', background: 'rgba(95, 143, 94, 0.15)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float3 16s ease-in-out infinite alternate', zIndex: 0 }}></div>
+
         <div style={{ 
           width: '100%', 
           maxWidth: '420px', 
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(247, 246, 243, 1) 100%)', 
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           padding: '2.5rem 2rem', 
           borderRadius: '24px', 
-          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.8)'
+          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05), inset 0 0 0 1px rgba(255,255,255,0.5)',
+          zIndex: 10,
+          position: 'relative'
         }}>
           
           {/* Header & Indicator */}
