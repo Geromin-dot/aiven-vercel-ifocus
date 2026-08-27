@@ -159,7 +159,7 @@ export default function LandingPage() {
           </div>
 
           {/* Toggle Buttons */}
-          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
             <button 
               onClick={() => { setActiveTab("login"); setError(""); }}
               style={{ 
