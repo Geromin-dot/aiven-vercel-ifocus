@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
+import heroImg from "../img/hero.jpg";
+
 export default function LandingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -71,14 +73,14 @@ export default function LandingPage() {
       }} className="hero-side">
         <div style={{ position: 'absolute', inset: 0 }}>
           <Image 
-            src="/hero-bg.jpg" 
+            src={heroImg} 
             alt="Student studying with iFocus" 
             fill 
             style={{ objectFit: 'cover', objectPosition: 'center' }} 
             priority
           />
           {/* Dark gradient overlay for text readability */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.4) 100%)' }}></div>
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.4) 100%)' }}></div>
         </div>
 
         <div style={{ position: 'absolute', bottom: '10%', left: '10%', right: '10%', color: 'white', zIndex: 10 }}>
@@ -91,12 +93,12 @@ export default function LandingPage() {
               <line x1="2" y1="12" x2="6" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round" />
               <line x1="18" y1="12" x2="22" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            <h1 style={{ fontSize: '2rem', fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>iFocus</h1>
+            <h1 style={{ fontSize: '2rem', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: 'white' }}>iFocus</h1>
           </div>
-          <h2 style={{ fontSize: '3.5rem', fontWeight: 600, lineHeight: 1.1, marginBottom: '1.5rem', letterSpacing: '-1px' }}>
+          <h2 style={{ fontSize: '3.5rem', fontWeight: 600, lineHeight: 1.1, marginBottom: '1.5rem', letterSpacing: '-1px', color: 'white' }}>
             Master your time.<br/>Elevate your focus.
           </h2>
-          <p style={{ fontSize: '1.25rem', opacity: 0.9, maxWidth: '500px', lineHeight: 1.6 }}>
+          <p style={{ fontSize: '1.25rem', opacity: 0.9, maxWidth: '500px', lineHeight: 1.6, color: 'white' }}>
             The ultimate productivity hub designed for deep work. Organize your tasks, master your flashcards, and let AI coach you to success.
           </p>
         </div>
@@ -110,7 +112,7 @@ export default function LandingPage() {
         justifyContent: 'center', 
         alignItems: 'center',
         padding: '2rem',
-        background: 'var(--bg-default)',
+        background: 'var(--bg-surface)',
         maxWidth: '100%',
         zIndex: 10
       }}>
