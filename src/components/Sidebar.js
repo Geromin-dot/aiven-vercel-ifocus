@@ -7,6 +7,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
+  if (pathname === '/') return null;
+
   return (
     <header>
       <div className="logo">
