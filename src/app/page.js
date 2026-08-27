@@ -64,7 +64,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', background: 'var(--bg-default)', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, display: 'flex', height: '100vh', width: '100vw', background: 'var(--bg-surface)', overflow: 'hidden', zIndex: 100 }}>
       
       {/* LEFT SIDE: Image & Text Overlay */}
       <div style={{ 
@@ -133,7 +133,7 @@ export default function LandingPage() {
                 background: 'transparent',
                 color: activeTab === "login" ? 'var(--text-primary)' : 'var(--text-secondary)',
                 fontWeight: activeTab === "login" ? 600 : 500,
-                borderBottom: activeTab === "login" ? '2px solid var(--primary)' : '2px solid transparent',
+                borderBottom: activeTab === "login" ? '2px solid var(--primary-accent)' : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: '1rem',
                 transition: 'all 0.2s ease'
@@ -149,7 +149,7 @@ export default function LandingPage() {
                 background: 'transparent',
                 color: activeTab === "register" ? 'var(--text-primary)' : 'var(--text-secondary)',
                 fontWeight: activeTab === "register" ? 600 : 500,
-                borderBottom: activeTab === "register" ? '2px solid var(--primary)' : '2px solid transparent',
+                borderBottom: activeTab === "register" ? '2px solid var(--primary-accent)' : '2px solid transparent',
                 cursor: 'pointer',
                 fontSize: '1rem',
                 transition: 'all 0.2s ease'
@@ -212,7 +212,7 @@ export default function LandingPage() {
                 marginTop: '1rem', 
                 padding: '0.85rem', 
                 borderRadius: '8px', 
-                background: 'var(--primary)', 
+                background: 'var(--primary-accent)', 
                 color: 'white', 
                 border: 'none', 
                 fontWeight: 600, 
