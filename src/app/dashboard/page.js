@@ -15,6 +15,9 @@ export default function CommandCenterPage() {
   const [aiFeedback, setAiFeedback] = useState('');
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
 
+  // Past Entries State (LocalStorage)
+  const [pastEntries, setPastEntries] = useState([]);
+
   // Pomodoro State
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
@@ -27,27 +30,30 @@ export default function CommandCenterPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const tracks = ['Chill Lofi', 'Study Music', 'Rain Ambient'];
 
-  // Past Entries Mock
-  const pastEntries = [
-    { id: 1, date: '7/27/26, 8:47 AM', text: 'I am feeling motivated right now!', state: 'Motivated' },
-    { id: 2, date: '7/25/26, 9:02 PM', text: 'I am very stressed and anxious about my upcoming exam.', state: 'Stressed' },
-    { id: 3, date: '7/24/26, 2:55 PM', text: 'Im frustrated right now.', state: 'Stressed' },
-    { id: 4, date: '7/23/26, 10:20 AM', text: 'I feel lazy I dont want to work', state: 'Distracted' },
-  ];
-
-  // Fetch initial todos
+  // Load from LocalStorage exactly like the legacy prototype
   useEffect(() => {
-    fetch('/api/todos')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setTodos(data);
-        setLoadingTodos(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch todos", err);
-        setLoadingTodos(false);
-      });
+    const storedTasks = localStorage.getItem('ifocus_tasks');
+    if (storedTasks) {
+      setTodos(JSON.parse(storedTasks));
+    }
+    
+    const storedHistory = localStorage.getItem('ifocus_journal_history');
+    if (storedHistory) {
+      setPastEntries(JSON.parse(storedHistory));
+    }
+    
+    setLoadingTodos(false);
   }, []);
+
+  const saveTodos = (newTodos) => {
+    setTodos(newTodos);
+    localStorage.setItem('ifocus_tasks', JSON.stringify(newTodos));
+  };
+
+  const saveHistory = (newHistory) => {
+    setPastEntries(newHistory);
+    localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
+  };
 
   // Pomodoro Logic
   useEffect(() => {
@@ -104,63 +110,32 @@ export default function CommandCenterPage() {
   };
 
   // To-Do Logic
-  const addTodo = async () => {
+  const addTodo = () => {
     if (todoInput.trim()) {
-      const text = todoInput;
-      const priority = todoPriority;
+      const newTask = {
+        id: Date.now().toString(),
+        text: todoInput,
+        completed: false,
+        priority: todoPriority
+      };
+      saveTodos([newTask, ...todos]);
       setTodoInput('');
-      
-      const tempId = Date.now().toString();
-      setTodos([{ id: tempId, text, completed: false, priority }, ...todos]);
-
-      try {
-        const res = await fetch('/api/todos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, priority })
-        });
-        
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Server error: ${res.status}`);
-        }
-        
-        const newTodo = await res.json();
-        setTodos(current => current.map(t => t.id === tempId ? newTodo : t));
-      } catch (err) {
-        console.error("ADD TODO ERROR:", err);
-        alert("Failed to add task: " + err.message);
-        setTodos(current => current.filter(t => t.id !== tempId));
-      }
     }
   };
 
-  const toggleTodo = async (id, currentStatus) => {
-    setTodos(todos.map(t => t.id === id ? { ...t, completed: !currentStatus } : t));
-    try {
-      await fetch(`/api/todos/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed: !currentStatus })
-      });
-    } catch (err) {
-      setTodos(todos.map(t => t.id === id ? { ...t, completed: currentStatus } : t));
-    }
+  const toggleTodo = (id) => {
+    const newTodos = todos.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+    saveTodos(newTodos);
   };
 
-  const deleteTodo = async (id) => {
-    const previous = [...todos];
-    setTodos(todos.filter(t => t.id !== id));
-    try {
-      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
-    } catch (err) {
-      setTodos(previous);
-    }
+  const deleteTodo = (id) => {
+    const newTodos = todos.filter(t => t.id !== id);
+    saveTodos(newTodos);
   };
 
   const clearCompleted = () => {
-    const completedIds = todos.filter(t => t.completed).map(t => t.id);
-    completedIds.forEach(id => deleteTodo(id));
+    const newTodos = todos.filter(t => !t.completed);
+    saveTodos(newTodos);
   };
 
   const filteredTodos = todos.filter(t => {
@@ -171,22 +146,43 @@ export default function CommandCenterPage() {
 
   // AI Coach Logic
   const submitReflection = async () => {
-    if (!reflectionInput.trim()) return;
+    const text = reflectionInput.trim();
+    if (!text) return;
     setIsSubmittingReflection(true);
     setAiFeedback('');
     try {
       const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: reflectionInput })
+        body: JSON.stringify({ text })
       });
       const data = await res.json();
+      
+      let feedback = "Keep up the great work!";
+      let state = "Engaged";
+      
       if (res.ok) {
-        setAiFeedback(data.feedback);
-        setReflectionInput('');
+        feedback = data.feedback;
+        // Basic state extraction for the badge based on feedback
+        if (feedback.toLowerCase().includes("stress") || feedback.toLowerCase().includes("overwhelm")) state = "Stressed";
+        if (feedback.toLowerCase().includes("distract") || feedback.toLowerCase().includes("focus")) state = "Distracted";
+        if (feedback.toLowerCase().includes("motiv")) state = "Motivated";
       } else {
-        setAiFeedback(`Error: ${data.error}`);
+        feedback = `Error: ${data.error}`;
       }
+      
+      setAiFeedback(feedback);
+      setReflectionInput('');
+      
+      // Save to journal history
+      const newEntry = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        text: text,
+        state: state
+      };
+      saveHistory([newEntry, ...pastEntries]);
+
     } catch (err) {
       setAiFeedback("Failed to reach AI Coach.");
     } finally {
@@ -226,15 +222,15 @@ export default function CommandCenterPage() {
 
         <div className="todo-list" style={{ flex: 1 }}>
           {loadingTodos ? (
-            <p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading tasks...</p>
+            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
-            <p style={{ textAlign: 'center', marginTop: '2rem' }}>No tasks yet.</p>
+            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>No tasks yet.</p>
           ) : (
             filteredTodos.map(todo => (
               <div key={todo.id} className={`todo-item priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}>
                 <div 
                   className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
-                  onClick={() => toggleTodo(todo.id, todo.completed)}
+                  onClick={() => toggleTodo(todo.id)}
                 >
                   {todo.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                 </div>
@@ -388,22 +384,24 @@ export default function CommandCenterPage() {
           )}
         </div>
 
-        <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <h2>Past Entries</h2>
-          <div className="journal-history" style={{ flex: 1 }}>
-            {pastEntries.map(entry => (
-              <div key={entry.id} className="journal-entry" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div className="entry-date">{entry.date}</div>
-                  <div className="entry-preview">{entry.text}</div>
+        {pastEntries.length > 0 && (
+          <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <h2>Past Entries</h2>
+            <div className="journal-history" style={{ flex: 1 }}>
+              {pastEntries.map(entry => (
+                <div key={entry.id} className="journal-entry" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div className="entry-date">{new Date(entry.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+                    <div className="entry-preview">{entry.text}</div>
+                  </div>
+                  <span className={`state-badge state-${entry.state}`} style={{ marginBottom: 0, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+                    {entry.state}
+                  </span>
                 </div>
-                <span className={`state-badge state-${entry.state}`} style={{ marginBottom: 0, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
-                  {entry.state}
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
