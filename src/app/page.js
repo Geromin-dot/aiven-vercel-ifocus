@@ -116,15 +116,27 @@ export default function LandingPage() {
         </div>
       </div>
 
+      <style>{`
+        @keyframes movingGradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animated-bg-container {
+          background: linear-gradient(-45deg, #f7f6f3, #e8f0e8, #f5ecd8, #eef2eb);
+          background-size: 400% 400%;
+          animation: movingGradient 15s ease infinite;
+        }
+      `}</style>
+      
       {/* RIGHT SIDE: Auth Form */}
-      <div style={{ 
+      <div className="animated-bg-container" style={{ 
         flex: '1', 
         display: 'flex', 
         flexDirection: 'column', 
         justifyContent: 'center', 
         alignItems: 'center',
         padding: '2rem',
-        background: 'var(--bg-default)', // Back to soft off-white
         maxWidth: '100%',
         zIndex: 10
       }}>
