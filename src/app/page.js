@@ -130,7 +130,7 @@ export default function LandingPage() {
           100% { transform: translate(20%, -15%) scale(1.3); }
         }
         .animated-bg-container {
-          background-color: var(--bg-default);
+          background-color: #0b0f0c; /* Deep dark green/black */
           position: relative;
           overflow: hidden;
         }
@@ -148,29 +148,29 @@ export default function LandingPage() {
         zIndex: 10
       }}>
         {/* Floating Ambient Blobs */}
-        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '60%', height: '60%', background: 'rgba(95, 143, 94, 0.25)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float1 12s ease-in-out infinite alternate', zIndex: 0 }}></div>
-        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '50%', height: '50%', background: 'rgba(211, 196, 161, 0.3)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float2 14s ease-in-out infinite alternate', zIndex: 0 }}></div>
-        <div style={{ position: 'absolute', top: '40%', left: '30%', width: '40%', height: '40%', background: 'rgba(95, 143, 94, 0.15)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float3 16s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '60%', height: '60%', background: 'rgba(95, 143, 94, 0.35)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float1 12s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '50%', height: '50%', background: 'rgba(211, 196, 161, 0.25)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float2 14s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', top: '40%', left: '30%', width: '40%', height: '40%', background: 'rgba(95, 143, 94, 0.2)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float3 16s ease-in-out infinite alternate', zIndex: 0 }}></div>
 
         <div style={{ 
           width: '100%', 
           maxWidth: '420px', 
-          background: 'rgba(255, 255, 255, 0.7)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          background: 'rgba(20, 24, 20, 0.65)', /* Dark frosted glass */
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           padding: '2.5rem 2rem', 
           borderRadius: '24px', 
-          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05), inset 0 0 0 1px rgba(255,255,255,0.5)',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)',
           zIndex: 10,
           position: 'relative'
         }}>
           
           {/* Header & Indicator */}
           <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+            <h2 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem', color: '#ffffff' }}>
               {activeTab === "login" ? "Welcome back" : "Create Account"}
             </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', marginBottom: '1.5rem' }}>
+            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '1rem', marginBottom: '1.5rem' }}>
               {activeTab === "login" ? "Please enter your details to sign in." : "Start your productivity journey."}
             </p>
             
@@ -179,14 +179,14 @@ export default function LandingPage() {
               <div style={{ 
                 height: '6px', 
                 width: activeTab === 'login' ? '24px' : '8px', 
-                background: activeTab === 'login' ? 'var(--primary-accent)' : 'var(--glass-border)', 
+                background: activeTab === 'login' ? 'var(--primary-accent)' : 'rgba(255, 255, 255, 0.2)', 
                 borderRadius: '4px', 
                 transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)' 
               }} />
               <div style={{ 
                 height: '6px', 
                 width: activeTab === 'register' ? '24px' : '8px', 
-                background: activeTab === 'register' ? 'var(--primary-accent)' : 'var(--glass-border)', 
+                background: activeTab === 'register' ? 'var(--primary-accent)' : 'rgba(255, 255, 255, 0.2)', 
                 borderRadius: '4px', 
                 transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)' 
               }} />
@@ -194,14 +194,14 @@ export default function LandingPage() {
           </div>
 
           {/* Toggle Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
             <button 
               onClick={() => { setActiveTab("login"); setError(""); }}
               style={{ 
                 padding: '0.75rem 0', 
                 border: 'none', 
                 background: 'transparent',
-                color: activeTab === "login" ? 'var(--text-primary)' : 'var(--text-secondary)',
+                color: activeTab === "login" ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
                 fontWeight: activeTab === "login" ? 600 : 500,
                 borderBottom: activeTab === "login" ? '2px solid var(--primary-accent)' : '2px solid transparent',
                 cursor: 'pointer',
@@ -217,7 +217,7 @@ export default function LandingPage() {
                 padding: '0.75rem 0', 
                 border: 'none', 
                 background: 'transparent',
-                color: activeTab === "register" ? 'var(--text-primary)' : 'var(--text-secondary)',
+                color: activeTab === "register" ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
                 fontWeight: activeTab === "register" ? 600 : 500,
                 borderBottom: activeTab === "register" ? '2px solid var(--primary-accent)' : '2px solid transparent',
                 cursor: 'pointer',
@@ -230,7 +230,7 @@ export default function LandingPage() {
           </div>
 
           {error && (
-            <div style={{ background: 'rgba(224, 62, 62, 0.1)', color: 'var(--error)', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', border: '1px solid rgba(224, 62, 62, 0.2)' }}>
+            <div style={{ background: 'rgba(224, 62, 62, 0.1)', color: '#ff6b6b', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', border: '1px solid rgba(224, 62, 62, 0.2)' }}>
               {error}
             </div>
           )}
@@ -249,22 +249,22 @@ export default function LandingPage() {
               <div style={{ width: '50%', paddingRight: '0.5rem', flexShrink: 0 }}>
                 <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Username or Email</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Username or Email</label>
                     <input 
                       type="text" 
                       placeholder="Enter your username or email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', outline: 'none', color: '#ffffff', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
                       onFocus={(e) => e.target.style.borderColor = 'var(--primary-accent)'}
-                      onBlur={(e) => e.target.style.borderColor = 'var(--glass-border)'}
+                      onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                       required={activeTab === "login"}
                     />
                   </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Password</label>
                       <button 
                         type="button" 
                         onClick={() => alert("Password reset functionality coming soon!")}
@@ -278,9 +278,9 @@ export default function LandingPage() {
                       placeholder="••••••••" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', outline: 'none', color: '#ffffff', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
                       onFocus={(e) => e.target.style.borderColor = 'var(--primary-accent)'}
-                      onBlur={(e) => e.target.style.borderColor = 'var(--glass-border)'}
+                      onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                       required={activeTab === "login"}
                     />
                   </div>
@@ -299,43 +299,43 @@ export default function LandingPage() {
               <div style={{ width: '50%', paddingLeft: '0.5rem', flexShrink: 0 }}>
                 <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Username</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Username</label>
                     <input 
                       type="text" 
                       placeholder="Choose a username" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', outline: 'none', color: '#ffffff', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
                       onFocus={(e) => e.target.style.borderColor = 'var(--primary-accent)'}
-                      onBlur={(e) => e.target.style.borderColor = 'var(--glass-border)'}
+                      onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                       required={activeTab === "register"}
                     />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Email</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Email</label>
                     <input 
                       type="email" 
                       placeholder="Enter your email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', outline: 'none', color: '#ffffff', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
                       onFocus={(e) => e.target.style.borderColor = 'var(--primary-accent)'}
-                      onBlur={(e) => e.target.style.borderColor = 'var(--glass-border)'}
+                      onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                       required={activeTab === "register"}
                     />
                   </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Password</label>
                     <input 
                       type="password" 
                       placeholder="••••••••" 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', outline: 'none', color: '#ffffff', fontSize: '1rem', transition: 'border-color 0.2s ease' }}
                       onFocus={(e) => e.target.style.borderColor = 'var(--primary-accent)'}
-                      onBlur={(e) => e.target.style.borderColor = 'var(--glass-border)'}
+                      onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                       required={activeTab === "register"}
                     />
                   </div>
@@ -353,10 +353,10 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0', color: 'var(--text-secondary)' }}>
-            <div style={{ flex: 1, height: '1px', background: 'var(--glass-border)' }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0', color: 'rgba(255, 255, 255, 0.4)' }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
             <span style={{ padding: '0 1rem', fontSize: '0.85rem', fontWeight: 500 }}>OR</span>
-            <div style={{ flex: 1, height: '1px', background: 'var(--glass-border)' }}></div>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
           </div>
 
           <button 
@@ -368,18 +368,18 @@ export default function LandingPage() {
               gap: '0.75rem', 
               padding: '0.85rem', 
               width: '100%', 
-              border: '1px solid var(--glass-border)', 
+              border: '1px solid rgba(255, 255, 255, 0.2)', 
               borderRadius: '8px', 
-              background: 'var(--bg-surface)', 
-              color: 'var(--text-primary)', 
+              background: 'rgba(255, 255, 255, 0.03)', 
+              color: '#ffffff', 
               fontSize: '1rem', 
               fontWeight: 500, 
               cursor: 'pointer', 
               transition: 'all 0.2s ease',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}
-            onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg-default)'; e.currentTarget.style.borderColor = 'var(--text-secondary)'; }}
-            onMouseOut={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.borderColor = 'var(--glass-border)'; }}
+            onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'; }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
