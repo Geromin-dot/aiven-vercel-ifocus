@@ -41,7 +41,7 @@ export default function LandingPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ name, email, password }),
+          body: JSON.stringify({ name, username: name, email, password }),
         });
 
         const data = await res.json();
@@ -141,7 +141,7 @@ export default function LandingPage() {
           {activeTab === "register" && (
             <input 
               type="text" 
-              placeholder="Full Name" 
+              placeholder="Username" 
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={{ padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none' }}
@@ -150,8 +150,8 @@ export default function LandingPage() {
           )}
 
           <input 
-            type="email" 
-            placeholder="Email Address" 
+            type="text" 
+            placeholder="Username or Email" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             style={{ padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', outline: 'none' }}
