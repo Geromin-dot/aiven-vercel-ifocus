@@ -118,19 +118,27 @@ export default function LandingPage() {
 
       <style>{`
         @keyframes float1 {
-          0% { transform: translate(0, 0) scale(1); }
-          100% { transform: translate(15%, 20%) scale(1.2); }
+          0% { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+          50% { transform: translate(25%, 30%) rotate(180deg) scale(1.3); border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+          100% { transform: translate(0, 0) rotate(360deg) scale(1); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
         }
         @keyframes float2 {
-          0% { transform: translate(0, 0) scale(1); }
-          100% { transform: translate(-15%, -20%) scale(1.1); }
+          0% { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 40% 60% 30% 70% / 60% 40% 70% 30%; }
+          50% { transform: translate(-30%, -20%) rotate(-120deg) scale(1.1); border-radius: 70% 30% 50% 50% / 30% 70% 70% 30%; }
+          100% { transform: translate(0, 0) rotate(-240deg) scale(1); border-radius: 40% 60% 30% 70% / 60% 40% 70% 30%; }
         }
         @keyframes float3 {
-          0% { transform: translate(0, 0) scale(1); }
-          100% { transform: translate(20%, -15%) scale(1.3); }
+          0% { transform: translate(0, 0) rotate(0deg) scale(1.2); border-radius: 70% 30% 50% 50% / 30% 70% 70% 30%; }
+          50% { transform: translate(25%, -35%) rotate(180deg) scale(0.9); border-radius: 30% 70% 30% 70% / 70% 30% 70% 30%; }
+          100% { transform: translate(0, 0) rotate(360deg) scale(1.2); border-radius: 70% 30% 50% 50% / 30% 70% 70% 30%; }
+        }
+        @keyframes float4 {
+          0% { transform: translate(0, 0) rotate(0deg) scale(0.8); border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
+          50% { transform: translate(-35%, 25%) rotate(90deg) scale(1.4); border-radius: 60% 40% 70% 30% / 40% 50% 60% 50%; }
+          100% { transform: translate(0, 0) rotate(180deg) scale(0.8); border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
         }
         .animated-bg-container {
-          background-color: #0b0f0c; /* Deep dark green/black */
+          background-color: #050806; /* Even deeper void color */
           position: relative;
           overflow: hidden;
         }
@@ -147,10 +155,11 @@ export default function LandingPage() {
         maxWidth: '100%',
         zIndex: 10
       }}>
-        {/* Floating Ambient Blobs */}
-        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '60%', height: '60%', background: 'rgba(95, 143, 94, 0.35)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float1 12s ease-in-out infinite alternate', zIndex: 0 }}></div>
-        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '50%', height: '50%', background: 'rgba(211, 196, 161, 0.25)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float2 14s ease-in-out infinite alternate', zIndex: 0 }}></div>
-        <div style={{ position: 'absolute', top: '40%', left: '30%', width: '40%', height: '40%', background: 'rgba(95, 143, 94, 0.2)', filter: 'blur(80px)', borderRadius: '50%', animation: 'float3 16s ease-in-out infinite alternate', zIndex: 0 }}></div>
+        {/* Floating Ambient Blobs - Lava Lamp Style */}
+        <div style={{ position: 'absolute', top: '-5%', left: '-5%', width: '70%', height: '70%', background: 'rgba(95, 143, 94, 0.45)', filter: 'blur(90px)', animation: 'float1 14s ease-in-out infinite', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '60%', height: '60%', background: 'rgba(211, 196, 161, 0.35)', filter: 'blur(90px)', animation: 'float2 18s ease-in-out infinite', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', top: '35%', left: '25%', width: '45%', height: '45%', background: 'rgba(95, 143, 94, 0.3)', filter: 'blur(80px)', animation: 'float3 16s ease-in-out infinite', zIndex: 0 }}></div>
+        <div style={{ position: 'absolute', bottom: '20%', left: '-15%', width: '55%', height: '55%', background: 'rgba(15, 123, 108, 0.3)', filter: 'blur(90px)', animation: 'float4 20s ease-in-out infinite', zIndex: 0 }}></div>
 
         <div style={{ 
           width: '100%', 
