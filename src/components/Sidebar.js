@@ -49,7 +49,7 @@ export default function Sidebar() {
             </Link>
             <button 
               className="sidebar-action logout" 
-              onClick={() => signOut()}
+              onClick={() => signOut({ callbackUrl: '/' })}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.95rem' }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
