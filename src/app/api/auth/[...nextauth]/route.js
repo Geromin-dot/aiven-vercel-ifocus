@@ -45,6 +45,8 @@ export const authOptions = {
           throw new Error("Invalid credentials");
         }
 
+        console.log(`[AUTH EVENT] User logged in successfully: ${user.username || user.name} (${user.email})`);
+
         return user;
       }
     })

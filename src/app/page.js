@@ -226,7 +226,16 @@ export default function LandingPage() {
                   </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Password</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'rgba(255, 255, 255, 0.7)' }}>Password</label>
+                      <button 
+                        type="button" 
+                        onClick={() => alert("Password reset functionality coming soon!")}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary-accent)', fontSize: '0.8rem', cursor: 'pointer', padding: 0 }}
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
                     <input 
                       type="password" 
                       placeholder="••••••••" 

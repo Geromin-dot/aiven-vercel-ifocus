@@ -49,6 +49,8 @@ export async function POST(req) {
       },
     });
 
+    console.log(`[AUTH EVENT] New user registered: ${username} (${email})`);
+
     // Remove password from response for security
     const { password: _, ...userWithoutPassword } = newUser;
 
