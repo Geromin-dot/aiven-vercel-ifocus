@@ -151,10 +151,10 @@ header {
     position: sticky;
     top: 0;
     flex-shrink: 0;
-    background: #8FA37C;
+    background: linear-gradient(180deg, var(--primary-accent) 0%, var(--bg-color) 100%);
     padding: 2rem 1.75rem 4.5rem 1.75rem;
     box-sizing: border-box;
-    border-right: none;
+    border-right: 1px solid var(--glass-border);
 }
 
 .logo {
@@ -215,8 +215,8 @@ header {
     gap: 0.5rem;
 }
 
-.sidebar-bottom a {
-    color: var(--text-secondary);
+.sidebar-bottom a, .sidebar-bottom button {
+    color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.95rem;
@@ -228,20 +228,20 @@ header {
     gap: 0.5rem;
 }
 
-.sidebar-bottom a:hover {
-    color: var(--text-primary);
-    background: rgba(0, 0, 0, 0.05);
+.sidebar-bottom a:hover, .sidebar-bottom button:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
 }
 
-.sidebar-bottom a.logout {
-    color: var(--error);
+.sidebar-bottom a.logout, .sidebar-bottom button.logout {
+    color: rgba(255, 255, 255, 0.9);
     background: transparent;
     border: 1px solid transparent;
 }
 
-.sidebar-bottom a.logout:hover {
+.sidebar-bottom a.logout:hover, .sidebar-bottom button.logout:hover {
     background: rgba(224, 62, 62, 0.1);
-    color: var(--error);
+    color: #ffcccc;
 }
 
 main {
@@ -386,11 +386,11 @@ textarea:focus {
 /* ===== Buttons ===== */
 .btn-primary {
     width: 100%;
-    background: #8FA37C;
+    background: linear-gradient(135deg, var(--primary-accent), var(--secondary-accent));
     color: white;
     border: none;
     padding: 1rem;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
@@ -400,7 +400,7 @@ textarea:focus {
     justify-content: center;
     gap: 0.5rem;
     transition: all 0.3s ease;
-    box-shadow: none;
+    box-shadow: 0 4px 15px rgba(95, 143, 94, 0.3);
 }
 
 .btn-primary:hover {

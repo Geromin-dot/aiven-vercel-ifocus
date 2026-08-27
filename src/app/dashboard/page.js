@@ -222,21 +222,23 @@ export default function CommandCenterPage() {
         </div>
         <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Organize complex to-do lists. Drag to reorder. Everything syncs across devices.</p>
         
-        <div className="todo-input-row" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <div className="todo-input-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem' }}>
           <input 
             type="text" 
             placeholder="What needs to be done?" 
             value={todoInput}
             onChange={(e) => setTodoInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: '200px', height: '48px', boxSizing: 'border-box' }}
           />
-          <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ width: '80px', padding: '0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
-            <option value="high">High</option>
-            <option value="medium">Med</option>
-            <option value="low">Low</option>
-          </select>
-          <button type="button" className="btn-primary" onClick={addTodo} style={{ width: 'auto', margin: 0, padding: '0 1.5rem' }}>+ Add</button>
+          <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+            <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ minWidth: 'max-content', height: '48px', boxSizing: 'border-box', padding: '0 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
+              <option value="low">Low</option>
+              <option value="medium">Med</option>
+              <option value="high">High</option>
+            </select>
+            <button type="button" className="btn-primary" onClick={addTodo} style={{ flex: 1, padding: '0 1rem', marginTop: 0, height: '48px', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
+          </div>
         </div>
 
         <div className="todo-list" style={{ flex: 1 }}>
