@@ -11,9 +11,11 @@ export default function LandingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("login");
+  
+  // Shared state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(""); // For register only
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,31 +33,41 @@ export default function LandingPage() {
     );
   }
 
-  const handleCredentialsSubmit = async (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      if (activeTab === "register") {
-        const res = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, username: name, email, password }),
-        });
+      const res = await signIn("credentials", { redirect: false, email, password });
+      if (res?.error) throw new Error(res.error === "CredentialsSignin" ? "Invalid email or password" : res.error);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Registration failed");
+  const handleRegisterSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-        const signInRes = await signIn("credentials", { redirect: false, email, password });
-        if (signInRes?.error) throw new Error("Login failed after registration");
-        
-        router.push("/dashboard");
-      } else {
-        const res = await signIn("credentials", { redirect: false, email, password });
-        if (res?.error) throw new Error(res.error === "CredentialsSignin" ? "Invalid email or password" : res.error);
-        router.push("/dashboard");
-      }
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, username: name, email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Registration failed");
+
+      const signInRes = await signIn("credentials", { redirect: false, email, password });
+      if (signInRes?.error) throw new Error("Login failed after registration");
+      
+      router.push("/dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,13 +130,36 @@ export default function LandingPage() {
       }}>
         <div style={{ width: '100%', maxWidth: '380px' }}>
           
-          <div style={{ marginBottom: '2.5rem' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Welcome back</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem' }}>Please enter your details to sign in.</p>
+          {/* Header & Indicator */}
+          <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+              {activeTab === "login" ? "Welcome back" : "Create Account"}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', marginBottom: '1.5rem' }}>
+              {activeTab === "login" ? "Please enter your details to sign in." : "Start your productivity journey."}
+            </p>
+            
+            {/* Animated Dot Indicator */}
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div style={{ 
+                height: '6px', 
+                width: activeTab === 'login' ? '24px' : '8px', 
+                background: activeTab === 'login' ? 'var(--primary-accent)' : 'var(--glass-border)', 
+                borderRadius: '4px', 
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)' 
+              }} />
+              <div style={{ 
+                height: '6px', 
+                width: activeTab === 'register' ? '24px' : '8px', 
+                background: activeTab === 'register' ? 'var(--primary-accent)' : 'var(--glass-border)', 
+                borderRadius: '4px', 
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)' 
+              }} />
+            </div>
           </div>
 
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '2rem', borderBottom: '1px solid var(--glass-border)' }}>
+          {/* Toggle Buttons */}
+          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
             <button 
               onClick={() => { setActiveTab("login"); setError(""); }}
               style={{ 
@@ -165,67 +200,104 @@ export default function LandingPage() {
             </div>
           )}
 
-          <form onSubmit={handleCredentialsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
-            
-            {activeTab === "register" && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Username</label>
-                <input 
-                  type="text" 
-                  placeholder="Choose a username" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
-                  required
-                />
+          {/* Sliding Container */}
+          <div style={{ overflow: 'hidden', width: '100%', marginBottom: '2rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              width: '200%', 
+              transform: activeTab === 'login' ? 'translateX(0)' : 'translateX(-50%)',
+              transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+              alignItems: 'flex-start'
+            }}>
+              
+              {/* Login Form Panel */}
+              <div style={{ width: '50%', paddingRight: '0.5rem', flexShrink: 0 }}>
+                <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Username or Email</label>
+                    <input 
+                      type="text" 
+                      placeholder="Enter your username or email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      required={activeTab === "login"}
+                    />
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      required={activeTab === "login"}
+                    />
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="animated-gradient-btn"
+                  >
+                    {loading ? "Signing in..." : "Sign In"}
+                  </button>
+                </form>
               </div>
-            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>{activeTab === "login" ? "Username or Email" : "Email"}</label>
-              <input 
-                type="text" 
-                placeholder={activeTab === "login" ? "Enter your username or email" : "Enter your email"} 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
-                required
-              />
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
-                required
-              />
-            </div>
+              {/* Register Form Panel */}
+              <div style={{ width: '50%', paddingLeft: '0.5rem', flexShrink: 0 }}>
+                <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Username</label>
+                    <input 
+                      type="text" 
+                      placeholder="Choose a username" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      required={activeTab === "register"}
+                    />
+                  </div>
 
-            <button 
-              type="submit" 
-              disabled={loading}
-              style={{ 
-                marginTop: '1rem', 
-                padding: '0.85rem', 
-                borderRadius: '8px', 
-                background: 'var(--primary-accent)', 
-                color: 'white', 
-                border: 'none', 
-                fontWeight: 600, 
-                fontSize: '1rem', 
-                cursor: 'pointer',
-                opacity: loading ? 0.7 : 1,
-                boxShadow: '0 4px 14px rgba(118, 172, 126, 0.4)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {loading ? "Please wait..." : (activeTab === "login" ? "Sign In" : "Create Account")}
-            </button>
-          </form>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Email</label>
+                    <input 
+                      type="email" 
+                      placeholder="Enter your email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      required={activeTab === "register"}
+                    />
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Password</label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{ padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'transparent', outline: 'none', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      required={activeTab === "register"}
+                    />
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="animated-gradient-btn"
+                  >
+                    {loading ? "Creating account..." : "Create Account"}
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', margin: '1.5rem 0', color: 'var(--text-secondary)' }}>
             <div style={{ flex: 1, height: '1px', background: 'var(--glass-border)' }}></div>
@@ -267,6 +339,44 @@ export default function LandingPage() {
         .hero-side { display: none; }
         @media (min-width: 768px) {
           .hero-side { display: block !important; }
+        }
+
+        @keyframes bgPan {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        .animated-gradient-btn {
+          margin-top: 1rem;
+          padding: 0.85rem;
+          border-radius: 8px;
+          border: none;
+          color: white;
+          font-weight: 600;
+          font-size: 1rem;
+          cursor: pointer;
+          background: linear-gradient(270deg, var(--primary-accent), var(--secondary-accent), var(--primary-accent));
+          background-size: 200% 200%;
+          animation: bgPan 4s ease infinite;
+          box-shadow: 0 4px 14px rgba(95, 143, 94, 0.4);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .animated-gradient-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(95, 143, 94, 0.5);
+        }
+
+        .animated-gradient-btn:active {
+          transform: translateY(0);
+        }
+
+        .animated-gradient-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          animation: none;
+          transform: none;
         }
       `}} />
     </div>
