@@ -5,29 +5,7 @@ import { useState } from 'react';
 export default function FlashcardsPage() {
   const [view, setView] = useState('collections'); // 'collections', 'create', 'loading', 'study'
 
-  const [collections, setCollections] = useState([
-    {
-      id: '1',
-      name: 'Biology 101',
-      createdAt: '2026-07-05',
-      activated: false,
-      cards: [ { needsReview: false }, { needsReview: false }, { needsReview: true }, { needsReview: true }, { needsReview: true }, { needsReview: true } ]
-    },
-    {
-      id: '2',
-      name: 'Water',
-      createdAt: '2026-07-02',
-      activated: true,
-      cards: Array(10).fill({ needsReview: false })
-    },
-    {
-      id: '3',
-      name: 'Terms',
-      createdAt: '2026-07-02',
-      activated: false,
-      cards: [...Array(9).fill({ needsReview: false }), { needsReview: true }]
-    }
-  ]);
+  const [collections, setCollections] = useState([]);
 
   return (
     <>
@@ -45,7 +23,7 @@ export default function FlashcardsPage() {
           </div>
           <div className="collections-grid" id="collectionsGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
             {collections.length === 0 ? (
-              <p>No collections yet. Create your first deck!</p>
+              <p style={{ textAlign: 'center', gridColumn: '1 / -1', color: 'var(--text-secondary)', marginTop: '2rem' }}>No collections yet. Create your first deck!</p>
             ) : (
               collections.map((col, idx) => {
                 const total = col.cards.length;
