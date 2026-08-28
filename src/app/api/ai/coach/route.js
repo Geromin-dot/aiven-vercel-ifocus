@@ -47,7 +47,7 @@ Reply STRICTLY in valid JSON format like this, without markdown blocks:
     if (!response.ok) {
       const errText = await response.text();
       console.error("Gemini API Error:", errText);
-      return NextResponse.json({ error: "Failed to generate AI response" }, { status: response.status });
+      return NextResponse.json({ error: "Failed to generate AI response: " + errText }, { status: response.status });
     }
 
     const data = await response.json();

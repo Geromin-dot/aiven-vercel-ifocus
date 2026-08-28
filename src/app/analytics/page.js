@@ -30,15 +30,16 @@ ChartJS.register(
 );
 
 export default function AnalyticsPage() {
-  const [focusData, setFocusData] = useState([2.5, 1.8, 3.2, 2.0, 1.5, 3.5, 2.8]);
-  const [stressData, setStressData] = useState([7, 5, 3, 6, 8, 2, 4]);
-  const [motivationData, setMotivationData] = useState([4, 6, 8, 5, 3, 9, 7]);
-  const [distractionData, setDistractionData] = useState([5, 3, 2, 6, 8, 1, 3]);
+  const [focusData, setFocusData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [stressData, setStressData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [motivationData, setMotivationData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [distractionData, setDistractionData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [sessionDistribution, setSessionDistribution] = useState([0, 0, 0, 0]);
   const [stats, setStats] = useState({
-    totalHours: 12.5,
-    tasksCompleted: 23,
-    avgDistractions: 3.2,
-    streakDays: 5
+    totalHours: 0,
+    tasksCompleted: 0,
+    avgDistractions: 0,
+    streakDays: 0
   });
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -56,7 +57,7 @@ export default function AnalyticsPage() {
     ChartJS.defaults.plugins.tooltip.padding = 12;
 
     const sessionHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-    let localFocusData = [...focusData];
+    let localFocusData = [0, 0, 0, 0, 0, 0, 0];
 
     if (sessionHistory.length > 0) {
       const todayIndex = new Date().getDay();
@@ -76,13 +77,14 @@ export default function AnalyticsPage() {
 
     const totalHours = localFocusData.reduce((a, b) => a + b, 0).toFixed(1);
     const focusStats = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
-    const avgDist = (distractionData.reduce((a, b) => a + b, 0) / 7).toFixed(1);
+    const localDistractionData = [0, 0, 0, 0, 0, 0, 0];
+    const avgDist = (localDistractionData.reduce((a, b) => a + b, 0) / 7).toFixed(1);
 
     setStats({
       totalHours: totalHours,
-      tasksCompleted: focusStats.sessions ? focusStats.sessions + 20 : 23,
+      tasksCompleted: focusStats.sessions ? focusStats.sessions + 20 : 0,
       avgDistractions: avgDist,
-      streakDays: focusStats.streak || 5
+      streakDays: focusStats.streak || 0
     });
 
   }, []); // Run once on mount
@@ -246,7 +248,7 @@ export default function AnalyticsPage() {
   const sessionChartData = {
     labels: ['25 min Focus', '50 min Deep Work', '15 min Quick', '90 min Flow'],
     datasets: [{
-      data: [8, 4, 6, 2],
+      data: sessionDistribution,
       backgroundColor: [
         'rgba(99, 102, 241, 0.8)',
         'rgba(236, 72, 153, 0.7)',
