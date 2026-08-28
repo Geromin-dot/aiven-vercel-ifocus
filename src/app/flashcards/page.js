@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from 'react';
+import Image from 'next/image';
+import emptyStateImg from '../../img/empty_flashcard_state.png';
 
 export default function FlashcardsPage() {
   const [view, setView] = useState('collections'); // 'collections', 'create', 'loading', 'study'
@@ -23,7 +25,10 @@ export default function FlashcardsPage() {
           </div>
           <div className="collections-grid" id="collectionsGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
             {collections.length === 0 ? (
-              <p style={{ textAlign: 'center', gridColumn: '1 / -1', color: 'var(--text-secondary)', marginTop: '2rem' }}>No collections yet. Create your first deck!</p>
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: '2rem', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                <Image src={emptyStateImg} alt="No collections yet" width={200} height={200} style={{ objectFit: 'contain' }} />
+                <p style={{ color: 'var(--text-secondary)' }}>No collections yet. Create your first deck!</p>
+              </div>
             ) : (
               collections.map((col, idx) => {
                 const total = col.cards.length;
