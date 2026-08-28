@@ -1665,3 +1665,41 @@ textarea:focus {
     color: var(--primary-accent);
     transform: translateX(3px);
 }
+
+/* ===== AI Coach Page ===== */
+.coach-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.ai-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-accent), var(--secondary-accent));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem auto;
+    box-shadow: 0 0 20px rgba(95, 143, 94, 0.4);
+}
+
+.pulse-animation {
+    animation: glow-pulse 3s infinite alternate;
+}
+
+.pulse-animation-warning {
+    animation: glow-pulse-warning 2s infinite alternate;
+}
+
+@keyframes glow-pulse {
+    0% { box-shadow: 0 0 10px rgba(95, 143, 94, 0.2), 0 0 20px rgba(95, 143, 94, 0.1); transform: scale(1); }
+    100% { box-shadow: 0 0 20px rgba(95, 143, 94, 0.5), 0 0 40px rgba(95, 143, 94, 0.3); transform: scale(1.05); }
+}
+
+@keyframes glow-pulse-warning {
+    0% { box-shadow: 0 0 10px rgba(230, 57, 70, 0.2), 0 0 20px rgba(230, 57, 70, 0.1); transform: scale(1); }
+    100% { box-shadow: 0 0 25px rgba(230, 57, 70, 0.6), 0 0 50px rgba(230, 57, 70, 0.4); transform: scale(1.08); }
+}
