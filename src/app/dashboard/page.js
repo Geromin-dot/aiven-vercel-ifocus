@@ -168,13 +168,15 @@ export default function CommandCenterPage() {
     setTodos(todos.map(t => t.id === id ? { ...t, completed: newStatus } : t));
     
     try {
-      await fetch(`/api/todos/${id}`, {
+      const res = await fetch(`/api/todos/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: newStatus })
       });
+      if (!res.ok) throw new Error(await res.text());
     } catch (err) {
       console.error("Failed to toggle todo:", err);
+      alert("Failed to update task.");
       // Revert on failure
       setTodos(todos.map(t => t.id === id ? { ...t, completed: !newStatus } : t));
     }
@@ -186,9 +188,11 @@ export default function CommandCenterPage() {
     setTodos(todos.filter(t => t.id !== id));
     
     try {
-      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
     } catch (err) {
       console.error("Failed to delete todo:", err);
+      alert("Failed to delete task.");
       setTodos(previousTodos); // Revert on failure
     }
   };
@@ -203,11 +207,15 @@ export default function CommandCenterPage() {
     
     try {
       // The API doesn't have a bulk delete, so we fire them individually
-      await Promise.all(completedTodos.map(t => 
+      const responses = await Promise.all(completedTodos.map(t => 
         fetch(`/api/todos/${t.id}`, { method: 'DELETE' })
       ));
+      
+      const failed = responses.filter(r => !r.ok);
+      if (failed.length > 0) throw new Error("Some deletions failed");
     } catch (err) {
       console.error("Failed to clear completed todos:", err);
+      alert("Failed to clear some tasks.");
       setTodos(previousTodos); // Revert on failure
     }
   };
