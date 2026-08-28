@@ -10,20 +10,18 @@ export default function FlashcardsPage() {
       {/* Collections View */}
       {view === 'collections' && (
         <div id="collectionsSection" className="glass-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
-              <h2 style={{ marginBottom: '0.5rem' }}>My Flashcard Collections</h2>
+              <h2>My Flashcard Collections</h2>
               <p className="subtitle" style={{ marginBottom: 0 }}>Select a deck to review, or create a new one.</p>
             </div>
-            <button className="btn-primary" style={{ width: 'auto', padding: '0.75rem 1.5rem', margin: 0 }} onClick={() => setView('create')}>
+            <button className="btn-primary" style={{ padding: '0.6rem 1.25rem', marginTop: 0 }} onClick={() => setView('create')}>
               + Create New Deck
             </button>
           </div>
           <div className="collections-grid" id="collectionsGrid">
             {/* Cards will be fetched from database */}
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', background: 'rgba(0,0,0,0.02)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--glass-border)' }}>
-              <p style={{ color: 'var(--text-secondary)' }}>No collections yet. Create your first deck!</p>
-            </div>
+            <p>No collections yet. Create your first deck!</p>
           </div>
         </div>
       )}
