@@ -5,6 +5,30 @@ import { useState } from 'react';
 export default function FlashcardsPage() {
   const [view, setView] = useState('collections'); // 'collections', 'create', 'loading', 'study'
 
+  const [collections, setCollections] = useState([
+    {
+      id: '1',
+      name: 'Biology 101',
+      createdAt: '2026-07-05',
+      activated: false,
+      cards: [ { needsReview: false }, { needsReview: false }, { needsReview: true }, { needsReview: true }, { needsReview: true }, { needsReview: true } ]
+    },
+    {
+      id: '2',
+      name: 'Water',
+      createdAt: '2026-07-02',
+      activated: true,
+      cards: Array(10).fill({ needsReview: false })
+    },
+    {
+      id: '3',
+      name: 'Terms',
+      createdAt: '2026-07-02',
+      activated: false,
+      cards: [...Array(9).fill({ needsReview: false }), { needsReview: true }]
+    }
+  ]);
+
   return (
     <>
       {/* Collections View */}
@@ -19,9 +43,60 @@ export default function FlashcardsPage() {
               + Create New Deck
             </button>
           </div>
-          <div className="collections-grid" id="collectionsGrid">
-            {/* Cards will be fetched from database */}
-            <p>No collections yet. Create your first deck!</p>
+          <div className="collections-grid" id="collectionsGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+            {collections.length === 0 ? (
+              <p>No collections yet. Create your first deck!</p>
+            ) : (
+              collections.map((col, idx) => {
+                const total = col.cards.length;
+                const mastered = col.cards.filter(c => c.needsReview === false).length;
+                const percentage = total > 0 ? Math.round((mastered / total) * 100) : 0;
+                const createdDate = new Date(col.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                
+                return (
+                  <div key={col.id} className="collection-card" style={{ position: 'relative', border: col.activated ? '2px solid var(--primary-accent)' : '1px solid var(--glass-border)', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', background: col.activated ? '#f4f8f4' : 'var(--glass-bg)', borderRadius: 'var(--radius-md)' }}>
+                    
+                    {/* Header (Icon + Kebab) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ background: '#e8e2c8', color: '#5a4b1c', width: '40px', height: '40px', borderRadius: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                        </div>
+                        
+                        <div className="kebab-menu" style={{ position: 'relative', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+                        </div>
+                    </div>
+
+                    {/* Title and Stats */}
+                    <div>
+                        <h3 style={{ marginBottom: '0.25rem', fontSize: '1.1rem', color: 'var(--text-primary)', wordBreak: 'break-word' }}>{col.name}</h3>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>{total} Cards • Created {createdDate}</p>
+                    </div>
+
+                    {/* Mastery Progress */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                            <span>Mastery</span>
+                            <span>{percentage}%</span>
+                        </div>
+                        <div style={{ width: '100%', height: '6px', background: 'rgba(0,0,0,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${percentage}%`, height: '100%', background: 'var(--primary-accent)', borderRadius: '3px' }}></div>
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <button className="btn-primary" style={{ width: '100%', padding: '0.5rem 1rem', fontSize: '0.9rem', margin: 0 }}>
+                            Study Deck
+                        </button>
+                        <button className="btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', background: col.activated ? 'rgba(0,0,0,0.05)' : 'transparent', textAlign: 'center', width: '100%', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)' }}>
+                            {col.activated ? 'Activated' : 'Activate for Vault'}
+                        </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
