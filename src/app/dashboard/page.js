@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 
 export default function CommandCenterPage() {
+  const { data: session, status } = useSession();
+  const userName = session?.user?.name || 'anonymous';
+
   // To-Do State
   const [todos, setTodos] = useState([]);
   const [todoInput, setTodoInput] = useState('');
@@ -32,23 +36,43 @@ export default function CommandCenterPage() {
 
   // Load from LocalStorage exactly like the legacy prototype
   useEffect(() => {
-    const storedTasks = localStorage.getItem('ifocus_tasks');
-    if (storedTasks) {
-      setTodos(JSON.parse(storedTasks));
+    if (status === 'loading') return;
+    
+    const tasksKey = `ifocus_tasks_${userName}`;
+    const historyKey = `ifocus_journal_history_${userName}`;
+    
+    let storedTasks = localStorage.getItem(tasksKey);
+    // Backward compatibility for existing 'richardx' user
+    if (!storedTasks && userName === 'richardx') {
+      storedTasks = localStorage.getItem('ifocus_tasks');
+      if (storedTasks) localStorage.setItem(tasksKey, storedTasks); // migrate
     }
     
-    const storedHistory = localStorage.getItem('ifocus_journal_history');
+    if (storedTasks) {
+      setTodos(JSON.parse(storedTasks));
+    } else {
+      setTodos([]);
+    }
+    
+    let storedHistory = localStorage.getItem(historyKey);
+    if (!storedHistory && userName === 'richardx') {
+      storedHistory = localStorage.getItem('ifocus_journal_history');
+      if (storedHistory) localStorage.setItem(historyKey, storedHistory); // migrate
+    }
+    
     if (storedHistory) {
       setPastEntries(JSON.parse(storedHistory));
+    } else {
+      setPastEntries([]);
     }
     
     setLoadingTodos(false);
-  }, []);
+  }, [userName, status]);
 
   const saveTodos = (newTodos) => {
     setTodos(newTodos);
     try {
-      localStorage.setItem('ifocus_tasks', JSON.stringify(newTodos));
+      localStorage.setItem(`ifocus_tasks_${userName}`, JSON.stringify(newTodos));
     } catch (e) {
       console.warn("LocalStorage failed:", e);
     }
@@ -57,7 +81,7 @@ export default function CommandCenterPage() {
   const saveHistory = (newHistory) => {
     setPastEntries(newHistory);
     try {
-      localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
+      localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(newHistory));
     } catch (e) {
       console.warn("LocalStorage failed:", e);
     }
