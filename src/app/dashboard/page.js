@@ -28,6 +28,12 @@ export default function CommandCenterPage() {
   const [isFocus, setIsFocus] = useState(true);
   const [timerPreset, setTimerPreset] = useState('25/5');
   const [sessionCount, setSessionCount] = useState(1);
+  
+  // Custom Timer State
+  const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
+  const [customWorkTime, setCustomWorkTime] = useState({ min: 0, sec: 0 });
+  const [customBreakTime, setCustomBreakTime] = useState({ min: 0, sec: 0 });
+  const [customSessions, setCustomSessions] = useState(0);
 
   // Ambient Audio State
   const [currentTrack, setCurrentTrack] = useState('Chill Lofi');
@@ -94,36 +100,53 @@ export default function CommandCenterPage() {
       
       if (isFocus) {
         setIsFocus(false);
-        const breakTime = timerPreset === '50/10' ? 10 : timerPreset === '15/3' ? 3 : timerPreset === '90/20' ? 20 : 5;
-        setTimeLeft(breakTime * 60);
+        const breakTime = timerPreset === 'Custom' 
+          ? customBreakTime.min * 60 + customBreakTime.sec 
+          : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+        setTimeLeft(breakTime);
       } else {
         setIsFocus(true);
-        const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
-        setTimeLeft(focusTime * 60);
+        const focusTime = timerPreset === 'Custom'
+          ? customWorkTime.min * 60 + customWorkTime.sec
+          : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
+        setTimeLeft(focusTime);
         setSessionCount(c => c + 1);
       }
     }
     return () => clearInterval(interval);
-  }, [isActive, timeLeft, isFocus, timerPreset]);
+  }, [isActive, timeLeft, isFocus, timerPreset, customWorkTime, customBreakTime]);
 
   const toggleTimer = () => setIsActive(!isActive);
 
   const resetTimer = () => {
     setIsActive(false);
-    const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
-    setTimeLeft(isFocus ? focusTime * 60 : 5 * 60);
+    if (timerPreset === 'Custom') {
+      setTimeLeft(isFocus ? customWorkTime.min * 60 + customWorkTime.sec : customBreakTime.min * 60 + customBreakTime.sec);
+    } else {
+      const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
+      setTimeLeft(isFocus ? focusTime * 60 : 5 * 60);
+    }
   };
 
   const setPreset = (preset) => {
-    setTimerPreset(preset);
-    setIsActive(false);
-    setIsFocus(true);
     if (preset === 'Custom') {
-      setTimeLeft(25 * 60);
+      setIsCustomTimerModalOpen(true);
     } else {
+      setTimerPreset(preset);
+      setIsActive(false);
+      setIsFocus(true);
       const focusTime = parseInt(preset.split('/')[0]);
       setTimeLeft(focusTime * 60);
     }
+  };
+
+  const saveCustomSettings = () => {
+    setIsCustomTimerModalOpen(false);
+    setTimerPreset('Custom');
+    setIsActive(false);
+    setIsFocus(true);
+    setTimeLeft(customWorkTime.min * 60 + customWorkTime.sec);
+    setSessionCount(1);
   };
 
   const formatTime = (seconds) => {
@@ -392,9 +415,11 @@ export default function CommandCenterPage() {
           </div>
           
           <div className="session-counter">
-            Session {sessionCount} of 1
+            Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 1}
             <div className="session-dots">
-              <div className="session-dot current"></div>
+              {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 1 }).map((_, i) => (
+                <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
+              ))}
             </div>
           </div>
         </div>
@@ -494,6 +519,43 @@ export default function CommandCenterPage() {
           </div>
         )}
       </div>
+
+      {/* Custom Timer Modal */}
+      {isCustomTimerModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+            <h2>Custom Timer Settings</h2>
+            <p className="subtitle" style={{ marginBottom: '1rem' }}>Set custom durations and number of sessions.</p>
+            
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Work Time</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input type="number" min="0" max="120" value={customWorkTime.min} onChange={e => setCustomWorkTime({ ...customWorkTime, min: parseInt(e.target.value) || 0 })} placeholder="Min" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                        <input type="number" min="0" max="59" value={customWorkTime.sec} onChange={e => setCustomWorkTime({ ...customWorkTime, sec: parseInt(e.target.value) || 0 })} placeholder="Sec" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                    </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Break Time</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input type="number" min="0" max="60" value={customBreakTime.min} onChange={e => setCustomBreakTime({ ...customBreakTime, min: parseInt(e.target.value) || 0 })} placeholder="Min" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                        <input type="number" min="0" max="59" value={customBreakTime.sec} onChange={e => setCustomBreakTime({ ...customBreakTime, sec: parseInt(e.target.value) || 0 })} placeholder="Sec" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                    </div>
+                </div>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total Sessions</label>
+                <input type="number" min="0" max="10" value={customSessions} onChange={e => setCustomSessions(parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button onClick={() => setIsCustomTimerModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
+                <button onClick={saveCustomSettings} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0 }}>Save Settings</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
