@@ -1,41 +1,69 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
 
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { text } = await request.json();
+
+    if (!text) {
+      return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    const { text } = await req.json();
-    if (!text || text.trim() === "") {
-      return NextResponse.json({ error: "Reflection text is required" }, { status: 400 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "AI is not configured (Missing API Key)." }, { status: 500 });
     }
 
-    // Simulated AI Processing Delay to feel authentic
-    await new Promise(resolve => setTimeout(resolve, 1800));
+    const prompt = `
+You are an AI study coach analyzing a student's reflection journal entry.
 
-    // Simulated AI Response based on keywords
-    let response = "That's a great start. Taking a moment to reflect is the first step toward better focus. Let's break this down into smaller, manageable chunks and tackle it one Pomodoro at a time.";
+Student Reflection: "${text}"
+
+Your job is to do TWO things:
+1. Categorize the student's emotional state into EXACTLY ONE of the following FOUR categories: Stressed, Distracted, Motivated, or Engaged.
+   - We trust the student's own reflection. If they express they are feeling stressed, anxious, tired, or overwhelmed, classify them as "Stressed".
+2. Write a thoughtful, personalized 2-3 sentence action plan. Give them GENUINE, highly specific psychological advice, cognitive behavioral strategies, or study techniques tailored to the EXACT subject or worry they mentioned.
+
+Reply STRICTLY in valid JSON format like this, without markdown blocks:
+{
+  "state": "Stressed",
+  "actionPlan": "It's completely valid to feel exhausted. Let's take it easy and just knock out a small quick win to build momentum."
+}
+`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Gemini API Error:", errText);
+      return NextResponse.json({ error: "Failed to generate AI response" }, { status: response.status });
+    }
+
+    const data = await response.json();
+    let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     
-    const lowerText = text.toLowerCase();
-    if (lowerText.includes("distracted") || lowerText.includes("focus")) {
-      response = "It sounds like you're struggling with distractions right now. I recommend using the Pomodoro timer on your left. Put your phone in another room and commit to just 25 minutes of unbroken focus on one single task.";
-    } else if (lowerText.includes("tired") || lowerText.includes("sleep") || lowerText.includes("exhausted")) {
-      response = "Fatigue is the enemy of productivity. If you're feeling this tired, pushing harder won't help. Hydrate, stretch, or take a 15-minute power nap before continuing.";
-    } else if (lowerText.includes("overwhelmed") || lowerText.includes("too much") || lowerText.includes("stress")) {
-      response = "When everything feels overwhelming, your brain panics. Let's dump all those tasks into your To-Do list, prioritize them, and only look at the very top item. You can do this.";
-    } else if (lowerText.includes("procrastinat")) {
-      response = "Procrastination usually comes from feeling overwhelmed by a task. Make the first step incredibly small—so small it feels silly to fail. What's a 2-minute action you can take right now?";
-    }
+    // Safety fallback in case it still wraps in markdown
+    aiText = aiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+    const parsed = JSON.parse(aiText);
 
-    return NextResponse.json({ 
-      feedback: response
+    return NextResponse.json({
+      state: parsed.state || "Engaged",
+      actionPlan: parsed.actionPlan || "Keep up the great work!"
     });
 
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("AI Coach Route Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -194,34 +194,31 @@ export default function CommandCenterPage() {
     setIsSubmittingReflection(true);
     setAiFeedback('');
     try {
-      // MOCK AI INTEGRATION (No env variables required)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const res = await fetch('/api/ai/coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
       
-      const lowerText = text.toLowerCase();
+      let feedback = "Keep up the great work!";
       let state = "Engaged";
-      let feedback = "Keep up the fantastic focus! You're doing great.";
-      let actionPlan = "Maintain your current workflow.";
-
-      if (lowerText.includes("stress") || lowerText.includes("tired") || lowerText.includes("overwhelm")) {
-        state = "Stressed";
-        feedback = "It's completely normal to feel overwhelmed.";
-        actionPlan = "We recommend pausing your current task. Take a 5-minute deep breathing break away from the screen.";
+      
+      if (res.ok) {
+        feedback = data.actionPlan;
+        state = data.state;
         
-        // Trigger AI Coach Intervention in Local Storage
-        const telemetryKey = `ifocus_telemetry_insight_${userName}`;
-        localStorage.setItem(telemetryKey, JSON.stringify({
-          reason: "You seem to be feeling overwhelmed or stressed based on your latest journal entry.",
-          actionPlan: actionPlan,
-          timestamp: new Date().toISOString()
-        }));
-      } else if (lowerText.includes("distract") || lowerText.includes("can't focus") || lowerText.includes("lost")) {
-        state = "Distracted";
-        feedback = "Distractions happen to the best of us.";
-        actionPlan = "Try closing unnecessary tabs and using the Pomodoro timer to build momentum.";
-      } else if (lowerText.includes("motiv")) {
-        state = "Motivated";
-        feedback = "Great energy! Use this momentum to tackle your hardest tasks first.";
-        actionPlan = "Dive right into your high-priority items.";
+        // Trigger AI Coach Intervention in Local Storage if not Engaged/Motivated
+        if (state === "Stressed" || state === "Distracted") {
+          const telemetryKey = `ifocus_telemetry_insight_${userName}`;
+          localStorage.setItem(telemetryKey, JSON.stringify({
+            reason: `Coach noticed you are feeling ${state.toLowerCase()} based on your journal entry.`,
+            actionPlan: feedback,
+            timestamp: new Date().toISOString()
+          }));
+        }
+      } else {
+        feedback = `Error: ${data.error}`;
       }
       
       setAiFeedback(feedback);
