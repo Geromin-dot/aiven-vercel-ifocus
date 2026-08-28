@@ -34,26 +34,28 @@ export default function CommandCenterPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const tracks = ['Chill Lofi', 'Study Music', 'Rain Ambient'];
 
-  // Load from LocalStorage exactly like the legacy prototype
+  // Load To-Dos from API and History from LocalStorage
   useEffect(() => {
     if (status === 'loading') return;
     
-    const tasksKey = `ifocus_tasks_${userName}`;
-    const historyKey = `ifocus_journal_history_${userName}`;
-    
-    let storedTasks = localStorage.getItem(tasksKey);
-    // Backward compatibility for existing 'richardx' user
-    if (!storedTasks && userName === 'richardx') {
-      storedTasks = localStorage.getItem('ifocus_tasks');
-      if (storedTasks) localStorage.setItem(tasksKey, storedTasks); // migrate
-    }
-    
-    if (storedTasks) {
-      setTodos(JSON.parse(storedTasks));
+    // Fetch Todos from Database
+    if (status === 'authenticated') {
+      fetch('/api/todos')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setTodos(data);
+          setLoadingTodos(false);
+        })
+        .catch(err => {
+          console.error("Failed to load todos:", err);
+          setLoadingTodos(false);
+        });
     } else {
-      setTodos([]);
+      setLoadingTodos(false);
     }
     
+    // Fetch Journal History from LocalStorage
+    const historyKey = `ifocus_journal_history_${userName}`;
     let storedHistory = localStorage.getItem(historyKey);
     if (!storedHistory && userName === 'richardx') {
       storedHistory = localStorage.getItem('ifocus_journal_history');
@@ -65,18 +67,7 @@ export default function CommandCenterPage() {
     } else {
       setPastEntries([]);
     }
-    
-    setLoadingTodos(false);
   }, [userName, status]);
-
-  const saveTodos = (newTodos) => {
-    setTodos(newTodos);
-    try {
-      localStorage.setItem(`ifocus_tasks_${userName}`, JSON.stringify(newTodos));
-    } catch (e) {
-      console.warn("LocalStorage failed:", e);
-    }
-  };
 
   const saveHistory = (newHistory) => {
     setPastEntries(newHistory);
@@ -141,44 +132,84 @@ export default function CommandCenterPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // To-Do Logic
-  const addTodo = (e) => {
+  // To-Do Logic (Cloud Synced)
+  const addTodo = async (e) => {
     if (e) e.preventDefault();
     if (!todoInput || !todoInput.trim()) {
       alert("Oops! The task input is empty.");
       return;
     }
     
+    const text = todoInput;
+    setTodoInput(''); // Optimistic clear
+    
     try {
-      const newTask = {
-        id: Date.now().toString(),
-        text: todoInput,
-        completed: false,
-        priority: todoPriority
-      };
+      const res = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, priority: todoPriority })
+      });
       
-      // Update state and storage
-      const updatedTodos = [newTask, ...todos];
-      saveTodos(updatedTodos);
-      setTodoInput('');
+      if (!res.ok) throw new Error("Failed to add task");
+      
+      const newTodo = await res.json();
+      setTodos(current => [newTodo, ...current]);
     } catch (err) {
       alert("Error adding task: " + err.message);
     }
   };
 
-  const toggleTodo = (id) => {
-    const newTodos = todos.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
-    saveTodos(newTodos);
+  const toggleTodo = async (id) => {
+    // Optimistic UI update
+    const todoToToggle = todos.find(t => t.id === id);
+    if (!todoToToggle) return;
+    
+    const newStatus = !todoToToggle.completed;
+    setTodos(todos.map(t => t.id === id ? { ...t, completed: newStatus } : t));
+    
+    try {
+      await fetch(`/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: newStatus })
+      });
+    } catch (err) {
+      console.error("Failed to toggle todo:", err);
+      // Revert on failure
+      setTodos(todos.map(t => t.id === id ? { ...t, completed: !newStatus } : t));
+    }
   };
 
-  const deleteTodo = (id) => {
-    const newTodos = todos.filter(t => t.id !== id);
-    saveTodos(newTodos);
+  const deleteTodo = async (id) => {
+    // Optimistic UI update
+    const previousTodos = [...todos];
+    setTodos(todos.filter(t => t.id !== id));
+    
+    try {
+      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error("Failed to delete todo:", err);
+      setTodos(previousTodos); // Revert on failure
+    }
   };
 
-  const clearCompleted = () => {
-    const newTodos = todos.filter(t => !t.completed);
-    saveTodos(newTodos);
+  const clearCompleted = async () => {
+    const completedTodos = todos.filter(t => t.completed);
+    if (completedTodos.length === 0) return;
+    
+    // Optimistic UI update
+    const previousTodos = [...todos];
+    setTodos(todos.filter(t => !t.completed));
+    
+    try {
+      // The API doesn't have a bulk delete, so we fire them individually
+      await Promise.all(completedTodos.map(t => 
+        fetch(`/api/todos/${t.id}`, { method: 'DELETE' })
+      ));
+    } catch (err) {
+      console.error("Failed to clear completed todos:", err);
+      setTodos(previousTodos); // Revert on failure
+    }
   };
 
   const filteredTodos = todos.filter(t => {
