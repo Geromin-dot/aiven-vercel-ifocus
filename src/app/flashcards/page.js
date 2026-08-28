@@ -13,8 +13,8 @@ export default function FlashcardsPage() {
     <>
       {/* Collections View */}
       {view === 'collections' && (
-        <div id="collectionsSection" className="glass-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div id="collectionsSection" className="glass-panel" style={{ minHeight: 'calc(100vh - 4rem)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', flexShrink: 0 }}>
             <div>
               <h2>My Flashcard Collections</h2>
               <p className="subtitle" style={{ marginBottom: 0 }}>Select a deck to review, or create a new one.</p>
@@ -23,11 +23,11 @@ export default function FlashcardsPage() {
               + Create New Deck
             </button>
           </div>
-          <div className="collections-grid" id="collectionsGrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
+          <div className="collections-grid" id="collectionsGrid" style={{ display: collections.length === 0 ? 'flex' : 'grid', flex: 1, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem', alignItems: collections.length === 0 ? 'center' : 'stretch', justifyContent: collections.length === 0 ? 'center' : 'start' }}>
             {collections.length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: '2rem', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                <Image src={emptyStateImg} alt="No collections yet" width={200} height={200} style={{ objectFit: 'contain' }} />
-                <p style={{ color: 'var(--text-secondary)' }}>No collections yet. Create your first deck!</p>
+              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
+                <Image src={emptyStateImg} alt="No collections yet" width={320} height={320} style={{ objectFit: 'contain' }} />
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>No collections yet. Create your first deck!</p>
               </div>
             ) : (
               collections.map((col, idx) => {
