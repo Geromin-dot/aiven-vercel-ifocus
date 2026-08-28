@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import emptyStateImg from '../../img/empty_flashcard_state.png';
+import emptyStateImg from '../../img/empty_flashcard_state.jpg';
 
 export default function FlashcardsPage() {
   const [view, setView] = useState('collections'); // 'collections', 'create', 'loading', 'study'
