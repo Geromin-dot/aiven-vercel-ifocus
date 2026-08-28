@@ -194,24 +194,34 @@ export default function CommandCenterPage() {
     setIsSubmittingReflection(true);
     setAiFeedback('');
     try {
-      const res = await fetch('/api/ai/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      const data = await res.json();
+      // MOCK AI INTEGRATION (No env variables required)
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      let feedback = "Keep up the great work!";
+      const lowerText = text.toLowerCase();
       let state = "Engaged";
-      
-      if (res.ok) {
-        feedback = data.feedback;
-        // Basic state extraction for the badge based on feedback
-        if (feedback.toLowerCase().includes("stress") || feedback.toLowerCase().includes("overwhelm")) state = "Stressed";
-        if (feedback.toLowerCase().includes("distract") || feedback.toLowerCase().includes("focus")) state = "Distracted";
-        if (feedback.toLowerCase().includes("motiv")) state = "Motivated";
-      } else {
-        feedback = `Error: ${data.error}`;
+      let feedback = "Keep up the fantastic focus! You're doing great.";
+      let actionPlan = "Maintain your current workflow.";
+
+      if (lowerText.includes("stress") || lowerText.includes("tired") || lowerText.includes("overwhelm")) {
+        state = "Stressed";
+        feedback = "It's completely normal to feel overwhelmed.";
+        actionPlan = "We recommend pausing your current task. Take a 5-minute deep breathing break away from the screen.";
+        
+        // Trigger AI Coach Intervention in Local Storage
+        const telemetryKey = `ifocus_telemetry_insight_${userName}`;
+        localStorage.setItem(telemetryKey, JSON.stringify({
+          reason: "You seem to be feeling overwhelmed or stressed based on your latest journal entry.",
+          actionPlan: actionPlan,
+          timestamp: new Date().toISOString()
+        }));
+      } else if (lowerText.includes("distract") || lowerText.includes("can't focus") || lowerText.includes("lost")) {
+        state = "Distracted";
+        feedback = "Distractions happen to the best of us.";
+        actionPlan = "Try closing unnecessary tabs and using the Pomodoro timer to build momentum.";
+      } else if (lowerText.includes("motiv")) {
+        state = "Motivated";
+        feedback = "Great energy! Use this momentum to tackle your hardest tasks first.";
+        actionPlan = "Dive right into your high-priority items.";
       }
       
       setAiFeedback(feedback);
