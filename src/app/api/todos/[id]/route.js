@@ -12,9 +12,11 @@ export async function PUT(req, { params }) {
 
     const body = await req.json();
     
+    const { id } = await params;
+    
     // Ensure the todo belongs to the user
     const existingTodo = await prisma.todo.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingTodo || existingTodo.userId !== session.user.id) {
@@ -22,7 +24,7 @@ export async function PUT(req, { params }) {
     }
 
     const todo = await prisma.todo.update({
-      where: { id: params.id },
+      where: { id },
       data: { completed: body.completed }
     });
     return NextResponse.json(todo);
@@ -38,9 +40,11 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
+    
     // Ensure the todo belongs to the user
     const existingTodo = await prisma.todo.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingTodo || existingTodo.userId !== session.user.id) {
@@ -48,7 +52,7 @@ export async function DELETE(req, { params }) {
     }
 
     await prisma.todo.delete({
-      where: { id: params.id }
+      where: { id }
     });
     return NextResponse.json({ success: true });
   } catch (error) {
