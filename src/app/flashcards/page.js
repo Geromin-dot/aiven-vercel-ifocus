@@ -26,7 +26,7 @@ export default function FlashcardsPage() {
           <div className="collections-grid" id="collectionsGrid" style={{ display: collections.length === 0 ? 'flex' : 'grid', flex: 1, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem', marginTop: '1.5rem', alignItems: collections.length === 0 ? 'center' : 'stretch', justifyContent: collections.length === 0 ? 'center' : 'start' }}>
             {collections.length === 0 ? (
               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', width: '100%' }}>
-                <Image src={emptyStateImg} alt="No collections yet" width={100} height={100} style={{ objectFit: 'contain' }} />
+                <Image src={emptyStateImg} alt="No collections yet" width={130} height={130} style={{ objectFit: 'contain' }} />
                 <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>No collections yet. Create your first deck!</p>
               </div>
             ) : (
