@@ -38,10 +38,10 @@ export default function Sidebar() {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={session.user.image} alt="User Avatar" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
               ) : (
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }}></div>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(0,0,0,0.1)' }}></div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>{session.user.name?.split(' ')[0] || 'User'}</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>{session.user.name?.split(' ')[0] || 'User'}</span>
               </div>
             </div>
             <Link href="/settings" className="sidebar-action">

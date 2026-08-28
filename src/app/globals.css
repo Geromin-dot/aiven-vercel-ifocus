@@ -216,7 +216,7 @@ header {
 }
 
 .sidebar-bottom a, .sidebar-bottom button {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text-secondary);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.95rem;
@@ -226,22 +226,25 @@ header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    width: 100%;
+    font-family: inherit;
 }
 
 .sidebar-bottom a:hover, .sidebar-bottom button:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-bottom a.logout, .sidebar-bottom button.logout {
-    color: rgba(255, 255, 255, 0.9);
-    background: transparent;
-    border: 1px solid transparent;
+    color: var(--error);
 }
 
 .sidebar-bottom a.logout:hover, .sidebar-bottom button.logout:hover {
     background: rgba(224, 62, 62, 0.1);
-    color: #ffcccc;
+    color: var(--error);
 }
 
 main {
