@@ -1297,16 +1297,16 @@ export default function CommandCenterPage() {
           className="timer-circle" 
           style={{ 
             '--progress': `${progressPercent}%`,
-            width: '265px',
-            height: '265px',
-            margin: '0.25rem auto'
+            width: '295px',
+            height: '295px',
+            margin: '0.2rem auto'
           }}
         >
           <div className="timer-inner">
-            <div className="timer-display" style={{ fontSize: '4rem', fontWeight: 800, letterSpacing: '-2px' }}>
+            <div className="timer-display" style={{ fontSize: '4.2rem', fontWeight: 500, letterSpacing: '-1px' }}>
               {formatTime(timeLeft)}
             </div>
-            <div className="timer-label" style={{ fontSize: '0.88rem', fontWeight: 600, letterSpacing: '0.4px', marginTop: '2px' }}>
+            <div className="timer-label" style={{ fontSize: '0.82rem', fontWeight: 600, letterSpacing: '0.6px', marginTop: '3px' }}>
               {isFocus ? 'Focus Time' : 'Break Time'}
             </div>
           </div>
