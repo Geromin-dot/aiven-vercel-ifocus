@@ -1360,39 +1360,25 @@ export default function CommandCenterPage() {
         </div>
       )}
 
-      {/* Keystroke Telemetrics Intervention Toast */}
+      {/* Keystroke Telemetrics Intervention Toast (iOS Spring Popup Style) */}
       {telemetryToast.show && (
-        <div style={{
-          position: 'fixed',
-          bottom: '2rem',
-          right: '2rem',
-          width: '330px',
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(245, 158, 11, 0.4)',
-          borderRadius: '16px',
-          padding: '1.15rem 1.25rem',
-          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(245, 158, 11, 0.2)',
-          zIndex: 9999,
-          animation: 'slideUpFade 0.3s ease-out'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+        <div className="ios-notification-toast">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-accent)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
               </div>
-              <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>Coach Intervened</h4>
+              <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Coach Intervened</h4>
             </div>
             <button
               onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', padding: '2px' }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.95rem', padding: '2px', display: 'flex', alignItems: 'center' }}
             >
               ✕
             </button>
           </div>
 
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0', lineHeight: '1.4' }}>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 0.85rem 0', lineHeight: '1.45' }}>
             {telemetryToast.reason}
           </p>
 
@@ -1400,13 +1386,13 @@ export default function CommandCenterPage() {
             <button
               className="btn-primary"
               onClick={() => router.push('/coach')}
-              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem', borderRadius: '9999px', margin: 0, height: '34px' }}
+              style={{ flex: 1, padding: '0.5rem', fontSize: '0.82rem', borderRadius: '9999px', margin: 0, height: '36px' }}
             >
               View Coach Strategy
             </button>
             <button
               onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
-              style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.45rem 0.8rem', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}
             >
               Dismiss
             </button>
