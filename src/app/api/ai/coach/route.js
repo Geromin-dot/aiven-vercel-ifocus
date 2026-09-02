@@ -18,29 +18,36 @@ export async function POST(request) {
       : "No active tasks.";
 
     const prompt = `
-You are an AI study coach analyzing a student's reflection journal entry.
+You are an empathetic, human-like AI study coach & cognitive strategist analyzing a student's daily reflection and task list.
 
 Student Reflection: "${text}"
 
 Current Tasks:
 ${taskListStr}
 
-Your job is to do THREE things:
-1. Categorize the student's emotional state into EXACTLY ONE of the following FOUR categories: Stressed, Distracted, Motivated, or Engaged.
-   - We trust the student's own reflection. If they express they are feeling stressed, anxious, tired, or overwhelmed, classify them as "Stressed".
-2. Determine the optimal order for the tasks based on their reflection. Use these default rules:
-   - Stressed: Quick Wins (Low effort/priority) first, High effort last.
-   - Distracted: Keep original order.
-   - Motivated/Engaged: High effort (High priority) first, Quick Wins last.
-3. Write a thoughtful, personalized 2-3 sentence action plan. Give them GENUINE, highly specific psychological advice, cognitive behavioral strategies, or study techniques tailored to the EXACT subject or worry they mentioned.
+Your mission is to think like an expert human mentor and do THREE things:
+1. Categorize the student's emotional state into EXACTLY ONE category: "Stressed", "Distracted", "Motivated", or "Engaged".
+   - Trust the student's authentic self-reflection (if they feel anxious, tired, stressed, drained, or overwhelmed -> "Stressed"; if driven, energized, excited -> "Motivated"; if wandering, restless -> "Distracted"; if focused, calm -> "Engaged").
 
-Reply STRICTLY in valid JSON format like this, without markdown blocks:
+2. Determine the optimal, human-tailored order for the tasks:
+   - **First Priority - Explicit Student Intent:** If the student explicitly expresses a preference or request (e.g., "start with math", "let me do the medium task first", "I want to finish Filipino today", "let's do biology first"), ALWAYS respect and honor their request by placing that task at the top!
+   - **Semantic Task & Real-World Difficulty Analysis:** Evaluate what each task actually demands from a human being (e.g., writing a 10-page research paper, analyzing complex literature, or solving advanced math/science is heavy cognitive load; quick flashcard review, organizing a desk, or physical activity like dance/stretching are low-friction quick wins and energizing resets).
+   - **Adaptive Coaching Sequencing:**
+     - *Stressed / Exhausted / Anxious:* If no specific task was requested, prioritize low-cognitive-friction or active resets first to build gentle dopamine and momentum, pushing intimidating high-cognitive tasks to later.
+     - *Motivated / Engaged:* If no specific task was requested, place the most challenging, high-impact cognitive tasks first during peak mental focus.
+     - *Distracted:* Prioritize concrete, structured, bite-sized active tasks with clear boundaries.
+
+3. Write a warm, encouraging, 2-3 sentence action plan:
+   - Acknowledge their exact reflection and any specific subject or preference they mentioned.
+   - Conversationally explain why you sequenced the tasks this way and offer a supportive, practical study technique (e.g., Pomodoro warm-up, Feynman technique, active recall, brain dump).
+
+Reply STRICTLY in valid JSON format like this:
 {
   "state": "Stressed",
-  "orderedIds": ["<id_of_first_task>", "<id_of_second_task>"],
-  "actionPlan": "It's completely valid to feel exhausted. Let's take it easy and just knock out a small quick win to build momentum."
+  "orderedIds": ["<id_1>", "<id_2>", "<id_3>"],
+  "actionPlan": "I hear that you want to start with math first to warm up! We'll tackle math with a gentle focus block..."
 }
-(Make sure orderedIds contains the exact 'id' strings from the Current Tasks list, sorted according to the rules above.)
+(Make sure orderedIds contains the exact 'id' strings from Current Tasks, containing ALL task IDs in the recommended order.)
 `;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
@@ -51,7 +58,7 @@ Reply STRICTLY in valid JSON format like this, without markdown blocks:
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.2,
+          temperature: 0.3,
           responseMimeType: "application/json"
         }
       })
