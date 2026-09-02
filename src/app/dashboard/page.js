@@ -16,7 +16,7 @@ export default function CommandCenterPage() {
 
   // AI Coach State
   const [reflectionInput, setReflectionInput] = useState('');
-  const [aiFeedback, setAiFeedback] = useState('');
+  const [aiFeedback, setAiFeedback] = useState(null);
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
 
   // Past Entries State (LocalStorage)
@@ -254,7 +254,7 @@ export default function CommandCenterPage() {
     const text = reflectionInput.trim();
     if (!text) return;
     setIsSubmittingReflection(true);
-    setAiFeedback('');
+    setAiFeedback(null);
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
@@ -276,6 +276,35 @@ export default function CommandCenterPage() {
         feedback = data.actionPlan;
         state = data.state;
         
+        // Adjust Timer based on state
+        setIsActive(false);
+        setIsFocus(true);
+        let timerLabel = "Focus Time";
+        if (state === "Stressed") {
+            setTimerPreset('Custom');
+            setCustomWorkTime({ min: 15, sec: 0 });
+            setCustomBreakTime({ min: 3, sec: 0 });
+            setTimeLeft(15 * 60);
+            timerLabel = "Gentle Focus (Stressed)";
+        } else if (state === "Distracted") {
+            setTimerPreset('Custom');
+            setCustomWorkTime({ min: 20, sec: 0 });
+            setCustomBreakTime({ min: 5, sec: 0 });
+            setTimeLeft(20 * 60);
+            timerLabel = "Strict Pomodoro (Distracted)";
+        } else if (state === "Engaged" || state === "Motivated") {
+            setTimerPreset('Custom');
+            setCustomWorkTime({ min: 60, sec: 0 });
+            setCustomBreakTime({ min: 10, sec: 0 });
+            setTimeLeft(60 * 60);
+            timerLabel = "Flow State (Engaged)";
+        }
+        
+        setAiFeedback({
+            title: `AI Adjusted Timer:\n${timerLabel}`,
+            message: feedback
+        });
+
         // Trigger AI Coach Intervention in Local Storage if not Engaged/Motivated
         if (state === "Stressed" || state === "Distracted") {
           const telemetryKey = `ifocus_telemetry_insight_${userName}`;
@@ -286,10 +315,9 @@ export default function CommandCenterPage() {
           }));
         }
       } else {
-        feedback = `Error: ${data.error}`;
+        setAiFeedback({ title: "Error", message: `Failed to generate AI response. ${data.error || ''}` });
       }
       
-      setAiFeedback(feedback);
       setReflectionInput('');
       
       // Save to journal history
@@ -302,7 +330,7 @@ export default function CommandCenterPage() {
       saveHistory([newEntry, ...pastEntries]);
 
     } catch (err) {
-      setAiFeedback("Failed to reach AI Coach.");
+      setAiFeedback({ title: "Error", message: "Failed to reach AI Coach." });
     } finally {
       setIsSubmittingReflection(false);
     }
@@ -496,14 +524,7 @@ export default function CommandCenterPage() {
             {isSubmittingReflection ? "Analyzing..." : "Submit & Analyze"}
           </button>
 
-          {aiFeedback && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(95, 143, 94, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-accent)' }}>
-              <h4 style={{ color: 'var(--primary-accent)', marginBottom: '0.5rem', fontSize: '0.9rem', textTransform: 'uppercase' }}>AI Coach Feedback</h4>
-              <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: 1.5, margin: 0 }}>
-                {aiFeedback}
-              </p>
-            </div>
-          )}
+
         </div>
 
         {pastEntries.length > 0 && (
@@ -525,6 +546,17 @@ export default function CommandCenterPage() {
           </div>
         )}
       </div>
+
+      {/* AI Coach Modal */}
+      {aiFeedback && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '450px', width: '90%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+            <h2 style={{ fontSize: '1.5rem', lineHeight: '1.3', whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>{aiFeedback.title}</h2>
+            <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem' }}>{aiFeedback.message}</p>
+            <button onClick={() => setAiFeedback(null)} className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>Continue</button>
+          </div>
+        </div>
+      )}
 
       {/* Custom Timer Modal */}
       {isCustomTimerModalOpen && (
