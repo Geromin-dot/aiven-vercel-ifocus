@@ -34,7 +34,7 @@ input, button, textarea, select {
 }
 
 body {
-    background-color: #f7faf7;
+    background-color: #f6f8f6;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -85,41 +85,6 @@ p:last-child {
 strong, b {
     font-weight: 600;
     color: var(--text-primary);
-}
-
-/* ===== Background Effects - Interactive Canvas & Cursor Spotlight ===== */
-.background-blobs {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: -1;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.blob {
-    position: absolute;
-    border-radius: 50%;
-}
-
-.blob-cursor {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 38vw;
-    height: 38vw;
-    min-width: 400px;
-    min-height: 400px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(72, 138, 85, 0.68) 0%, rgba(210, 160, 68, 0.36) 42%, rgba(42, 152, 122, 0.18) 65%, transparent 80%);
-    filter: blur(60px);
-    opacity: 0.95;
-    mix-blend-mode: multiply;
-    pointer-events: none;
-    z-index: 0;
-    will-change: transform;
 }
 
 /* ===== App Container ===== */
