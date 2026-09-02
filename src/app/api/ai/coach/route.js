@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { text } = await request.json();
+    const { text, tasks } = await request.json();
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -12,20 +12,32 @@ export async function POST(request) {
     if (!apiKey) {
       return NextResponse.json({ error: "AI is not configured (Missing API Key)." }, { status: 500 });
     }
+    
+    const taskListStr = tasks && tasks.length > 0 
+      ? tasks.map(t => `${t.id}: ${t.text} (Priority: ${t.priority})`).join('\n')
+      : "No active tasks.";
 
     const prompt = `
 You are an AI study coach analyzing a student's reflection journal entry.
 
 Student Reflection: "${text}"
 
-Your job is to do TWO things:
+Current Tasks:
+${taskListStr}
+
+Your job is to do THREE things:
 1. Categorize the student's emotional state into EXACTLY ONE of the following FOUR categories: Stressed, Distracted, Motivated, or Engaged.
    - We trust the student's own reflection. If they express they are feeling stressed, anxious, tired, or overwhelmed, classify them as "Stressed".
-2. Write a thoughtful, personalized 2-3 sentence action plan. Give them GENUINE, highly specific psychological advice, cognitive behavioral strategies, or study techniques tailored to the EXACT subject or worry they mentioned.
+2. Determine the optimal order for the tasks based on their reflection. Use these default rules:
+   - Stressed: Quick Wins (Low effort/priority) first, High effort last.
+   - Distracted: Keep original order.
+   - Motivated/Engaged: High effort (High priority) first, Quick Wins last.
+3. Write a thoughtful, personalized 2-3 sentence action plan. Give them GENUINE, highly specific psychological advice, cognitive behavioral strategies, or study techniques tailored to the EXACT subject or worry they mentioned.
 
 Reply STRICTLY in valid JSON format like this, without markdown blocks:
 {
   "state": "Stressed",
+  "orderedIds": ["taskId1", "taskId2"],
   "actionPlan": "It's completely valid to feel exhausted. Let's take it easy and just knock out a small quick win to build momentum."
 }
 `;

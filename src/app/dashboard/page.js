@@ -3,6 +3,31 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 
+const playAlertSound = () => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.1); // C6
+    
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
+    
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 1);
+  } catch (e) {
+    console.log("Audio play prevented", e);
+  }
+};
+
 export default function CommandCenterPage() {
   const { data: session, status } = useSession();
   const userName = session?.user?.name || 'anonymous';
@@ -259,10 +284,11 @@ export default function CommandCenterPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
       
+      const activeTasks = todos.filter(t => !t.completed).map(t => ({ id: t.id, text: t.text, priority: t.priority }));
       const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, tasks: activeTasks }),
         signal: controller.signal
       });
       
@@ -275,6 +301,24 @@ export default function CommandCenterPage() {
       if (res.ok) {
         feedback = data.actionPlan;
         state = data.state;
+        
+        playAlertSound();
+        
+        // Task Reordering
+        if (data.orderedIds && data.orderedIds.length > 0) {
+            const activeTodos = todos.filter(t => !t.completed);
+            const completedTodos = todos.filter(t => t.completed);
+            const reorderedActive = [];
+            
+            data.orderedIds.forEach(id => {
+                const todo = activeTodos.find(t => String(t.id) === String(id));
+                if (todo) reorderedActive.push(todo);
+            });
+            activeTodos.forEach(todo => {
+                if (!reorderedActive.find(t => String(t.id) === String(todo.id))) reorderedActive.push(todo);
+            });
+            setTodos([...reorderedActive, ...completedTodos]);
+        }
         
         // Adjust Timer based on state
         setIsActive(false);
