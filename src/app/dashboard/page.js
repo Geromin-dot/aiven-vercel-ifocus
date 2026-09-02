@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 const playAlertSound = () => {
   try {
@@ -31,6 +32,7 @@ const playAlertSound = () => {
 export default function CommandCenterPage() {
   const { data: session, status } = useSession();
   const userName = session?.user?.name || 'anonymous';
+  const router = useRouter();
 
   // To-Do State
   const [todos, setTodos] = useState([]);
@@ -105,8 +107,31 @@ export default function CommandCenterPage() {
   const totalKeystrokesRef = useRef(0);
   const anomalyTriggeredRef = useRef(false);
 
-  const profanityList = ['fuck', 'shit', 'bitch', 'asshole', 'damn', 'stupid', 'hate', 'useless', 'idiot'];
-  const anxietyList = ['worry', 'worried', 'stress', 'stressed', 'anxious', 'scared', 'terrified', 'overwhelmed', 'nervous', 'fail', 'failing', 'hopeless'];
+  // Comprehensive Frustration / Profanity / Anxiety Trigger Words (Legacy Prototype Parity)
+  const profanityList = [
+    'fuck', 'fucking', 'fucked', 'shit', 'bitch', 'asshole', 'damn', 'dammit',
+    'stupid', 'hate', 'useless', 'idiot', 'crap', 'sucks', 'annoying', 'pissed',
+    'furious', 'trash', 'dumb', 'bullshit', 'screw this'
+  ];
+  const anxietyList = [
+    'worry', 'worried', 'stress', 'stressed', 'anxious', 'anxiety', 'scared',
+    'terrified', 'overwhelmed', 'nervous', 'fail', 'failing', 'failure',
+    'hopeless', 'panic', 'panicking', 'paralyzed', 'exhausted', 'burnt out',
+    'cant do this', "can't do this", 'give up', 'giving up', 'lost'
+  ];
+
+  const dismissTelemetryToast = () => {
+    setTelemetryToast(prev => ({ ...prev, show: false }));
+    anomalyTriggeredRef.current = false; // Allow re-triggering when subsequent errors happen!
+  };
+
+  const goToCoach = () => {
+    if (router) {
+      router.push('/coach');
+    } else {
+      window.location.href = '/coach';
+    }
+  };
 
   const playNotificationChime = () => {
     try {
@@ -1414,7 +1439,7 @@ export default function CommandCenterPage() {
               <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Coach Intervened</h4>
             </div>
             <button
-              onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
+              onClick={dismissTelemetryToast}
               style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.95rem', padding: '2px', display: 'flex', alignItems: 'center' }}
             >
               ✕
@@ -1428,13 +1453,13 @@ export default function CommandCenterPage() {
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               className="btn-primary"
-              onClick={() => router.push('/coach')}
+              onClick={goToCoach}
               style={{ flex: 1, padding: '0.5rem', fontSize: '0.82rem', borderRadius: '9999px', margin: 0, height: '36px' }}
             >
               View Coach Strategy
             </button>
             <button
-              onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
+              onClick={dismissTelemetryToast}
               style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}
             >
               Dismiss
