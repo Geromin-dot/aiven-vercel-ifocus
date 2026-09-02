@@ -392,40 +392,40 @@ export default function CommandCenterPage() {
   return (
     <div className="command-center-layout">
       {/* Column 1: Task Command Center */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
           <h2>To-Do List</h2>
           <div className="sync-badge">
             <span className="dot"></span>
             Cloud Synced (Live)
           </div>
         </div>
-        <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Organize complex to-do lists. Drag to reorder. Everything syncs across devices.</p>
+        <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Organize tasks. Drag to reorder. Syncs across devices.</p>
         
-        <div className="todo-input-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <div className="todo-input-row" style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
           <input 
             type="text" 
             placeholder="What needs to be done?" 
             value={todoInput}
             onChange={(e) => setTodoInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-            style={{ flex: 1, minWidth: '200px', height: '48px', boxSizing: 'border-box' }}
+            style={{ flex: 1, minWidth: '120px', height: '36px', fontSize: '0.85rem', padding: '0 0.65rem', boxSizing: 'border-box' }}
           />
-          <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
-            <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ minWidth: 'max-content', height: '48px', boxSizing: 'border-box', padding: '0 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ height: '36px', fontSize: '0.8rem', padding: '0 0.5rem', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
               <option value="low">Low</option>
               <option value="medium">Med</option>
               <option value="high">High</option>
             </select>
-            <button type="button" className="btn-primary" onClick={addTodo} style={{ flex: 1, padding: '0 1rem', marginTop: 0, height: '48px', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
+            <button type="button" className="btn-primary" onClick={addTodo} style={{ padding: '0 0.85rem', marginTop: 0, height: '36px', fontSize: '0.85rem', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
           </div>
         </div>
 
-        <div className="todo-list" style={{ flex: 1 }}>
+        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {loadingTodos ? (
-            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>Loading tasks...</p>
+            <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
-            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>No tasks yet.</p>
+            <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No tasks yet.</p>
           ) : (
             filteredTodos.map(todo => (
               <div key={todo.id} className={`todo-item priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}>
@@ -433,7 +433,7 @@ export default function CommandCenterPage() {
                   className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
                   onClick={() => toggleTodo(todo.id)}
                 >
-                  {todo.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  {todo.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                 </div>
                 <span className="todo-text">{todo.text}</span>
                 <span className={`todo-priority-badge ${todo.priority || 'medium'}`}>{todo.priority || 'medium'}</span>
@@ -443,21 +443,18 @@ export default function CommandCenterPage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-          <button onClick={clearCompleted} style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-            Clear Completed
-          </button>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', marginTop: '0.6rem' }}>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
             {['All', 'Active', 'Done'].map(filter => (
               <button 
                 key={filter}
                 onClick={() => setTodoFilter(filter)}
                 style={{ 
-                  background: todoFilter === filter ? 'rgba(0,0,0,0.05)' : 'transparent',
+                  background: todoFilter === filter ? 'rgba(0,0,0,0.06)' : 'transparent',
                   border: 'none',
-                  padding: '0.25rem 0.75rem',
+                  padding: '0.2rem 0.55rem',
                   borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.85rem',
+                  fontSize: '0.78rem',
                   cursor: 'pointer',
                   fontWeight: todoFilter === filter ? 600 : 400
                 }}
@@ -466,14 +463,17 @@ export default function CommandCenterPage() {
               </button>
             ))}
           </div>
+          <button onClick={clearCompleted} style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            Clear Completed
+          </button>
         </div>
       </div>
 
       {/* Column 2: Timer & Audio */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', minHeight: 0 }}>
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem 1.15rem' }}>
           <h2>Pomodoro Timer</h2>
-          <p className="subtitle">Leave your phone. Focus here.</p>
+          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Leave your phone. Focus here.</p>
 
           <div className="timer-circle">
             <div className="timer-inner">
@@ -511,12 +511,12 @@ export default function CommandCenterPage() {
           </div>
         </div>
 
-        <div className="glass-panel" style={{ flex: 1 }}>
+        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
           <h2>Ambient Audio</h2>
-          <p className="subtitle">Local music tracks.</p>
+          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Local music tracks.</p>
           
-          <div className="audio-player">
-            <div className="audio-tracks">
+          <div className="audio-player" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div className="audio-tracks" style={{ flex: 1, minHeight: 0 }}>
               {tracks.map(track => (
                 <div 
                   key={track} 
@@ -524,29 +524,29 @@ export default function CommandCenterPage() {
                   onClick={() => { setCurrentTrack(track); setIsPlaying(true); }}
                 >
                   <span className="track-name">{track}</span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{currentTrack === track && isPlaying ? 'Playing' : 'Play'}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{currentTrack === track && isPlaying ? 'Playing' : 'Play'}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginTop: '1rem' }}>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6 }}>⏮</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.35rem' }}>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6, fontSize: '0.9rem' }}>⏮</button>
               <button 
                 onClick={() => setIsPlaying(!isPlaying)}
-                style={{ background: 'var(--primary-accent)', color: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}
+                style={{ background: 'var(--primary-accent)', color: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}
               >
                 {isPlaying ? '⏸' : '▶'}
               </button>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6 }}>⏭</button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6, fontSize: '0.9rem' }}>⏭</button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
               <span>0:00</span>
-              <input type="range" style={{ flex: 1, accentColor: 'var(--primary-accent)' }} defaultValue="0" />
+              <input type="range" style={{ flex: 1, accentColor: 'var(--primary-accent)', height: '3px' }} defaultValue="0" />
               <span>3:15</span>
             </div>
 
-            <p style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem' }}>
+            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
               {isPlaying ? `Now Playing: ${currentTrack}` : 'Paused'}
             </p>
           </div>
@@ -554,10 +554,10 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Column 3: Journal */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', minHeight: 0 }}>
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
           <h2>Quick Reflection</h2>
-          <p className="subtitle">Clear your mind. AI will analyze your entry.</p>
+          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Clear your mind. AI will analyze your entry.</p>
           
           <textarea 
             className="journal-textarea" 
@@ -565,32 +565,30 @@ export default function CommandCenterPage() {
             onChange={(e) => setReflectionInput(e.target.value)}
             placeholder="E.g., I have so much to read for biology and I keep getting distracted..."
             disabled={isSubmittingReflection}
-            style={{ minHeight: '150px', marginBottom: '1rem' }}
+            style={{ height: '70px', minHeight: '65px', maxHeight: '85px', fontSize: '0.825rem', padding: '0.5rem 0.65rem', marginBottom: '0.5rem' }}
           ></textarea>
           
           <button 
             className="btn-primary" 
             onClick={submitReflection}
             disabled={isSubmittingReflection || !reflectionInput.trim()}
-            style={{ margin: 0 }}
+            style={{ margin: 0, height: '36px', fontSize: '0.85rem', padding: '0 1rem' }}
           >
             {isSubmittingReflection ? "Analyzing..." : "Submit & Analyze"}
           </button>
-
-
         </div>
 
         {pastEntries.length > 0 && (
-          <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
             <h2>Past Entries</h2>
-            <div className="journal-history" style={{ flex: 1 }}>
+            <div className="journal-history" style={{ flex: 1, minHeight: 0 }}>
               {pastEntries.map(entry => (
                 <div key={entry.id} className="journal-entry" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
+                  <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
                     <div className="entry-date">{new Date(entry.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
                     <div className="entry-preview">{entry.text}</div>
                   </div>
-                  <span className={`state-badge state-${entry.state}`} style={{ marginBottom: 0, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+                  <span className={`state-badge state-${entry.state}`} style={{ marginBottom: 0, padding: '0.15rem 0.5rem', fontSize: '0.68rem', flexShrink: 0 }}>
                     {entry.state}
                   </span>
                 </div>
