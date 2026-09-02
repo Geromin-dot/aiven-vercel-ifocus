@@ -41,6 +41,8 @@ export default function CommandCenterPage() {
   const [todoFilter, setTodoFilter] = useState('All');
   const [loadingTodos, setLoadingTodos] = useState(true);
   const [activeMenuTodoId, setActiveMenuTodoId] = useState(null);
+  const [closingMenuTodoId, setClosingMenuTodoId] = useState(null);
+  const [deletingTodoIds, setDeletingTodoIds] = useState(new Set());
   const [editingTodoId, setEditingTodoId] = useState(null);
   const [editingText, setEditingText] = useState('');
   const [editingPriority, setEditingPriority] = useState('medium');
@@ -642,6 +644,54 @@ export default function CommandCenterPage() {
     }
   };
 
+  const playTaskDeleteSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.16);
+
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } catch (e) {
+      console.log("Audio play error", e);
+    }
+  };
+
+  const closeActionMenu = (id) => {
+    setClosingMenuTodoId(id);
+    setTimeout(() => {
+      setActiveMenuTodoId(null);
+      setClosingMenuTodoId(null);
+    }, 180);
+  };
+
+  const handleAnimatedDelete = (id) => {
+    playTaskDeleteSound();
+    setDeletingTodoIds(prev => new Set(prev).add(id));
+    setActiveMenuTodoId(null);
+    setTimeout(() => {
+      deleteTodo(id);
+      setDeletingTodoIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 280);
+  };
+
   const toggleTodo = async (id) => {
     // Optimistic UI update
     const todoToToggle = todos.find(t => t.id === id);
@@ -991,7 +1041,7 @@ export default function CommandCenterPage() {
             filteredTodos.map((todo) => (
               <div 
                 key={todo.id} 
-                className={`todo-item ${todo.completed ? 'completed' : ''}`}
+                className={`todo-item ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''}`}
                 style={{
                   position: 'relative',
                   borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`
@@ -1040,8 +1090,7 @@ export default function CommandCenterPage() {
                         padding: '0 0.25rem',
                         borderRadius: '6px',
                         border: '1px solid rgba(0,0,0,0.1)',
-                        background: 'rgba(0,0,0,0.03)',
-                        cursor: 'pointer'
+                        background: 'rgba(0,0,0,0.03)'
                       }}
                     >
                       <option value="low">Low</option>
@@ -1085,37 +1134,16 @@ export default function CommandCenterPage() {
                   <>
                     <span className="todo-text">{todo.text}</span>
                     
-                    {/* Action Menu: Inline iOS Action Pill on Click */}
-                    {activeMenuTodoId === todo.id ? (
+                    {/* Action Menu: Smooth Animated Action Pill */}
+                    {activeMenuTodoId === todo.id || closingMenuTodoId === todo.id ? (
                       <div 
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.3rem',
-                          background: 'rgba(0,0,0,0.04)',
-                          padding: '2px 4px',
-                          borderRadius: '9999px',
-                          animation: 'iosActionSlideIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                        }}
+                        className={`todo-action-pill ${closingMenuTodoId === todo.id ? 'closing' : ''}`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
+                          className="action-pill-btn edit"
                           onClick={() => startEditingTodo(todo)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 8px',
-                            background: '#ffffff',
-                            border: '1px solid rgba(0,0,0,0.08)',
-                            borderRadius: '9999px',
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            color: 'var(--primary-accent)',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                          }}
                           title="Edit this task"
                         >
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -1123,23 +1151,8 @@ export default function CommandCenterPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            deleteTodo(todo.id);
-                            setActiveMenuTodoId(null);
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 8px',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid rgba(239, 68, 68, 0.2)',
-                            borderRadius: '9999px',
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            color: '#ef4444',
-                            cursor: 'pointer'
-                          }}
+                          className="action-pill-btn delete"
+                          onClick={() => handleAnimatedDelete(todo.id)}
                           title="Delete this task"
                         >
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -1147,23 +1160,14 @@ export default function CommandCenterPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setActiveMenuTodoId(null)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '20px',
-                            height: '20px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem'
-                          }}
+                          className="action-pill-close"
+                          onClick={() => closeActionMenu(todo.id)}
                           title="Close options"
                         >
-                          ✕
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                          </svg>
                         </button>
                       </div>
                     ) : (

@@ -331,6 +331,32 @@ main {
     animation: taskCompleteGlow 0.4s ease-out;
 }
 
+.todo-item.deleting {
+    animation: iosTaskDelete 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+@keyframes iosTaskDelete {
+    0% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        max-height: 80px;
+        margin-bottom: 0.5rem;
+    }
+    40% {
+        opacity: 0.6;
+        transform: translateX(20px) scale(0.96);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(45px) scale(0.88);
+        max-height: 0;
+        margin-bottom: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-width: 0;
+    }
+}
+
 @keyframes taskCompleteGlow {
     0% {
         background: rgba(78, 130, 83, 0.18);
@@ -342,15 +368,108 @@ main {
     }
 }
 
+/* ===== iOS Action Pill & Micro-Interactions ===== */
+.todo-action-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 4px;
+    border-radius: 9999px;
+    animation: iosActionSlideIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    transform-origin: right center;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.todo-action-pill.closing {
+    animation: iosActionSlideOut 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 @keyframes iosActionSlideIn {
     0% {
         opacity: 0;
-        transform: translateX(10px) scale(0.92);
+        transform: scale(0.85) translateX(10px);
     }
     100% {
         opacity: 1;
-        transform: translateX(0) scale(1);
+        transform: scale(1) translateX(0);
     }
+}
+
+@keyframes iosActionSlideOut {
+    0% {
+        opacity: 1;
+        transform: scale(1) translateX(0);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.85) translateX(10px);
+    }
+}
+
+.action-pill-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.action-pill-btn.edit {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--primary-accent);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.action-pill-btn.edit:hover {
+    background: #f0fdf4;
+    border-color: rgba(78, 130, 83, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(78, 130, 83, 0.15);
+}
+
+.action-pill-btn.delete {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.action-pill-btn.delete:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.action-pill-close {
+    background: rgba(0, 0, 0, 0.06);
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.action-pill-close:hover {
+    background: rgba(0, 0, 0, 0.12);
+    color: var(--text-primary);
+    transform: scale(1.15) rotate(90deg);
+}
+
+.action-pill-close:active {
+    transform: scale(0.9) rotate(90deg);
 }
 
 .todo-item.completed .todo-text {
