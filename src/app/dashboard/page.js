@@ -56,6 +56,7 @@ export default function CommandCenterPage() {
   
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [customWorkTime, setCustomWorkTime] = useState({ min: 0, sec: 0 });
   const [customBreakTime, setCustomBreakTime] = useState({ min: 0, sec: 0 });
   const [customSessions, setCustomSessions] = useState(0);
@@ -553,49 +554,68 @@ export default function CommandCenterPage() {
         </div>
       </div>
 
-      {/* Column 3: Journal */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', minHeight: 0 }}>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
+      {/* Column 3: Journal & AI Coach */}
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.25rem 1.4rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
           <h2>Quick Reflection</h2>
-          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Clear your mind. AI will analyze your entry.</p>
-          
-          <textarea 
-            className="journal-textarea" 
-            value={reflectionInput}
-            onChange={(e) => setReflectionInput(e.target.value)}
-            placeholder="E.g., I have so much to read for biology and I keep getting distracted..."
-            disabled={isSubmittingReflection}
-            style={{ height: '70px', minHeight: '65px', maxHeight: '85px', fontSize: '0.825rem', padding: '0.5rem 0.65rem', marginBottom: '0.5rem' }}
-          ></textarea>
-          
           <button 
-            className="btn-primary" 
-            onClick={submitReflection}
-            disabled={isSubmittingReflection || !reflectionInput.trim()}
-            style={{ margin: 0, height: '36px', fontSize: '0.85rem', padding: '0 1rem' }}
+            onClick={() => setIsHistoryModalOpen(true)}
+            style={{
+              background: 'rgba(0,0,0,0.04)',
+              border: '1px solid var(--glass-border)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              cursor: 'pointer',
+              fontWeight: 500,
+              transition: 'all 0.2s ease'
+            }}
           >
-            {isSubmittingReflection ? "Analyzing..." : "Submit & Analyze"}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            History {pastEntries.length > 0 && `(${pastEntries.length})`}
           </button>
         </div>
+        <p className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '0.85rem', lineHeight: '1.3' }}>Clear your mind. AI will analyze your entry.</p>
+        
+        <textarea 
+          className="journal-textarea" 
+          value={reflectionInput}
+          onChange={(e) => setReflectionInput(e.target.value)}
+          placeholder="E.g., I have so much to read for biology and I keep getting distracted..."
+          disabled={isSubmittingReflection}
+          style={{ flex: 1, minHeight: '140px', fontSize: '0.875rem', padding: '0.75rem 0.85rem', marginBottom: '0.75rem', resize: 'none' }}
+        ></textarea>
+        
+        <button 
+          className="btn-primary" 
+          onClick={submitReflection}
+          disabled={isSubmittingReflection || !reflectionInput.trim()}
+          style={{ margin: 0, height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+        >
+          {isSubmittingReflection ? (
+            "Analyzing with AI Coach..."
+          ) : (
+            <>
+              <span>Submit & Analyze</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path><path d="M19 5l-14 14"></path><path d="M5 5l14 14"></path></svg>
+            </>
+          )}
+        </button>
 
-        {pastEntries.length > 0 && (
-          <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
-            <h2>Past Entries</h2>
-            <div className="journal-history" style={{ flex: 1, minHeight: 0 }}>
-              {pastEntries.map(entry => (
-                <div key={entry.id} className="journal-entry" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
-                    <div className="entry-date">{new Date(entry.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
-                    <div className="entry-preview">{entry.text}</div>
-                  </div>
-                  <span className={`state-badge state-${entry.state}`} style={{ marginBottom: 0, padding: '0.15rem 0.5rem', fontSize: '0.68rem', flexShrink: 0 }}>
-                    {entry.state}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* AI Coaching Strategy Tip Box */}
+        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: 'rgba(95, 143, 94, 0.08)', border: '1px solid rgba(95, 143, 94, 0.18)', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-accent)', fontWeight: 600, fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+            Adaptive AI Coach
           </div>
-        )}
+          <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', lineHeight: '1.45', margin: 0 }}>
+            Share how you feel or what task you want to start with. AI analyzes emotional friction, reorders your to-dos, and sets your focus timer.
+          </p>
+        </div>
       </div>
 
       {/* AI Coach Modal */}
@@ -641,6 +661,48 @@ export default function CommandCenterPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                 <button onClick={() => setIsCustomTimerModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
                 <button onClick={saveCustomSettings} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0 }}>Save Settings</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reflection History Modal */}
+      {isHistoryModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '540px', width: '92%', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Reflection History</h2>
+              <button onClick={() => setIsHistoryModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+            </div>
+            <p className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '1rem' }}>Past reflection journal entries and detected emotional states.</p>
+            
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', paddingRight: '4px', maxHeight: '420px' }}>
+              {pastEntries.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                  <p>No reflection entries recorded yet.</p>
+                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Submit a quick reflection to start building your mental clarity history.</p>
+                </div>
+              ) : (
+                pastEntries.map(entry => (
+                  <div key={entry.id} className="journal-entry" style={{ padding: '0.75rem 1rem', background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                        {new Date(entry.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                      <span className={`state-badge state-${entry.state}`} style={{ margin: 0, padding: '0.15rem 0.55rem', fontSize: '0.7rem' }}>
+                        {entry.state}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
+                      "{entry.text}"
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, fontSize: '0.85rem' }}>Close</button>
             </div>
           </div>
         </div>
