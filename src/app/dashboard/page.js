@@ -311,7 +311,8 @@ export default function CommandCenterPage() {
             const reorderedActive = [];
             
             data.orderedIds.forEach(id => {
-                const todo = activeTodos.find(t => String(t.id) === String(id));
+                const cleanId = String(id).trim();
+                const todo = activeTodos.find(t => String(t.id).trim() === cleanId);
                 if (todo) reorderedActive.push(todo);
             });
             activeTodos.forEach(todo => {
@@ -396,7 +397,7 @@ export default function CommandCenterPage() {
           <h2>To-Do List</h2>
           <div className="sync-badge">
             <span className="dot"></span>
-            Cloud Synced
+            Cloud Synced (Live)
           </div>
         </div>
         <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Organize complex to-do lists. Drag to reorder. Everything syncs across devices.</p>
