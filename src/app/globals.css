@@ -34,7 +34,7 @@ input, button, textarea, select {
 }
 
 body {
-    background-color: #f6f8f6;
+    background-color: #ecf1ec;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -224,16 +224,26 @@ main {
     width: 100%;
 }
 
-/* ===== Glassmorphism Panels (Glossy White iOS Style) ===== */
+/* ===== Tactile Elevated Cards & Panels (iOS Inspired) ===== */
 .glass-panel {
-    background: rgba(255, 255, 255, 0.68);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: #ffffff;
     border-radius: 26px;
     padding: 1.4rem 1.5rem;
-    box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.7);
-    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    box-shadow: 
+        0 2px 4px rgba(0, 0, 0, 0.02),
+        0 8px 24px -4px rgba(0, 0, 0, 0.08),
+        0 20px 48px -10px rgba(0, 0, 0, 0.06),
+        0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+    box-shadow: 
+        0 4px 8px rgba(0, 0, 0, 0.03),
+        0 12px 32px -4px rgba(0, 0, 0, 0.10),
+        0 28px 56px -10px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
 }
 
 /* ===== iOS / iPhone Style Popup Toast Notification ===== */
