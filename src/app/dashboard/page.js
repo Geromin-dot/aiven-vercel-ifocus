@@ -529,117 +529,166 @@ export default function CommandCenterPage() {
         </div>
       </div>
 
-      {/* Column 2: Pomodoro Timer & Dynamic Audio (Centerpiece) */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', height: '100%', minHeight: 0, padding: '1.4rem 1.25rem' }}>
+      {/* Column 2: Pomodoro Timer & Daily Progress (Apple Reference Style) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', minHeight: 0 }}>
         
-        {/* Floating Dynamic Ambient Island */}
-        <div 
-          className="ambient-island-widget"
-          onClick={() => setIsAudioModalOpen(true)}
-          title="Click to open Soundscape Player"
-          style={{ marginBottom: '0.5rem' }}
-        >
-          <div className={`ambient-wave ${isPlaying ? 'playing' : ''}`}>
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.1 }}>
-              {currentTrack}
-            </span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-              {isPlaying ? 'Playing • Click for tracks' : 'Paused • Soundscapes'}
-            </span>
-          </div>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
-            style={{ 
-              background: isPlaying ? 'var(--primary-accent)' : 'rgba(0,0,0,0.06)', 
-              color: isPlaying ? 'white' : 'var(--text-primary)',
-              border: 'none', 
-              borderRadius: '50%', 
-              width: '28px', 
-              height: '28px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              marginLeft: '4px'
-            }}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-        </div>
-
-        {/* Circular Pomodoro Timer */}
-        <div 
-          className="timer-circle" 
-          style={{ 
-            '--progress': `${progressPercent}%`,
-            width: '205px',
-            height: '205px',
-            margin: '0.25rem auto'
-          }}
-        >
-          <div className="timer-inner">
-            <div className="timer-display" style={{ fontSize: '2.9rem', fontWeight: 700 }}>
-              {formatTime(timeLeft)}
+        {/* Top Card: Daily Progress & Soundscape Player */}
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.1rem 1.4rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Daily Progress</h2>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--primary-accent)' }}>{todos.filter(t => t.completed).length}/{todos.length || 0}</span> Tasks was done
             </div>
-            <div className="timer-label" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-accent)', marginTop: '0.2rem' }}>
-              {isFocus ? 'Focus Time' : 'Break Time'}
-            </div>
-          </div>
-        </div>
-
-        {/* Active Task Chip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(0,0,0,0.03)', padding: '0.35rem 0.85rem', borderRadius: 'var(--radius-pill)', fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '90%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          <span>🎯</span>
-          <span style={{ fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {activeTask ? activeTask.text : 'Ready to Focus'}
-          </span>
-        </div>
-
-        {/* Authentic iFocus Sage Theme Controls */}
-        <div className="timer-controls" style={{ margin: '0.4rem 0' }}>
-          <button 
-            className="btn-primary" 
-            onClick={toggleTimer}
-            style={{ minWidth: '110px', height: '40px', fontSize: '0.95rem', background: isActive ? 'var(--warning)' : '' }}
-          >
-            {isActive ? 'Pause' : 'Start'}
-          </button>
-          <button 
-            className="btn-secondary" 
-            onClick={resetTimer}
-            style={{ height: '40px', fontSize: '0.9rem' }}
-          >
-            Reset
-          </button>
-        </div>
-
-        {/* Presets Row */}
-        <div className="pomodoro-settings" style={{ margin: 0 }}>
-          {['25/5', '50/10', '15/3', '90/20', 'Custom'].map(preset => (
             <button 
-              key={preset}
-              className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
-              onClick={() => setPreset(preset)}
-              style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
+              onClick={() => setIsAudioModalOpen(true)}
+              style={{
+                background: 'rgba(0,0,0,0.04)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                borderRadius: '9999px',
+                padding: '4px 10px',
+                fontSize: '0.72rem',
+                color: 'var(--text-secondary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                cursor: 'pointer',
+                marginTop: '0.4rem',
+                fontWeight: 500
+              }}
             >
-              {preset}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+              {isPlaying ? `Playing: ${currentTrack}` : `Audio: ${currentTrack}`}
             </button>
-          ))}
+          </div>
+
+          {/* Circular Progress Badge */}
+          <div 
+            className="daily-progress-badge" 
+            style={{ '--daily-progress': `${Math.round((todos.filter(t => t.completed).length / (todos.length || 1)) * 100)}%` }}
+          >
+            <div className="daily-progress-text">
+              {Math.round((todos.filter(t => t.completed).length / (todos.length || 1)) * 100)}%
+            </div>
+          </div>
         </div>
 
-        {/* Session Indicator Dots */}
-        <div className="session-counter" style={{ margin: 0, fontSize: '0.78rem' }}>
-          Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 4}
-          <div className="session-dots" style={{ marginTop: '0.35rem' }}>
-            {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 4 }).map((_, i) => (
-              <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
+        {/* Main Pomodoro Timer Card */}
+        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '1.35rem 1.4rem' }}>
+          
+          {/* Ongoing / Break Pill Switcher */}
+          <div className="ios-segmented-control" style={{ marginBottom: '0.5rem' }}>
+            <button 
+              className={`ios-segment-btn ${isFocus ? 'active' : ''}`}
+              onClick={() => {
+                setIsFocus(true);
+                setIsActive(false);
+                const focusTime = timerPreset === 'Custom'
+                  ? customWorkTime.min * 60 + customWorkTime.sec
+                  : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
+                setTimeLeft(focusTime);
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Ongoing
+            </button>
+            <button 
+              className={`ios-segment-btn ${!isFocus ? 'active' : ''}`}
+              onClick={() => {
+                setIsFocus(false);
+                setIsActive(false);
+                const breakTime = timerPreset === 'Custom'
+                  ? customBreakTime.min * 60 + customBreakTime.sec
+                  : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+                setTimeLeft(breakTime);
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+              Break
+            </button>
+          </div>
+
+          {/* Giant Clean Digits */}
+          <div className="ios-timer-digits" style={{ margin: '0.5rem 0' }}>
+            {formatTime(timeLeft)}
+          </div>
+
+          {/* Horizontal Progress Bar */}
+          <div className="ios-timer-progress-bar" style={{ margin: '0.4rem 0 1rem 0' }}>
+            <div className="ios-timer-progress-fill" style={{ width: `${progressPercent}%` }}></div>
+          </div>
+
+          {/* Clean Controls (Reset, Start/Stop Pill, Settings) */}
+          <div className="ios-timer-actions" style={{ margin: '0.5rem 0' }}>
+            <button 
+              className="ios-circle-action-btn"
+              onClick={resetTimer}
+              title="Reset Timer"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+
+            <button 
+              className={`ios-pill-action-btn ${isActive ? 'paused' : ''}`}
+              onClick={toggleTimer}
+              style={{
+                background: isActive ? '#d97706' : '#4e8253',
+                padding: '0.7rem 2.2rem',
+                borderRadius: '9999px',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 8px 20px -4px rgba(78, 130, 83, 0.4)'
+              }}
+            >
+              {isActive ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                  <span>Stop</span>
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                  <span>Start</span>
+                </>
+              )}
+            </button>
+
+            <button 
+              className="ios-circle-action-btn"
+              onClick={() => setIsCustomTimerModalOpen(true)}
+              title="Custom Timer Settings"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </button>
+          </div>
+
+          {/* Presets Row */}
+          <div className="pomodoro-settings" style={{ margin: 0 }}>
+            {['25/5', '50/10', '15/3', '90/20', 'Custom'].map(preset => (
+              <button 
+                key={preset}
+                className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
+                onClick={() => setPreset(preset)}
+                style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}
+              >
+                {preset}
+              </button>
             ))}
+          </div>
+
+          {/* Session Indicator Dots */}
+          <div className="session-counter" style={{ margin: 0, fontSize: '0.78rem' }}>
+            Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 4}
+            <div className="session-dots" style={{ marginTop: '0.35rem' }}>
+              {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 4 }).map((_, i) => (
+                <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -724,7 +773,7 @@ export default function CommandCenterPage() {
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="glass-panel modal-content" style={{ maxWidth: '460px', width: '92%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.3rem', margin: 0 }}>🎵 Ambient Soundscapes</h2>
+              <h2 style={{ fontSize: '1.3rem', margin: 0 }}>Ambient Soundscapes</h2>
               <button onClick={() => setIsAudioModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
             </div>
             <p className="subtitle" style={{ fontSize: '0.82rem', marginBottom: '1.25rem' }}>Background audio streams to help you focus.</p>
@@ -733,7 +782,6 @@ export default function CommandCenterPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
               {tracks.map(track => {
                 const isCurrent = currentTrack === track;
-                const icon = track === 'Chill Lofi' ? '☕' : track === 'Study Music' ? '📚' : '🌧️';
                 const desc = track === 'Chill Lofi' ? 'Calming Lo-Fi beats & ambient vibes' : track === 'Study Music' ? 'Alpha wave melodies for concentration' : 'Gentle rain shower & soothing drops';
                 return (
                   <div 
@@ -744,7 +792,15 @@ export default function CommandCenterPage() {
                       setIsPlaying(true);
                     }}
                   >
-                    <div style={{ fontSize: '1.5rem' }}>{icon}</div>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', color: 'var(--primary-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {track === 'Chill Lofi' ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+                      ) : track === 'Study Music' ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path><line x1="8" y1="19" x2="8" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line><line x1="16" y1="19" x2="16" y2="21"></line></svg>
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{track}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{desc}</div>
@@ -763,7 +819,7 @@ export default function CommandCenterPage() {
 
             {/* Volume Control */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.03)', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
-              <span style={{ fontSize: '1rem' }}>🔈</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
               <input 
                 type="range" 
                 min="0" 

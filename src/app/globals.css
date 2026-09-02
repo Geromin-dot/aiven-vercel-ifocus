@@ -34,7 +34,14 @@ input, button, textarea, select {
 }
 
 body {
-    background-color: var(--bg-color);
+    background: #0f2017;
+    background-image: 
+        radial-gradient(at 10% 15%, rgba(68, 126, 92, 0.75) 0px, transparent 55%),
+        radial-gradient(at 90% 10%, rgba(95, 143, 94, 0.7) 0px, transparent 50%),
+        radial-gradient(at 95% 85%, rgba(184, 166, 126, 0.5) 0px, transparent 55%),
+        radial-gradient(at 5% 90%, rgba(15, 123, 108, 0.65) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(27, 56, 43, 0.95) 0px, transparent 70%);
+    background-attachment: fixed;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
@@ -288,15 +295,15 @@ main {
     overflow-y: auto;
 }
 
-/* ===== Glassmorphism Panels ===== */
+/* ===== Glassmorphism Panels (iOS Fluent Style) ===== */
 .glass-panel {
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.85);
-    border-radius: var(--radius-xl);
-    padding: 1.35rem 1.4rem;
-    box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02);
+    background: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    border-radius: 26px;
+    padding: 1.4rem 1.5rem;
+    box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(255, 255, 255, 0.5);
     transition: all 0.3s ease;
 }
 
@@ -1004,6 +1011,35 @@ textarea:focus {
     inset: 9px;
     border-radius: 50%;
     background: var(--bg-surface);
+}
+
+/* ===== Circular Progress Badge for Daily Progress ===== */
+.daily-progress-badge {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: conic-gradient(var(--primary-accent) var(--daily-progress, 0%), rgba(0,0,0,0.06) 0%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.daily-progress-badge::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: #ffffff;
+}
+
+.daily-progress-text {
+    position: relative;
+    z-index: 1;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
 }
 
 .timer-inner {
