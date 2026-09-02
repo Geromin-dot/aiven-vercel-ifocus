@@ -328,6 +328,29 @@ main {
 .todo-item.completed {
     background: rgba(255, 255, 255, 0.55);
     border-color: rgba(0, 0, 0, 0.04);
+    animation: taskCompleteGlow 0.4s ease-out;
+}
+
+@keyframes taskCompleteGlow {
+    0% {
+        background: rgba(78, 130, 83, 0.18);
+        transform: scale(1.01);
+    }
+    100% {
+        background: rgba(255, 255, 255, 0.55);
+        transform: scale(1);
+    }
+}
+
+@keyframes iosActionSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateX(10px) scale(0.92);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
 }
 
 .todo-item.completed .todo-text {
@@ -360,6 +383,25 @@ main {
     border-color: #4e8253;
     animation: checkmarkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 2px 6px rgba(78, 130, 83, 0.35);
+}
+
+.todo-checkbox.checked svg {
+    animation: checkmarkDraw 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes checkmarkDraw {
+    0% {
+        opacity: 0;
+        transform: scale(0.3) rotate(-20deg);
+    }
+    65% {
+        opacity: 1;
+        transform: scale(1.25) rotate(6deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
 }
 
 @keyframes checkmarkPop {
