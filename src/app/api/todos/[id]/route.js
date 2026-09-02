@@ -23,9 +23,14 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 
+    const updateData = {};
+    if (body.text !== undefined) updateData.text = body.text;
+    if (body.priority !== undefined) updateData.priority = body.priority;
+    if (body.completed !== undefined) updateData.completed = body.completed;
+
     const todo = await prisma.todo.update({
       where: { id },
-      data: { completed: body.completed }
+      data: updateData
     });
     return NextResponse.json(todo);
   } catch (error) {

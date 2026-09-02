@@ -40,6 +40,10 @@ export default function CommandCenterPage() {
   const [todoPriority, setTodoPriority] = useState('medium');
   const [todoFilter, setTodoFilter] = useState('All');
   const [loadingTodos, setLoadingTodos] = useState(true);
+  const [activeMenuTodoId, setActiveMenuTodoId] = useState(null);
+  const [editingTodoId, setEditingTodoId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const [editingPriority, setEditingPriority] = useState('medium');
 
   // AI Coach State
   const [reflectionInput, setReflectionInput] = useState('');
@@ -520,6 +524,35 @@ export default function CommandCenterPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Task Add Apple-Style Sound Effect
+  const playTaskAddSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.exponentialRampToValueAtTime(960, now + 0.12);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } catch (e) {
+      console.log("Audio play error", e);
+    }
+  };
+
   // To-Do Logic (Cloud Synced)
   const addTodo = async (e) => {
     if (e) e.preventDefault();
@@ -530,6 +563,7 @@ export default function CommandCenterPage() {
     
     const text = todoInput;
     setTodoInput(''); // Optimistic clear
+    playTaskAddSound(); // Play satisfying chime pop!
     
     try {
       const res = await fetch('/api/todos', {
@@ -544,6 +578,33 @@ export default function CommandCenterPage() {
       setTodos(current => [newTodo, ...current]);
     } catch (err) {
       alert("Error adding task: " + err.message);
+    }
+  };
+
+  const startEditingTodo = (todo) => {
+    setEditingTodoId(todo.id);
+    setEditingText(todo.text);
+    setEditingPriority(todo.priority || 'medium');
+    setActiveMenuTodoId(null);
+  };
+
+  const saveEditedTodo = async (id) => {
+    if (!editingText.trim()) return;
+    const prevTodos = [...todos];
+    setTodos(todos.map(t => t.id === id ? { ...t, text: editingText.trim(), priority: editingPriority } : t));
+    setEditingTodoId(null);
+
+    try {
+      const res = await fetch(`/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: editingText.trim(), priority: editingPriority })
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (err) {
+      console.error("Failed to save edited todo:", err);
+      alert("Failed to update task.");
+      setTodos(prevTodos);
     }
   };
 
@@ -744,7 +805,7 @@ export default function CommandCenterPage() {
   const activeTask = todos.find(t => !t.completed);
 
   return (
-    <div className="command-center-layout">
+    <div className="command-center-layout" onClick={() => setActiveMenuTodoId(null)}>
       {/* Background Audio Element */}
       <audio ref={audioRef} loop src={getTrackSrc(currentTrack)} />
 
@@ -894,6 +955,7 @@ export default function CommandCenterPage() {
                 key={todo.id} 
                 className={`todo-item ${todo.completed ? 'completed' : ''}`}
                 style={{
+                  position: 'relative',
                   borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`
                 }}
               >
@@ -908,15 +970,189 @@ export default function CommandCenterPage() {
                     </svg>
                   )}
                 </div>
-                <span className="todo-text">{todo.text}</span>
-                <span className={`todo-priority-badge ${todo.priority || 'medium'}`}>{todo.priority || 'medium'}</span>
-                <button 
-                  className="todo-delete" 
-                  onClick={() => deleteTodo(todo.id)}
-                  title="Delete task"
-                >
-                  ✕
-                </button>
+
+                {editingTodoId === todo.id ? (
+                  <div style={{ display: 'flex', flex: 1, gap: '0.35rem', alignItems: 'center' }}>
+                    <input 
+                      type="text"
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEditedTodo(todo.id);
+                        if (e.key === 'Escape') setEditingTodoId(null);
+                      }}
+                      autoFocus
+                      style={{
+                        flex: 1,
+                        height: '30px',
+                        fontSize: '0.86rem',
+                        padding: '0 0.45rem',
+                        borderRadius: '6px',
+                        border: '1px solid #4e8253',
+                        background: '#ffffff',
+                        outline: 'none'
+                      }}
+                    />
+                    <select
+                      value={editingPriority}
+                      onChange={(e) => setEditingPriority(e.target.value)}
+                      style={{
+                        height: '30px',
+                        fontSize: '0.75rem',
+                        padding: '0 0.25rem',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        background: 'rgba(0,0,0,0.03)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Med</option>
+                      <option value="high">High</option>
+                    </select>
+                    <button
+                      onClick={() => saveEditedTodo(todo.id)}
+                      style={{
+                        background: '#4e8253',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0 0.5rem',
+                        height: '30px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                      title="Save changes"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => setEditingTodoId(null)}
+                      style={{
+                        background: 'rgba(0,0,0,0.06)',
+                        color: 'var(--text-secondary)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0 0.5rem',
+                        height: '30px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                      title="Cancel"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="todo-text">{todo.text}</span>
+                    <span className={`todo-priority-badge ${todo.priority || 'medium'}`}>{todo.priority || 'medium'}</span>
+                    
+                    {/* 3 Dots Action Menu */}
+                    <div style={{ position: 'relative' }}>
+                      <button 
+                        type="button" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuTodoId(activeMenuTodoId === todo.id ? null : todo.id);
+                        }}
+                        title="Task options"
+                        style={{
+                          background: activeMenuTodoId === todo.id ? 'rgba(0,0,0,0.08)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '26px',
+                          height: '26px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="2"></circle>
+                          <circle cx="12" cy="12" r="2"></circle>
+                          <circle cx="12" cy="19" r="2"></circle>
+                        </svg>
+                      </button>
+
+                      {/* Dropdown Popover */}
+                      {activeMenuTodoId === todo.id && (
+                        <div 
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: '4px',
+                            width: '120px',
+                            background: '#ffffff',
+                            border: '1px solid rgba(0, 0, 0, 0.08)',
+                            borderRadius: '12px',
+                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 0 1px rgba(0,0,0,0.1)',
+                            padding: '4px',
+                            zIndex: 100
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => startEditingTodo(todo)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              width: '100%',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.78rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textAlign: 'left'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(78, 130, 83, 0.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                            Edit
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteTodo(todo.id);
+                              setActiveMenuTodoId(null);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              width: '100%',
+                              padding: '6px 8px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#ef4444',
+                              fontSize: '0.78rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textAlign: 'left'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
