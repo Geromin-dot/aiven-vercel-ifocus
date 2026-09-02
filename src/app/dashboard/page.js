@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
 const playAlertSound = () => {
@@ -57,6 +57,7 @@ export default function CommandCenterPage() {
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [customWorkTime, setCustomWorkTime] = useState({ min: 0, sec: 0 });
   const [customBreakTime, setCustomBreakTime] = useState({ min: 0, sec: 0 });
   const [customSessions, setCustomSessions] = useState(0);
@@ -64,6 +65,8 @@ export default function CommandCenterPage() {
   // Ambient Audio State
   const [currentTrack, setCurrentTrack] = useState('Chill Lofi');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(70);
+  const audioRef = useRef(null);
   const tracks = ['Chill Lofi', 'Study Music', 'Rain Ambient'];
 
   // Load To-Dos from API and History from LocalStorage
@@ -109,6 +112,26 @@ export default function CommandCenterPage() {
       console.warn("LocalStorage failed:", e);
     }
   };
+
+  // Audio Track Source Map
+  const getTrackSrc = (name) => {
+    if (name === 'Chill Lofi') return '/music/Lofi Chill.mp3';
+    if (name === 'Study Music') return '/music/Study Music.mp3';
+    if (name === 'Rain Ambient') return '/music/rain.mp3';
+    return '/music/Lofi Chill.mp3';
+  };
+
+  // Audio Playback Sync
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume / 100;
+      if (isPlaying) {
+        audioRef.current.play().catch(e => console.warn("Audio autoplay blocked:", e));
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [isPlaying, currentTrack, volume]);
 
   // Pomodoro Logic
   useEffect(() => {
@@ -390,53 +413,90 @@ export default function CommandCenterPage() {
     }
   };
 
+  // Calculate Progress Percent for Pomodoro Progress Bar
+  const getTotalTime = () => {
+    if (isFocus) {
+      if (timerPreset === 'Custom') return (customWorkTime.min * 60 + customWorkTime.sec) || 25 * 60;
+      return (parseInt(timerPreset.split('/')[0]) || 25) * 60;
+    } else {
+      if (timerPreset === 'Custom') return (customBreakTime.min * 60 + customBreakTime.sec) || 5 * 60;
+      return (parseInt(timerPreset.split('/')[1]) || 5) * 60;
+    }
+  };
+  const totalTime = getTotalTime();
+  const progressPercent = Math.min(100, Math.max(0, ((totalTime - timeLeft) / (totalTime || 1)) * 100));
+  const activeTask = todos.find(t => !t.completed);
+
   return (
     <div className="command-center-layout">
-      {/* Column 1: Task Command Center */}
+      {/* Background Audio Element */}
+      <audio ref={audioRef} loop src={getTrackSrc(currentTrack)} />
+
+      {/* Column 1: Task Command Center (Apple Reminders Style) */}
       <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-          <h2>To-Do List</h2>
-          <div className="sync-badge">
-            <span className="dot"></span>
-            Cloud Synced (Live)
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Tasks List</h2>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              {todos.filter(t => t.completed).length}/{todos.length} Done
+            </span>
           </div>
-        </div>
-        <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Organize tasks. Drag to reorder. Syncs across devices.</p>
-        
-        <div className="todo-input-row" style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
-          <input 
-            type="text" 
-            placeholder="What needs to be done?" 
-            value={todoInput}
-            onChange={(e) => setTodoInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-            style={{ flex: 1, minWidth: '120px', height: '36px', fontSize: '0.85rem', padding: '0 0.65rem', boxSizing: 'border-box' }}
-          />
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
-            <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ height: '36px', fontSize: '0.8rem', padding: '0 0.5rem', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
-              <option value="low">Low</option>
-              <option value="medium">Med</option>
-              <option value="high">High</option>
-            </select>
-            <button type="button" className="btn-primary" onClick={addTodo} style={{ padding: '0 0.85rem', marginTop: 0, height: '36px', fontSize: '0.85rem', boxSizing: 'border-box', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
+          <div className="sync-badge" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+            <span className="dot"></span>
+            Cloud Synced
           </div>
         </div>
 
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', gap: '0.35rem', margin: '0.5rem 0' }}>
+          {['All', 'Active', 'Done'].map(filter => (
+            <button 
+              key={filter}
+              onClick={() => setTodoFilter(filter)}
+              style={{ 
+                background: todoFilter === filter ? '#ffffff' : 'rgba(0,0,0,0.04)',
+                border: todoFilter === filter ? '1px solid rgba(0,0,0,0.08)' : '1px solid transparent',
+                boxShadow: todoFilter === filter ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                fontWeight: todoFilter === filter ? 600 : 400,
+                color: todoFilter === filter ? 'var(--text-primary)' : 'var(--text-secondary)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+
+        {/* Task List */}
         <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {loadingTodos ? (
-            <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
+            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
-            <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No tasks yet.</p>
+            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No tasks found.</p>
           ) : (
-            filteredTodos.map(todo => (
-              <div key={todo.id} className={`todo-item priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}>
+            filteredTodos.map((todo, idx) => (
+              <div 
+                key={todo.id} 
+                className={`todo-item priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}
+                style={{ 
+                  borderRadius: 'var(--radius-md)', 
+                  padding: '0.6rem 0.85rem',
+                  background: todo.completed ? 'rgba(0,0,0,0.02)' : '#ffffff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                }}
+              >
                 <div 
                   className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
                   onClick={() => toggleTodo(todo.id)}
+                  style={{ width: '20px', height: '20px' }}
                 >
-                  {todo.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  {todo.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                 </div>
-                <span className="todo-text">{todo.text}</span>
+                <span className="todo-text" style={{ fontSize: '0.88rem' }}>{todo.text}</span>
                 <span className={`todo-priority-badge ${todo.priority || 'medium'}`}>{todo.priority || 'medium'}</span>
                 <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
               </div>
@@ -444,127 +504,192 @@ export default function CommandCenterPage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', marginTop: '0.6rem' }}>
-          <div style={{ display: 'flex', gap: '0.35rem' }}>
-            {['All', 'Active', 'Done'].map(filter => (
-              <button 
-                key={filter}
-                onClick={() => setTodoFilter(filter)}
-                style={{ 
-                  background: todoFilter === filter ? 'rgba(0,0,0,0.06)' : 'transparent',
-                  border: 'none',
-                  padding: '0.2rem 0.55rem',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                  fontWeight: todoFilter === filter ? 600 : 400
-                }}
-              >
-                {filter}
-              </button>
-            ))}
-          </div>
-          <button onClick={clearCompleted} style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        {/* Input Bar */}
+        <div className="todo-input-row" style={{ marginTop: '0.75rem', gap: '0.4rem' }}>
+          <input 
+            type="text" 
+            placeholder="What needs to be done?" 
+            value={todoInput}
+            onChange={(e) => setTodoInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+            style={{ flex: 1, minWidth: '120px', height: '38px', fontSize: '0.85rem', padding: '0 0.75rem', borderRadius: 'var(--radius-sm)' }}
+          />
+          <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ height: '38px', fontSize: '0.8rem', padding: '0 0.5rem', borderRadius: 'var(--radius-sm)' }}>
+            <option value="low">Low</option>
+            <option value="medium">Med</option>
+            <option value="high">High</option>
+          </select>
+          <button type="button" className="btn-primary" onClick={addTodo} style={{ padding: '0 0.9rem', marginTop: 0, height: '38px', fontSize: '0.85rem', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+          <button onClick={clearCompleted} style={{ background: 'transparent', border: 'none', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline' }}>
             Clear Completed
           </button>
         </div>
       </div>
 
-      {/* Column 2: Timer & Audio */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', height: '100%', minHeight: 0 }}>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem 1.15rem' }}>
-          <h2>Pomodoro Timer</h2>
-          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Leave your phone. Focus here.</p>
-
-          <div className="timer-circle">
-            <div className="timer-inner">
-              <div className="timer-display">{formatTime(timeLeft)}</div>
-              <div className="timer-label">{isFocus ? 'Focus Time' : 'Break Time'}</div>
-            </div>
+      {/* Column 2: Pomodoro Timer & Dynamic Audio (Apple Style Centerpiece) */}
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', height: '100%', minHeight: 0, padding: '1.5rem 1.25rem' }}>
+        
+        {/* Floating Dynamic Ambient Island */}
+        <div 
+          className="ambient-island-widget"
+          onClick={() => setIsAudioModalOpen(true)}
+          title="Click to open Soundscape Player"
+        >
+          <div className={`ambient-wave ${isPlaying ? 'playing' : ''}`}>
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
-
-          <div className="timer-controls">
-            <button className="btn-primary" onClick={toggleTimer} style={{ background: isActive ? 'var(--warning)' : '' }}>
-              {isActive ? 'Pause' : 'Start'}
-            </button>
-            <button className="btn-secondary" onClick={resetTimer}>Reset</button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+              {currentTrack}
+            </span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+              {isPlaying ? 'Playing • Click for more' : 'Paused • Soundscapes'}
+            </span>
           </div>
-
-          <div className="pomodoro-settings">
-            {['25/5', '50/10', '15/3', '90/20', 'Custom'].map(preset => (
-              <button 
-                key={preset}
-                className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
-                onClick={() => setPreset(preset)}
-              >
-                {preset}
-              </button>
-            ))}
-          </div>
-          
-          <div className="session-counter">
-            Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 1}
-            <div className="session-dots">
-              {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 1 }).map((_, i) => (
-                <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
-              ))}
-            </div>
-          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
+            style={{ 
+              background: isPlaying ? 'var(--primary-accent)' : 'rgba(0,0,0,0.06)', 
+              color: isPlaying ? 'white' : 'var(--text-primary)',
+              border: 'none', 
+              borderRadius: '50%', 
+              width: '26px', 
+              height: '26px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              marginLeft: '4px'
+            }}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
         </div>
 
-        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1rem 1.15rem' }}>
-          <h2>Ambient Audio</h2>
-          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.35rem' }}>Local music tracks.</p>
-          
-          <div className="audio-player" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <div className="audio-tracks" style={{ flex: 1, minHeight: 0 }}>
-              {tracks.map(track => (
-                <div 
-                  key={track} 
-                  className={`audio-track ${currentTrack === track && isPlaying ? 'playing' : ''}`}
-                  onClick={() => { setCurrentTrack(track); setIsPlaying(true); }}
-                >
-                  <span className="track-name">{track}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{currentTrack === track && isPlaying ? 'Playing' : 'Play'}</span>
-                </div>
-              ))}
-            </div>
+        {/* iOS Segmented Pill Control */}
+        <div className="ios-segmented-control">
+          <button 
+            className={`ios-segment-btn ${isFocus ? 'active' : ''}`}
+            onClick={() => {
+              setIsFocus(true);
+              setIsActive(false);
+              const focusTime = timerPreset === 'Custom'
+                ? customWorkTime.min * 60 + customWorkTime.sec
+                : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
+              setTimeLeft(focusTime);
+            }}
+          >
+            <span>⏱</span> Ongoing
+          </button>
+          <button 
+            className={`ios-segment-btn ${!isFocus ? 'active' : ''}`}
+            onClick={() => {
+              setIsFocus(false);
+              setIsActive(false);
+              const breakTime = timerPreset === 'Custom'
+                ? customBreakTime.min * 60 + customBreakTime.sec
+                : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+              setTimeLeft(breakTime);
+            }}
+          >
+            <span>☕</span> Break
+          </button>
+        </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.35rem' }}>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6, fontSize: '0.9rem' }}>⏮</button>
-              <button 
-                onClick={() => setIsPlaying(!isPlaying)}
-                style={{ background: 'var(--primary-accent)', color: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}
-              >
-                {isPlaying ? '⏸' : '▶'}
-              </button>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6, fontSize: '0.9rem' }}>⏭</button>
-            </div>
+        {/* Giant Apple Digits */}
+        <div className="ios-timer-digits">
+          {formatTime(timeLeft)}
+        </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-              <span>0:00</span>
-              <input type="range" style={{ flex: 1, accentColor: 'var(--primary-accent)', height: '3px' }} defaultValue="0" />
-              <span>3:15</span>
-            </div>
+        {/* Horizontal Progress Bar */}
+        <div className="ios-timer-progress-bar">
+          <div className="ios-timer-progress-fill" style={{ width: `${progressPercent}%` }}></div>
+        </div>
 
-            <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-              {isPlaying ? `Now Playing: ${currentTrack}` : 'Paused'}
-            </p>
+        {/* Active Task Pill Indicator */}
+        <div className="ios-active-task-chip">
+          <span>📗</span>
+          <span>{activeTask ? `#1 - ${activeTask.text}` : 'Focus Session Ready'}</span>
+        </div>
+
+        {/* Timer Control Actions (Reset, Start/Stop Pill, Presets) */}
+        <div className="ios-timer-actions">
+          <button 
+            className="ios-circle-action-btn"
+            onClick={resetTimer}
+            title="Reset Timer"
+          >
+            ⟲
+          </button>
+
+          <button 
+            className={`ios-pill-action-btn ${isActive ? 'paused' : ''}`}
+            onClick={toggleTimer}
+          >
+            {isActive ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                <span>Stop</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span>Start</span>
+              </>
+            )}
+          </button>
+
+          <button 
+            className="ios-circle-action-btn"
+            onClick={() => setIsCustomTimerModalOpen(true)}
+            title="Settings & Presets"
+          >
+            ⚙
+          </button>
+        </div>
+
+        {/* Presets Row */}
+        <div className="pomodoro-settings" style={{ margin: 0 }}>
+          {['25/5', '50/10', '15/3', '90/20', 'Custom'].map(preset => (
+            <button 
+              key={preset}
+              className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
+              onClick={() => setPreset(preset)}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+
+        {/* Session Indicator Dots */}
+        <div className="session-counter" style={{ margin: 0 }}>
+          Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 4}
+          <div className="session-dots">
+            {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 4 }).map((_, i) => (
+              <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Column 3: Journal & AI Coach */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.25rem 1.4rem' }}>
+      {/* Column 3: Quick Reflection (Apple Notes / Journal Style) */}
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.5rem 1.4rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-          <h2>Quick Reflection</h2>
+          <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Quick Reflection</h2>
           <button 
             onClick={() => setIsHistoryModalOpen(true)}
             style={{
-              background: 'rgba(0,0,0,0.04)',
-              border: '1px solid var(--glass-border)',
-              padding: '0.35rem 0.75rem',
-              borderRadius: 'var(--radius-sm)',
+              background: '#ffffff',
+              border: '1px solid rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+              padding: '0.35rem 0.8rem',
+              borderRadius: '9999px',
               fontSize: '0.78rem',
               color: 'var(--text-secondary)',
               display: 'flex',
@@ -587,14 +712,24 @@ export default function CommandCenterPage() {
           onChange={(e) => setReflectionInput(e.target.value)}
           placeholder="E.g., I have so much to read for biology and I keep getting distracted..."
           disabled={isSubmittingReflection}
-          style={{ flex: 1, minHeight: '140px', fontSize: '0.875rem', padding: '0.75rem 0.85rem', marginBottom: '0.75rem', resize: 'none' }}
+          style={{ 
+            flex: 1, 
+            minHeight: '140px', 
+            fontSize: '0.88rem', 
+            padding: '0.85rem', 
+            marginBottom: '0.75rem', 
+            resize: 'none', 
+            background: '#ffffff',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid rgba(0,0,0,0.08)'
+          }}
         ></textarea>
         
         <button 
           className="btn-primary" 
           onClick={submitReflection}
           disabled={isSubmittingReflection || !reflectionInput.trim()}
-          style={{ margin: 0, height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+          style={{ margin: 0, height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px' }}
         >
           {isSubmittingReflection ? (
             "Analyzing with AI Coach..."
@@ -607,8 +742,8 @@ export default function CommandCenterPage() {
         </button>
 
         {/* AI Coaching Strategy Tip Box */}
-        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: 'rgba(95, 143, 94, 0.08)', border: '1px solid rgba(95, 143, 94, 0.18)', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-accent)', fontWeight: 600, fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.18)', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: 600, fontSize: '0.82rem', marginBottom: '0.25rem' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
             Adaptive AI Coach
           </div>
@@ -618,13 +753,85 @@ export default function CommandCenterPage() {
         </div>
       </div>
 
+      {/* Ambient Soundscapes Modal */}
+      {isAudioModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '460px', width: '92%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <h2 style={{ fontSize: '1.3rem', margin: 0 }}>🎵 Ambient Soundscapes</h2>
+              <button onClick={() => setIsAudioModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+            </div>
+            <p className="subtitle" style={{ fontSize: '0.82rem', marginBottom: '1.25rem' }}>Background audio streams to help you focus.</p>
+
+            {/* Track Selection Cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {tracks.map(track => {
+                const isCurrent = currentTrack === track;
+                const icon = track === 'Chill Lofi' ? '☕' : track === 'Study Music' ? '📚' : '🌧️';
+                const desc = track === 'Chill Lofi' ? 'Calming Lo-Fi beats & ambient vibes' : track === 'Study Music' ? 'Alpha wave melodies for concentration' : 'Gentle rain shower & soothing drops';
+                return (
+                  <div 
+                    key={track}
+                    className={`soundscape-card ${isCurrent ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentTrack(track);
+                      setIsPlaying(true);
+                    }}
+                  >
+                    <div style={{ fontSize: '1.5rem' }}>{icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{track}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{desc}</div>
+                    </div>
+                    {isCurrent && isPlaying ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-accent)', background: 'rgba(34,197,94,0.1)', padding: '0.2rem 0.6rem', borderRadius: '9999px' }}>
+                        Playing
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Select</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Volume Control */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.03)', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '1rem' }}>🔈</span>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={volume}
+                onChange={(e) => setVolume(parseInt(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--primary-accent)' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '35px' }}>{volume}%</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button 
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="btn-primary" 
+                style={{ margin: 0, padding: '0.5rem 1.5rem', borderRadius: '9999px', fontSize: '0.88rem' }}
+              >
+                {isPlaying ? 'Pause Audio' : 'Play Soundscape'}
+              </button>
+              <button onClick={() => setIsAudioModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1.25rem', borderRadius: '9999px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Coach Modal */}
       {aiFeedback && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="glass-panel modal-content" style={{ maxWidth: '450px', width: '90%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
             <h2 style={{ fontSize: '1.5rem', lineHeight: '1.3', whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>{aiFeedback.title}</h2>
             <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem' }}>{aiFeedback.message}</p>
-            <button onClick={() => setAiFeedback(null)} className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>Continue</button>
+            <button onClick={() => setAiFeedback(null)} className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', borderRadius: '9999px' }}>Continue</button>
           </div>
         </div>
       )}
@@ -659,8 +866,8 @@ export default function CommandCenterPage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button onClick={() => setIsCustomTimerModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
-                <button onClick={saveCustomSettings} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0 }}>Save Settings</button>
+                <button onClick={() => setIsCustomTimerModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '9999px', cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
+                <button onClick={saveCustomSettings} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, borderRadius: '9999px' }}>Save Settings</button>
             </div>
           </div>
         </div>
@@ -702,7 +909,7 @@ export default function CommandCenterPage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-              <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, fontSize: '0.85rem' }}>Close</button>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, fontSize: '0.85rem', borderRadius: '9999px' }}>Close</button>
             </div>
           </div>
         </div>
