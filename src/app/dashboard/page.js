@@ -725,8 +725,8 @@ export default function CommandCenterPage() {
       {/* Column 3: Daily Progress + Quick Reflection & AI Coach */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', height: '100%', minHeight: 0 }}>
         
-        {/* Top Card: Enlarged Daily Progress & Dynamic Inspiring Quote */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1.25rem 1.4rem' }}>
+        {/* Top Card: Enlarged Daily Progress & Luxury Inspiring Quote */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1.35rem 1.45rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Daily Progress</h2>
@@ -736,28 +736,28 @@ export default function CommandCenterPage() {
             </div>
 
             {/* Silky-Smooth Animated SVG Progress Ring */}
-            <div style={{ position: 'relative', width: '62px', height: '62px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="62" height="62" viewBox="0 0 62 62" style={{ transform: 'rotate(-90deg)' }}>
+            <div style={{ position: 'relative', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="64" height="64" viewBox="0 0 64 64" style={{ transform: 'rotate(-90deg)' }}>
                 {/* Background Track */}
                 <circle
-                  cx="31"
-                  cy="31"
-                  r="25"
+                  cx="32"
+                  cy="32"
+                  r="26"
                   fill="none"
                   stroke="rgba(0,0,0,0.06)"
                   strokeWidth="5"
                 />
                 {/* Smooth Animated Progress Stroke */}
                 <circle
-                  cx="31"
-                  cy="31"
-                  r="25"
+                  cx="32"
+                  cy="32"
+                  r="26"
                   fill="none"
                   stroke="var(--primary-accent)"
                   strokeWidth="5"
                   strokeLinecap="round"
-                  strokeDasharray={2 * Math.PI * 25}
-                  strokeDashoffset={2 * Math.PI * 25 * (1 - (todos.length ? todos.filter(t => t.completed).length / todos.length : 0))}
+                  strokeDasharray={2 * Math.PI * 26}
+                  strokeDashoffset={2 * Math.PI * 26 * (1 - (todos.length ? todos.filter(t => t.completed).length / todos.length : 0))}
                   style={{ transition: 'stroke-dashoffset 0.75s cubic-bezier(0.4, 0, 0.2, 1)' }}
                 />
               </svg>
@@ -767,126 +767,149 @@ export default function CommandCenterPage() {
             </div>
           </div>
 
-          {/* Dynamic Daily Focus Quote Box */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', padding: '0.65rem 0.85rem', background: 'rgba(0,0,0,0.025)', border: '1px solid rgba(0,0,0,0.04)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontStyle: 'italic', lineHeight: '1.35' }}>
-                "{currentQuote.quote}"
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--primary-accent)', fontWeight: 600, marginTop: '3px' }}>
-                — {currentQuote.author}
-              </div>
+          {/* Luxury Apple-Style Focus Quote Widget */}
+          <div style={{
+            marginTop: '0.25rem',
+            padding: '0.85rem 1rem',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.75) 0%, rgba(238,247,241,0.65) 100%)',
+            border: '1px solid rgba(255,255,255,0.95)',
+            borderRadius: '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--primary-accent)' }}>
+                Daily Mindset
+              </span>
+              <button
+                type="button"
+                onClick={shuffleQuote}
+                title="Get another quote"
+                style={{
+                  background: 'rgba(0,0,0,0.04)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(78,130,83,0.15)'; e.currentTarget.style.color = 'var(--primary-accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path></svg>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={shuffleQuote}
-              title="Get another quote"
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px', opacity: 0.7, transition: 'transform 0.2s ease, opacity 0.2s ease' }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'rotate(45deg)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.transform = 'rotate(0deg)'; }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path></svg>
-            </button>
+            <div style={{ fontSize: '0.85rem', color: '#1e293b', fontStyle: 'italic', lineHeight: '1.45', fontWeight: 500 }}>
+              "{currentQuote.quote}"
+            </div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600, marginTop: '4px' }}>
+              — {currentQuote.author}
+            </div>
           </div>
         </div>
 
-        {/* Bottom Card: Quick Reflection & Adaptive AI Coach (Perfect Height Fit) */}
-        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1.35rem 1.4rem' }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-              <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
-              <button 
-                onClick={() => setIsHistoryModalOpen(true)}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                  padding: '0.3rem 0.75rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                History {pastEntries.length > 0 && `(${pastEntries.length})`}
-              </button>
-            </div>
-            <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.65rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
-            
-            {/* Quick Starter Inspiration Chips */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.65rem' }}>
-              {[
-                { label: 'Stressed / Overwhelmed', text: "I'm feeling really stressed with all these deadlines, help me start small." },
-                { label: 'Energetic & Ready', text: "I have high energy right now, want to tackle my hardest task first!" },
-                { label: 'Start with Medium', text: "I want to start with a medium difficulty task to build momentum." }
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => setReflectionInput(chip.text)}
-                  style={{
-                    background: 'rgba(0,0,0,0.03)',
-                    border: '1px solid rgba(0,0,0,0.06)',
-                    borderRadius: '9999px',
-                    padding: '3px 9px',
-                    fontSize: '0.72rem',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(78,130,83,0.1)'; e.currentTarget.style.color = 'var(--primary-accent)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-
-            <textarea 
-              className="journal-textarea" 
-              value={reflectionInput}
-              onChange={(e) => setReflectionInput(e.target.value)}
-              placeholder="Type how you feel or pick a starter above..."
-              disabled={isSubmittingReflection}
-              style={{ 
-                width: '100%',
-                height: '115px',
-                fontSize: '0.86rem', 
-                padding: '0.75rem', 
-                marginBottom: '0.65rem', 
-                resize: 'none', 
-                background: '#ffffff',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(0,0,0,0.08)',
-                boxSizing: 'border-box'
-              }}
-            ></textarea>
-            
+        {/* Bottom Card: Quick Reflection & Adaptive AI Coach (Seamless Fit) */}
+        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+            <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
             <button 
-              className="btn-primary" 
-              onClick={submitReflection}
-              disabled={isSubmittingReflection || !reflectionInput.trim()}
-              style={{ width: '100%', height: '40px', fontSize: '0.88rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: 0 }}
+              onClick={() => setIsHistoryModalOpen(true)}
+              style={{
+                background: '#ffffff',
+                border: '1px solid rgba(0,0,0,0.08)',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                padding: '0.3rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: 'pointer',
+                fontWeight: 500,
+                transition: 'all 0.2s ease'
+              }}
             >
-              {isSubmittingReflection ? (
-                "Analyzing with AI Coach..."
-              ) : (
-                <>
-                  <span>Submit & Analyze</span>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path><path d="M19 5l-14 14"></path><path d="M5 5l14 14"></path></svg>
-                </>
-              )}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              History {pastEntries.length > 0 && `(${pastEntries.length})`}
             </button>
           </div>
+          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
+          
+          {/* Quick Starter Inspiration Chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.6rem' }}>
+            {[
+              { label: 'Stressed / Overwhelmed', text: "I'm feeling really stressed with all these deadlines, help me start small." },
+              { label: 'Energetic & Ready', text: "I have high energy right now, want to tackle my hardest task first!" },
+              { label: 'Start with Medium', text: "I want to start with a medium difficulty task to build momentum." }
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => setReflectionInput(chip.text)}
+                style={{
+                  background: 'rgba(0,0,0,0.03)',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  borderRadius: '9999px',
+                  padding: '3px 9px',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(78,130,83,0.1)'; e.currentTarget.style.color = 'var(--primary-accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Expanded Textarea filling remaining vertical space */}
+          <textarea 
+            className="journal-textarea" 
+            value={reflectionInput}
+            onChange={(e) => setReflectionInput(e.target.value)}
+            placeholder="Type how you feel or pick a starter above..."
+            disabled={isSubmittingReflection}
+            style={{ 
+              flex: 1,
+              width: '100%',
+              minHeight: '120px',
+              fontSize: '0.88rem', 
+              padding: '0.85rem', 
+              marginBottom: '0.75rem', 
+              resize: 'none', 
+              background: '#ffffff',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(0,0,0,0.08)',
+              boxSizing: 'border-box'
+            }}
+          ></textarea>
+          
+          {/* Submit Button */}
+          <button 
+            className="btn-primary" 
+            onClick={submitReflection}
+            disabled={isSubmittingReflection || !reflectionInput.trim()}
+            style={{ width: '100%', height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: '0 0 0.75rem 0' }}
+          >
+            {isSubmittingReflection ? (
+              "Analyzing with AI Coach..."
+            ) : (
+              <>
+                <span>Submit & Analyze</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path><path d="M19 5l-14 14"></path><path d="M5 5l14 14"></path></svg>
+              </>
+            )}
+          </button>
 
           {/* AI Coaching Strategy Tip Box */}
-          <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', background: 'rgba(34, 197, 94, 0.07)', border: '1px solid rgba(34, 197, 94, 0.16)', borderRadius: 'var(--radius-md)' }}>
+          <div style={{ padding: '0.75rem 0.9rem', background: 'rgba(34, 197, 94, 0.07)', border: '1px solid rgba(34, 197, 94, 0.16)', borderRadius: 'var(--radius-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
               Adaptive AI Coach
