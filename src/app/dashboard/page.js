@@ -529,36 +529,16 @@ export default function CommandCenterPage() {
         </div>
       </div>
 
-      {/* Column 2: Pomodoro Timer & Daily Progress (Apple Reference Style) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', minHeight: 0 }}>
+      {/* Column 2: Daily Progress + Pomodoro Timer & Audio */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', minHeight: 0 }}>
         
-        {/* Top Card: Daily Progress & Soundscape Player */}
-        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.1rem 1.4rem' }}>
+        {/* Top Card: Daily Progress */}
+        <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.15rem 1.4rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.15rem', margin: 0 }}>Daily Progress</h2>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Daily Progress</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
               <span style={{ fontWeight: 600, color: 'var(--primary-accent)' }}>{todos.filter(t => t.completed).length}/{todos.length || 0}</span> Tasks was done
             </div>
-            <button 
-              onClick={() => setIsAudioModalOpen(true)}
-              style={{
-                background: 'rgba(0,0,0,0.04)',
-                border: '1px solid rgba(0,0,0,0.06)',
-                borderRadius: '9999px',
-                padding: '4px 10px',
-                fontSize: '0.72rem',
-                color: 'var(--text-secondary)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                cursor: 'pointer',
-                marginTop: '0.4rem',
-                fontWeight: 500
-              }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-              {isPlaying ? `Playing: ${currentTrack}` : `Audio: ${currentTrack}`}
-            </button>
           </div>
 
           {/* Circular Progress Badge */}
@@ -572,11 +552,56 @@ export default function CommandCenterPage() {
           </div>
         </div>
 
-        {/* Main Pomodoro Timer Card */}
+        {/* Main Pomodoro Timer Card with Audio Widget */}
         <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '1.35rem 1.4rem' }}>
           
+          {/* Dynamic Ambient Audio Island Widget inside Pomodoro Card */}
+          <div 
+            className="ambient-island-widget"
+            onClick={() => setIsAudioModalOpen(true)}
+            title="Click to open Soundscape Player"
+            style={{ marginBottom: '0.25rem' }}
+          >
+            <div className={`ambient-wave ${isPlaying ? 'playing' : ''}`}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                {currentTrack}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                {isPlaying ? 'Playing • Click for tracks' : 'Audio • Soundscapes'}
+              </span>
+            </div>
+            <button 
+              onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
+              style={{ 
+                background: isPlaying ? 'var(--primary-accent)' : 'rgba(0,0,0,0.06)', 
+                color: isPlaying ? 'white' : 'var(--text-primary)',
+                border: 'none', 
+                borderRadius: '50%', 
+                width: '28px', 
+                height: '28px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                marginLeft: '4px'
+              }}
+            >
+              {isPlaying ? (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              )}
+            </button>
+          </div>
+
           {/* Ongoing / Break Pill Switcher */}
-          <div className="ios-segmented-control" style={{ marginBottom: '0.5rem' }}>
+          <div className="ios-segmented-control" style={{ margin: '0.2rem 0' }}>
             <button 
               className={`ios-segment-btn ${isFocus ? 'active' : ''}`}
               onClick={() => {
@@ -607,18 +632,27 @@ export default function CommandCenterPage() {
             </button>
           </div>
 
-          {/* Giant Clean Digits */}
-          <div className="ios-timer-digits" style={{ margin: '0.5rem 0' }}>
-            {formatTime(timeLeft)}
+          {/* Circular Pomodoro Timer Ring */}
+          <div 
+            className="timer-circle" 
+            style={{ 
+              '--progress': `${progressPercent}%`,
+              width: '215px',
+              height: '215px'
+            }}
+          >
+            <div className="timer-inner">
+              <div className="timer-display">
+                {formatTime(timeLeft)}
+              </div>
+              <div className="timer-label">
+                {isFocus ? 'Focus Time' : 'Break Time'}
+              </div>
+            </div>
           </div>
 
-          {/* Horizontal Progress Bar */}
-          <div className="ios-timer-progress-bar" style={{ margin: '0.4rem 0 1rem 0' }}>
-            <div className="ios-timer-progress-fill" style={{ width: `${progressPercent}%` }}></div>
-          </div>
-
-          {/* Clean Controls (Reset, Start/Stop Pill, Settings) */}
-          <div className="ios-timer-actions" style={{ margin: '0.5rem 0' }}>
+          {/* Controls (Reset, Start/Stop Pill, Settings) */}
+          <div className="ios-timer-actions" style={{ margin: '0.25rem 0 0.5rem 0' }}>
             <button 
               className="ios-circle-action-btn"
               onClick={resetTimer}
@@ -632,7 +666,7 @@ export default function CommandCenterPage() {
               onClick={toggleTimer}
               style={{
                 background: isActive ? '#d97706' : '#4e8253',
-                padding: '0.7rem 2.2rem',
+                padding: '0.65rem 2.2rem',
                 borderRadius: '9999px',
                 color: '#ffffff',
                 fontWeight: 600,
