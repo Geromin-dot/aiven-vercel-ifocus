@@ -37,9 +37,10 @@ Your job is to do THREE things:
 Reply STRICTLY in valid JSON format like this, without markdown blocks:
 {
   "state": "Stressed",
-  "orderedIds": ["taskId1", "taskId2"],
+  "orderedIds": ["<id_of_first_task>", "<id_of_second_task>"],
   "actionPlan": "It's completely valid to feel exhausted. Let's take it easy and just knock out a small quick win to build momentum."
 }
+(Make sure orderedIds contains the exact 'id' strings from the Current Tasks list, sorted according to the rules above.)
 `;
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
