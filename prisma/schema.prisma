@@ -103,6 +103,7 @@ model Todo {
   text      String
   completed Boolean  @default(false)
   priority  String   @default("medium")
+  orderIndex Int     @default(0)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

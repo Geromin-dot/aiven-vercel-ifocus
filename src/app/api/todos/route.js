@@ -12,7 +12,10 @@ export async function GET(req) {
 
     const todos = await prisma.todo.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' }
+      orderBy: [
+        { orderIndex: 'asc' },
+        { createdAt: 'desc' }
+      ]
     });
     return NextResponse.json(todos);
   } catch (error) {

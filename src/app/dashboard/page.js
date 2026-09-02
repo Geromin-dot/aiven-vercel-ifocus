@@ -317,7 +317,15 @@ export default function CommandCenterPage() {
             activeTodos.forEach(todo => {
                 if (!reorderedActive.find(t => String(t.id) === String(todo.id))) reorderedActive.push(todo);
             });
-            setTodos([...reorderedActive, ...completedTodos]);
+            const newOrder = [...reorderedActive, ...completedTodos];
+            setTodos(newOrder);
+            
+            // Persist order
+            fetch('/api/todos/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderedIds: newOrder.map(t => t.id) })
+            }).catch(e => console.error("Failed to sync order:", e));
         }
         
         // Adjust Timer based on state
