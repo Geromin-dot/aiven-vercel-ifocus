@@ -748,23 +748,116 @@ export default function CommandCenterPage() {
       {/* Background Audio Element */}
       <audio ref={audioRef} loop src={getTrackSrc(currentTrack)} />
 
-      {/* Column 1: Task Command Center (Apple Reminders Style) */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+      {/* Column 1: Task Command Center (Apple Reminders iOS Style) */}
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.4rem 1.45rem' }}>
+        
+        {/* Header Row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Tasks List</h2>
+            <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Tasks List</h2>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
               {todos.filter(t => t.completed).length}/{todos.length} Done
             </span>
           </div>
-          <div className="sync-badge" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
-            <span className="dot"></span>
-            Cloud Synced
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            {todos.some(t => t.completed) && (
+              <button 
+                onClick={clearCompleted} 
+                style={{ 
+                  background: 'rgba(239, 68, 68, 0.08)', 
+                  border: '1px solid rgba(239, 68, 68, 0.15)', 
+                  fontSize: '0.72rem', 
+                  fontWeight: 500,
+                  color: '#ef4444', 
+                  padding: '0.2rem 0.55rem',
+                  borderRadius: '9999px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Clear all completed tasks"
+              >
+                Clear Done
+              </button>
+            )}
+            <div className="sync-badge" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+              <span className="dot"></span>
+              Cloud Synced
+            </div>
           </div>
         </div>
 
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: '0.35rem', margin: '0.5rem 0' }}>
+        {/* Quick Add Bar (Placed ON TOP of Categories!) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: '#ffffff',
+          border: '1px solid rgba(0, 0, 0, 0.08)',
+          borderRadius: '14px',
+          padding: '4px 6px',
+          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.02)',
+          margin: '0.45rem 0'
+        }}>
+          <input 
+            type="text" 
+            placeholder="Add a new task..." 
+            value={todoInput}
+            onChange={(e) => setTodoInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+            style={{
+              flex: 1,
+              minWidth: '110px',
+              height: '34px',
+              fontSize: '0.86rem',
+              padding: '0 0.55rem',
+              border: 'none',
+              background: 'transparent',
+              outline: 'none'
+            }}
+          />
+          <select 
+            value={todoPriority} 
+            onChange={(e) => setTodoPriority(e.target.value)} 
+            style={{
+              height: '32px',
+              fontSize: '0.78rem',
+              padding: '0 0.4rem',
+              border: '1px solid rgba(0,0,0,0.06)',
+              borderRadius: '8px',
+              background: 'rgba(0,0,0,0.03)',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="low">Low</option>
+            <option value="medium">Med</option>
+            <option value="high">High</option>
+          </select>
+          <button 
+            type="button" 
+            onClick={addTodo} 
+            style={{
+              background: '#4e8253',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0 0.95rem',
+              height: '32px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 6px rgba(78, 130, 83, 0.3)'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            + Add
+          </button>
+        </div>
+
+        {/* Category Filter Pills (Directly below Add Bar) */}
+        <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.65rem' }}>
           {['All', 'Active', 'Done'].map(filter => (
             <button 
               key={filter}
@@ -773,75 +866,60 @@ export default function CommandCenterPage() {
                 background: todoFilter === filter ? '#ffffff' : 'rgba(0,0,0,0.04)',
                 border: todoFilter === filter ? '1px solid rgba(0,0,0,0.08)' : '1px solid transparent',
                 boxShadow: todoFilter === filter ? '0 2px 6px rgba(0,0,0,0.05)' : 'none',
-                padding: '0.25rem 0.75rem',
+                padding: '0.22rem 0.75rem',
                 borderRadius: '9999px',
-                fontSize: '0.78rem',
+                fontSize: '0.76rem',
                 cursor: 'pointer',
                 fontWeight: todoFilter === filter ? 600 : 400,
                 color: todoFilter === filter ? 'var(--text-primary)' : 'var(--text-secondary)',
                 transition: 'all 0.2s ease'
               }}
             >
-              {filter}
+              {filter} {filter === 'All' ? `(${todos.length})` : filter === 'Active' ? `(${todos.filter(t => !t.completed).length})` : `(${todos.filter(t => t.completed).length})`}
             </button>
           ))}
         </div>
 
-        {/* Task List */}
-        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        {/* Tasks List */}
+        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '2px' }}>
           {loadingTodos ? (
             <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
-            <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No tasks found.</p>
+            <div style={{ textAlign: 'center', marginTop: '2.5rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+              <p>No tasks in this category.</p>
+            </div>
           ) : (
-            filteredTodos.map((todo, idx) => (
+            filteredTodos.map((todo) => (
               <div 
                 key={todo.id} 
-                className={`todo-item priority-${todo.priority || 'medium'} ${todo.completed ? 'completed' : ''}`}
-                style={{ 
-                  borderRadius: 'var(--radius-md)', 
-                  padding: '0.6rem 0.85rem',
-                  background: todo.completed ? 'rgba(0,0,0,0.02)' : '#ffffff',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+                className={`todo-item ${todo.completed ? 'completed' : ''}`}
+                style={{
+                  borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`
                 }}
               >
                 <div 
                   className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
                   onClick={() => toggleTodo(todo.id)}
-                  style={{ width: '20px', height: '20px' }}
+                  title={todo.completed ? 'Mark incomplete' : 'Mark complete'}
                 >
-                  {todo.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                  {todo.completed && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  )}
                 </div>
-                <span className="todo-text" style={{ fontSize: '0.88rem' }}>{todo.text}</span>
+                <span className="todo-text">{todo.text}</span>
                 <span className={`todo-priority-badge ${todo.priority || 'medium'}`}>{todo.priority || 'medium'}</span>
-                <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
+                <button 
+                  className="todo-delete" 
+                  onClick={() => deleteTodo(todo.id)}
+                  title="Delete task"
+                >
+                  ✕
+                </button>
               </div>
             ))
           )}
-        </div>
-
-        {/* Input Bar */}
-        <div className="todo-input-row" style={{ marginTop: '0.75rem', gap: '0.4rem' }}>
-          <input 
-            type="text" 
-            placeholder="What needs to be done?" 
-            value={todoInput}
-            onChange={(e) => setTodoInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addTodo()}
-            style={{ flex: 1, minWidth: '120px', height: '38px', fontSize: '0.85rem', padding: '0 0.75rem', borderRadius: 'var(--radius-sm)' }}
-          />
-          <select value={todoPriority} onChange={(e) => setTodoPriority(e.target.value)} style={{ height: '38px', fontSize: '0.8rem', padding: '0 0.5rem', borderRadius: 'var(--radius-sm)' }}>
-            <option value="low">Low</option>
-            <option value="medium">Med</option>
-            <option value="high">High</option>
-          </select>
-          <button type="button" className="btn-primary" onClick={addTodo} style={{ padding: '0 0.9rem', marginTop: 0, height: '38px', fontSize: '0.85rem', borderRadius: 'var(--radius-sm)' }}>+ Add</button>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
-          <button onClick={clearCompleted} style={{ background: 'transparent', border: 'none', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline' }}>
-            Clear Completed
-          </button>
         </div>
       </div>
 

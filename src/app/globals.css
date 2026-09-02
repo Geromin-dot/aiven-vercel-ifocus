@@ -362,23 +362,22 @@ main {
     bottom: 2rem;
     right: 2rem;
     width: 350px;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.94);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
-    border: 1px solid rgba(78, 130, 83, 0.25);
-    border-left: 5px solid #4e8253;
+    border: 1px solid rgba(255, 255, 255, 0.9);
     border-radius: 20px;
     padding: 1.25rem 1.4rem;
-    box-shadow: 0 25px 50px -10px rgba(0, 0, 0, 0.18), 0 0 20px rgba(78, 130, 83, 0.12);
+    box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.05);
     z-index: 9999;
-    animation: iosPopupSpring 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    animation: iosPopupSpring 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
     transform-origin: bottom right;
 }
 
 @keyframes iosPopupSpring {
     0% {
         opacity: 0;
-        transform: translateY(35px) scale(0.88);
+        transform: translateY(35px) scale(0.9);
     }
     65% {
         opacity: 1;
@@ -388,6 +387,134 @@ main {
         opacity: 1;
         transform: translateY(0) scale(1);
     }
+}
+
+/* ===== iOS Reminders Task Item & Checkbox Animations ===== */
+.todo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.95rem;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    margin-bottom: 0.5rem;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: iosTaskInsert 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.todo-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-color: rgba(78, 130, 83, 0.25);
+}
+
+.todo-item.completed {
+    background: rgba(255, 255, 255, 0.55);
+    border-color: rgba(0, 0, 0, 0.04);
+}
+
+.todo-item.completed .todo-text {
+    text-decoration: line-through;
+    color: var(--text-secondary);
+    opacity: 0.65;
+}
+
+.todo-checkbox {
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.22);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.todo-checkbox:hover {
+    border-color: #4e8253;
+    background: rgba(78, 130, 83, 0.08);
+}
+
+.todo-checkbox.checked {
+    background: #4e8253;
+    border-color: #4e8253;
+    animation: checkmarkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 2px 6px rgba(78, 130, 83, 0.35);
+}
+
+@keyframes checkmarkPop {
+    0% { transform: scale(0.7); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes iosTaskInsert {
+    0% {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.97);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.todo-text {
+    flex: 1;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.35;
+    transition: all 0.2s ease;
+    word-break: break-word;
+}
+
+.todo-priority-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    letter-spacing: 0.4px;
+}
+
+.todo-priority-badge.low {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.todo-priority-badge.medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+}
+
+.todo-priority-badge.high {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.todo-delete {
+    background: none;
+    border: none;
+    color: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.15s ease;
+}
+
+.todo-delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
 }
 
 .hidden {
