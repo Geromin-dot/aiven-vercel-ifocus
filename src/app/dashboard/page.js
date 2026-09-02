@@ -1292,21 +1292,21 @@ export default function CommandCenterPage() {
           </button>
         </div>
 
-        {/* Grand Circular Pomodoro Timer Ring */}
+        {/* Grand Circular Pomodoro Timer Ring - Enlarged Centerpiece Hero */}
         <div 
           className="timer-circle" 
           style={{ 
             '--progress': `${progressPercent}%`,
-            width: '225px',
-            height: '225px',
-            margin: '0.4rem auto'
+            width: '265px',
+            height: '265px',
+            margin: '0.25rem auto'
           }}
         >
           <div className="timer-inner">
-            <div className="timer-display" style={{ fontSize: '3.3rem' }}>
+            <div className="timer-display" style={{ fontSize: '4rem', fontWeight: 800, letterSpacing: '-2px' }}>
               {formatTime(timeLeft)}
             </div>
-            <div className="timer-label">
+            <div className="timer-label" style={{ fontSize: '0.88rem', fontWeight: 600, letterSpacing: '0.4px', marginTop: '2px' }}>
               {isFocus ? 'Focus Time' : 'Break Time'}
             </div>
           </div>
@@ -1432,17 +1432,26 @@ export default function CommandCenterPage() {
             </div>
           </div>
 
-          {/* Luxury Apple-Style Focus Quote Widget */}
+          {/* Luxury High-Contrast Focus Quote Widget */}
           <div style={{
             marginTop: '0.25rem',
-            padding: '0.85rem 1rem',
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.75) 0%, rgba(238,247,241,0.65) 100%)',
-            border: '1px solid rgba(255,255,255,0.95)',
+            padding: '0.95rem 1.15rem',
+            background: '#f2f7f3',
+            border: '1px solid rgba(78, 130, 83, 0.18)',
             borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+            boxShadow: '0 2px 8px rgba(78, 130, 83, 0.05)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--primary-accent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <span style={{ 
+                fontSize: '0.68rem', 
+                fontWeight: 700, 
+                textTransform: 'uppercase', 
+                letterSpacing: '0.8px', 
+                color: '#346b3a',
+                background: 'rgba(78, 130, 83, 0.12)',
+                padding: '2px 8px',
+                borderRadius: '6px'
+              }}>
                 Daily Mindset
               </span>
               <button
@@ -1450,8 +1459,9 @@ export default function CommandCenterPage() {
                 onClick={shuffleQuote}
                 title="Get another quote"
                 style={{
-                  background: 'rgba(0,0,0,0.04)',
-                  border: 'none',
+                  background: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                   borderRadius: '50%',
                   width: '24px',
                   height: '24px',
@@ -1462,16 +1472,16 @@ export default function CommandCenterPage() {
                   cursor: 'pointer',
                   transition: 'all 0.2s ease'
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(78,130,83,0.15)'; e.currentTarget.style.color = 'var(--primary-accent)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--primary-accent)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path></svg>
               </button>
             </div>
-            <div style={{ fontSize: '0.85rem', color: '#1e293b', fontStyle: 'italic', lineHeight: '1.45', fontWeight: 500 }}>
+            <div style={{ fontSize: '0.86rem', color: '#0f172a', fontStyle: 'italic', lineHeight: '1.45', fontWeight: 500 }}>
               "{currentQuote.quote}"
             </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600, marginTop: '4px' }}>
+            <div style={{ fontSize: '0.74rem', color: '#346b3a', fontWeight: 600, marginTop: '5px' }}>
               — {currentQuote.author}
             </div>
           </div>

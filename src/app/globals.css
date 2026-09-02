@@ -217,14 +217,14 @@ main {
 /* ===== Command Center 3-Column Layout with Spacious Gaps ===== */
 .command-center-layout {
     display: grid;
-    grid-template-columns: 1fr 1.05fr 1fr;
-    gap: 2.25rem;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    gap: 2rem;
     height: calc(100vh - 2.7rem);
     max-height: calc(100vh - 2.7rem);
     width: 100%;
 }
 
-/* ===== Tactile Elevated Cards & Panels (iOS Inspired) ===== */
+/* ===== Tactile Elevated Cards & Panels (iOS Inspired - Consistent Static Elevation) ===== */
 .glass-panel {
     background: #ffffff;
     border-radius: 26px;
@@ -235,15 +235,6 @@ main {
         0 8px 24px -4px rgba(0, 0, 0, 0.08),
         0 20px 48px -10px rgba(0, 0, 0, 0.06),
         0 0 0 1px rgba(255, 255, 255, 0.8) inset;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-panel:hover {
-    box-shadow: 
-        0 4px 8px rgba(0, 0, 0, 0.03),
-        0 12px 32px -4px rgba(0, 0, 0, 0.10),
-        0 28px 56px -10px rgba(0, 0, 0, 0.08),
-        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
 }
 
 /* ===== iOS / iPhone Style Popup Toast Notification ===== */
