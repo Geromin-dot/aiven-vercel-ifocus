@@ -80,13 +80,15 @@ export default function CommandCenterPage() {
     setQuoteIndex(prev => (prev + 1) % FOCUS_QUOTES.length);
   };
 
-  // Keystroke Telemetrics Engine State & Refs
+  // Keystroke Telemetrics Engine State & Refs (Always-On Real-time Reading)
   const [telemetryStats, setTelemetryStats] = useState({
     flight: 0,
     dwell: 0,
+    backspaces: 0,
     errorRate: 0,
     totalKeystrokes: 0,
-    state: 'ready'
+    state: 'idle', // 'idle', 'flow', 'fast', 'friction', 'hesitant'
+    speedLabel: 'Ready'
   });
   const [telemetryToast, setTelemetryToast] = useState({
     show: false,
@@ -131,8 +133,64 @@ export default function CommandCenterPage() {
     });
   };
 
+  const updateTelemetryStats = () => {
+    const avgDwell = dwellTimesRef.current.length
+      ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length
+      : 0;
+    const avgFlight = flightTimesRef.current.length
+      ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length
+      : 0;
+    const total = totalKeystrokesRef.current || 1;
+    const bsCount = backspaceCountRef.current;
+    const bsRatio = bsCount / total;
+
+    let detectedState = 'flow';
+    let label = '🟢 Steady Flow';
+
+    // Disregard fast typing as friction (fast typers are just fast!)
+    if (avgFlight > 0 && avgFlight < 75) {
+      detectedState = 'fast';
+      label = '⚡ Fast Flow';
+    } else if (bsRatio > 0.40 && bsCount >= 6) {
+      detectedState = 'friction';
+      label = '🔴 High Friction';
+    } else if (avgDwell > 300) {
+      detectedState = 'hesitant';
+      label = '🟡 Hesitant';
+    } else if (totalKeystrokesRef.current < 4) {
+      detectedState = 'idle';
+      label = '⌨️ Calibrating...';
+    }
+
+    setTelemetryStats({
+      flight: Math.round(avgFlight),
+      dwell: Math.round(avgDwell),
+      backspaces: bsCount,
+      errorRate: Math.round(bsRatio * 100),
+      totalKeystrokes: totalKeystrokesRef.current,
+      state: detectedState,
+      speedLabel: label
+    });
+
+    // Check Actual Cognitive Friction Anomalies (Ignoring fast typing!)
+    if (bsRatio > 0.45 && bsCount >= 6 && !anomalyTriggeredRef.current) {
+      anomalyTriggeredRef.current = true;
+      triggerTelemetryAlert(
+        "High correction rate detected. You might be experiencing cognitive friction or feeling stuck on this topic.",
+        "Step away from the keyboard and explain the concept out loud. If still stuck, break the task down into smaller steps.",
+        avgDwell, avgFlight, bsRatio
+      );
+    } else if (avgDwell > 360 && totalKeystrokesRef.current >= 10 && !anomalyTriggeredRef.current) {
+      anomalyTriggeredRef.current = true;
+      triggerTelemetryAlert(
+        "Significant keystroke hesitation detected. Your brain might be experiencing mental fatigue.",
+        "Stand up, stretch your legs, and get a glass of water. A quick physical reset will restore your energy.",
+        avgDwell, avgFlight, bsRatio
+      );
+    }
+  };
+
   const handleTelemetryKeyDown = (e) => {
-    if (anomalyTriggeredRef.current) return;
     const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
     if (ignoredKeys.includes(e.key)) return;
 
@@ -143,7 +201,7 @@ export default function CommandCenterPage() {
       if (!ignoreRepeatKeys.includes(e.key)) {
         if (keydownTimesRef.current[e.code]) {
           const heldDuration = now - keydownTimesRef.current[e.code];
-          if (heldDuration > 1500) {
+          if (heldDuration > 2000 && !anomalyTriggeredRef.current) {
             anomalyTriggeredRef.current = true;
             const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
             const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
@@ -159,6 +217,7 @@ export default function CommandCenterPage() {
       if (e.key === 'Backspace' || e.key === 'Delete') {
         backspaceCountRef.current++;
         totalKeystrokesRef.current++;
+        updateTelemetryStats();
       }
       return;
     }
@@ -168,10 +227,10 @@ export default function CommandCenterPage() {
       backspaceCountRef.current++;
     }
     totalKeystrokesRef.current++;
+    updateTelemetryStats();
   };
 
   const handleTelemetryKeyUp = (e) => {
-    if (anomalyTriggeredRef.current) return;
     const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
     if (ignoredKeys.includes(e.key)) return;
 
@@ -195,53 +254,7 @@ export default function CommandCenterPage() {
     }
     lastKeyupTimeRef.current = now;
 
-    // Check Metrics & Anomalies
-    if (totalKeystrokesRef.current >= 8) {
-      const avgDwell = dwellTimesRef.current.reduce((a, b) => a + b, 0) / (dwellTimesRef.current.length || 1);
-      const avgFlight = flightTimesRef.current.reduce((a, b) => a + b, 0) / (flightTimesRef.current.length || 1);
-      const backspaceRatio = backspaceCountRef.current / (totalKeystrokesRef.current || 1);
-
-      let detectedState = 'smooth';
-      if (backspaceRatio > 0.40) {
-        detectedState = 'friction';
-        if (!anomalyTriggeredRef.current) {
-          anomalyTriggeredRef.current = true;
-          triggerTelemetryAlert(
-            "High correction rate detected. You might be experiencing cognitive friction or feeling stuck.",
-            "Step away from the keyboard and explain the concept out loud. If still stuck, break the task into smaller steps.",
-            avgDwell, avgFlight, backspaceRatio
-          );
-        }
-      } else if (avgFlight < 45) {
-        detectedState = 'friction';
-        if (!anomalyTriggeredRef.current) {
-          anomalyTriggeredRef.current = true;
-          triggerTelemetryAlert(
-            "Rapid, agitated keystroke speed detected. Don't worry, take a moment to slow down.",
-            "Close your eyes and take 5 slow breaths. Disconnect for a moment to let your nervous system reset.",
-            avgDwell, avgFlight, backspaceRatio
-          );
-        }
-      } else if (avgDwell > 320) {
-        detectedState = 'hesitant';
-        if (!anomalyTriggeredRef.current) {
-          anomalyTriggeredRef.current = true;
-          triggerTelemetryAlert(
-            "Significant keystroke hesitation detected. Your brain might be experiencing mental fatigue.",
-            "Stand up, stretch your legs, and get a glass of water. A quick physical reset will restore your energy.",
-            avgDwell, avgFlight, backspaceRatio
-          );
-        }
-      }
-
-      setTelemetryStats({
-        flight: Math.round(avgFlight),
-        dwell: Math.round(avgDwell),
-        errorRate: Math.round(backspaceRatio * 100),
-        totalKeystrokes: totalKeystrokesRef.current,
-        state: detectedState
-      });
-    }
+    updateTelemetryStats();
   };
 
   const handleTelemetryInput = (e) => {
@@ -294,7 +307,7 @@ export default function CommandCenterPage() {
     dwellTimesRef.current = [];
     keydownTimesRef.current = {};
     lastKeyupTimeRef.current = null;
-    setTelemetryStats({ flight: 0, dwell: 0, errorRate: 0, totalKeystrokes: 0, state: 'ready' });
+    setTelemetryStats({ flight: 0, dwell: 0, backspaces: 0, errorRate: 0, totalKeystrokes: 0, state: 'idle', speedLabel: 'Ready' });
   };
 
   // Ambient Audio State
@@ -1086,35 +1099,37 @@ export default function CommandCenterPage() {
             ))}
           </div>
 
-          {/* Real-Time Keystroke Telemetrics Indicator Pill */}
-          {telemetryStats.totalKeystrokes >= 6 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.3rem 0.65rem',
-              marginBottom: '0.45rem',
-              background: telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(78, 130, 83, 0.08)',
-              border: `1px solid ${telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(78, 130, 83, 0.2)'}`,
-              borderRadius: '8px',
-              fontSize: '0.7rem',
-              color: telemetryStats.state === 'friction' ? '#dc2626' : 'var(--primary-accent)',
-              fontFamily: 'monospace'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: telemetryStats.state === 'friction' ? '#dc2626' : '#16a34a'
-                }}></span>
-                <span>Telemetry: Flight {telemetryStats.flight}ms • Dwell {telemetryStats.dwell}ms • Err {telemetryStats.errorRate}%</span>
-              </div>
-              <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 600 }}>
-                {telemetryStats.state === 'friction' ? 'Friction' : 'Active'}
+          {/* Always-On Live Keystroke Telemetrics Dashboard Bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.35rem 0.75rem',
+            marginBottom: '0.5rem',
+            background: telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.08)' : telemetryStats.state === 'fast' ? 'rgba(59, 130, 246, 0.08)' : 'rgba(78, 130, 83, 0.08)',
+            border: `1px solid ${telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.2)' : telemetryStats.state === 'fast' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(78, 130, 83, 0.2)'}`,
+            borderRadius: '10px',
+            fontSize: '0.72rem',
+            color: telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#2563eb' : 'var(--primary-accent)',
+            fontFamily: 'monospace',
+            transition: 'all 0.2s ease'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#3b82f6' : '#16a34a',
+                boxShadow: telemetryStats.totalKeystrokes > 0 ? `0 0 8px ${telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#3b82f6' : '#16a34a'}` : 'none'
+              }}></span>
+              <span>
+                Flight: <strong>{telemetryStats.flight ? `${telemetryStats.flight}ms` : '--'}</strong> | Dwell: <strong>{telemetryStats.dwell ? `${telemetryStats.dwell}ms` : '--'}</strong> | BS: <strong>{telemetryStats.backspaces}</strong> ({telemetryStats.errorRate}%)
               </span>
             </div>
-          )}
+            <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>
+              {telemetryStats.speedLabel}
+            </span>
+          </div>
 
           {/* Expanded Textarea with Telemetry Event Listeners */}
           <textarea 
