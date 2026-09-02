@@ -38,6 +38,7 @@ export default function CommandCenterPage() {
   const [todos, setTodos] = useState([]);
   const [todoInput, setTodoInput] = useState('');
   const [todoPriority, setTodoPriority] = useState('medium');
+  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
   const [todoFilter, setTodoFilter] = useState('All');
   const [loadingTodos, setLoadingTodos] = useState(true);
   const [activeMenuTodoId, setActiveMenuTodoId] = useState(null);
@@ -893,7 +894,7 @@ export default function CommandCenterPage() {
   const activeTask = todos.find(t => !t.completed);
 
   return (
-    <div className="command-center-layout" onClick={() => setActiveMenuTodoId(null)}>
+    <div className="command-center-layout" onClick={() => { setActiveMenuTodoId(null); setIsPriorityDropdownOpen(false); }}>
       {/* Background Audio Element */}
       <audio ref={audioRef} loop src={getTrackSrc(currentTrack)} />
 
@@ -965,23 +966,122 @@ export default function CommandCenterPage() {
               outline: 'none'
             }}
           />
-          <select 
-            value={todoPriority} 
-            onChange={(e) => setTodoPriority(e.target.value)} 
-            style={{
-              height: '32px',
-              fontSize: '0.78rem',
-              padding: '0 0.4rem',
-              border: '1px solid rgba(0,0,0,0.06)',
-              borderRadius: '8px',
-              background: 'rgba(0,0,0,0.03)',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="low">Low</option>
-            <option value="medium">Med</option>
-            <option value="high">High</option>
-          </select>
+          {/* Custom Priority Dropdown Pill (iOS Style) */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsPriorityDropdownOpen(!isPriorityDropdownOpen);
+              }}
+              style={{
+                height: '32px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                padding: '0 0.55rem',
+                border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: '8px',
+                background: todoPriority === 'high' ? 'rgba(239, 68, 68, 0.08)' : todoPriority === 'low' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                color: todoPriority === 'high' ? '#ef4444' : todoPriority === 'low' ? '#10b981' : '#d97706',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.18s ease'
+              }}
+            >
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: todoPriority === 'high' ? '#ef4444' : todoPriority === 'low' ? '#10b981' : '#f59e0b'
+              }}></span>
+              <span>{todoPriority === 'high' ? 'High' : todoPriority === 'low' ? 'Low' : 'Med'}</span>
+              <svg 
+                width="10" 
+                height="10" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                style={{
+                  transform: isPriorityDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            {/* Floating iOS Dropdown Popover */}
+            {isPriorityDropdownOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 5px)',
+                  right: 0,
+                  width: '115px',
+                  background: '#ffffff',
+                  border: '1px solid rgba(0, 0, 0, 0.08)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.1)',
+                  padding: '4px',
+                  zIndex: 100,
+                  animation: 'iosPopupSpring 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {[
+                  { value: 'low', label: 'Low', color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+                  { value: 'medium', label: 'Med', color: '#d97706', bg: 'rgba(245, 158, 11, 0.08)' },
+                  { value: 'high', label: 'High', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
+                ].map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => {
+                      setTodoPriority(p.value);
+                      setIsPriorityDropdownOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '7px',
+                      border: 'none',
+                      background: todoPriority === p.value ? p.bg : 'transparent',
+                      color: todoPriority === p.value ? p.color : 'var(--text-primary)',
+                      fontSize: '0.78rem',
+                      fontWeight: todoPriority === p.value ? 700 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (todoPriority !== p.value) e.currentTarget.style.background = 'rgba(0,0,0,0.04)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (todoPriority !== p.value) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color }}></span>
+                      <span>{p.label}</span>
+                    </div>
+                    {todoPriority === p.value && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={p.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button 
             type="button" 
             onClick={addTodo} 
