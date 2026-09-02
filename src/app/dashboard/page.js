@@ -966,7 +966,7 @@ export default function CommandCenterPage() {
               outline: 'none'
             }}
           />
-          {/* Custom Priority Dropdown Pill (iOS Style) */}
+          {/* Custom Effort Level Dropdown Pill (iOS Style) */}
           <div style={{ position: 'relative' }}>
             <button
               type="button"
@@ -974,11 +974,12 @@ export default function CommandCenterPage() {
                 e.stopPropagation();
                 setIsPriorityDropdownOpen(!isPriorityDropdownOpen);
               }}
+              title="Select task effort level"
               style={{
                 height: '32px',
                 fontSize: '0.78rem',
                 fontWeight: 600,
-                padding: '0 0.55rem',
+                padding: '0 0.6rem',
                 border: '1px solid rgba(0,0,0,0.08)',
                 borderRadius: '8px',
                 background: todoPriority === 'high' ? 'rgba(239, 68, 68, 0.08)' : todoPriority === 'low' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
@@ -990,13 +991,11 @@ export default function CommandCenterPage() {
                 transition: 'all 0.18s ease'
               }}
             >
-              <span style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: todoPriority === 'high' ? '#ef4444' : todoPriority === 'low' ? '#10b981' : '#f59e0b'
-              }}></span>
-              <span>{todoPriority === 'high' ? 'High' : todoPriority === 'low' ? 'Low' : 'Med'}</span>
+              {/* Lightning / Energy Gauge Icon */}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.9 }}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span>{todoPriority === 'high' ? 'High Effort' : todoPriority === 'low' ? 'Low Effort' : 'Med Effort'}</span>
               <svg 
                 width="10" 
                 height="10" 
@@ -1008,7 +1007,8 @@ export default function CommandCenterPage() {
                 strokeLinejoin="round"
                 style={{
                   transform: isPriorityDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s ease'
+                  transition: 'transform 0.2s ease',
+                  marginLeft: '2px'
                 }}
               >
                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -1022,21 +1022,29 @@ export default function CommandCenterPage() {
                   position: 'absolute',
                   top: 'calc(100% + 5px)',
                   right: 0,
-                  width: '115px',
+                  width: '160px',
                   background: '#ffffff',
                   border: '1px solid rgba(0, 0, 0, 0.08)',
                   borderRadius: '12px',
                   boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.1)',
-                  padding: '4px',
+                  padding: '5px',
                   zIndex: 100,
                   animation: 'iosPopupSpring 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Header Label */}
+                <div style={{ padding: '3px 8px 6px', borderBottom: '1px solid rgba(0,0,0,0.06)', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    Work Effort Level
+                  </span>
+                </div>
+
                 {[
-                  { value: 'low', label: 'Low', color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
-                  { value: 'medium', label: 'Med', color: '#d97706', bg: 'rgba(245, 158, 11, 0.08)' },
-                  { value: 'high', label: 'High', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
+                  { value: 'low', label: 'Low Effort', sub: 'Quick • Light', color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
+                  { value: 'medium', label: 'Med Effort', sub: 'Steady • Moderate', color: '#d97706', bg: 'rgba(245, 158, 11, 0.08)' },
+                  { value: 'high', label: 'High Effort', sub: 'Deep Focus • Heavy', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
                 ].map((p) => (
                   <button
                     key={p.value}
@@ -1055,11 +1063,10 @@ export default function CommandCenterPage() {
                       border: 'none',
                       background: todoPriority === p.value ? p.bg : 'transparent',
                       color: todoPriority === p.value ? p.color : 'var(--text-primary)',
-                      fontSize: '0.78rem',
-                      fontWeight: todoPriority === p.value ? 700 : 500,
                       cursor: 'pointer',
                       textAlign: 'left',
-                      transition: 'background 0.15s ease'
+                      transition: 'background 0.15s ease',
+                      marginBottom: '2px'
                     }}
                     onMouseEnter={(e) => {
                       if (todoPriority !== p.value) e.currentTarget.style.background = 'rgba(0,0,0,0.04)';
@@ -1068,9 +1075,14 @@ export default function CommandCenterPage() {
                       if (todoPriority !== p.value) e.currentTarget.style.background = 'transparent';
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color }}></span>
-                      <span>{p.label}</span>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: todoPriority === p.value ? 700 : 600 }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color }}></span>
+                        <span>{p.label}</span>
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: 'var(--text-secondary)', marginLeft: '12px', marginTop: '1px' }}>
+                        {p.sub}
+                      </div>
                     </div>
                     {todoPriority === p.value && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={p.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
