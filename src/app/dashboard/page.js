@@ -530,7 +530,7 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Column 2: Daily Progress + Pomodoro Timer & Audio */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', minHeight: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', height: '100%', minHeight: 0 }}>
         
         {/* Top Card: Daily Progress */}
         <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.15rem 1.4rem' }}>
