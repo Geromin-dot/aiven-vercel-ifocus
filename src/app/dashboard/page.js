@@ -80,6 +80,223 @@ export default function CommandCenterPage() {
     setQuoteIndex(prev => (prev + 1) % FOCUS_QUOTES.length);
   };
 
+  // Keystroke Telemetrics Engine State & Refs
+  const [telemetryStats, setTelemetryStats] = useState({
+    flight: 0,
+    dwell: 0,
+    errorRate: 0,
+    totalKeystrokes: 0,
+    state: 'ready'
+  });
+  const [telemetryToast, setTelemetryToast] = useState({
+    show: false,
+    reason: '',
+    actionPlan: '',
+    metrics: { dwellTime: 0, flightTime: 0, errorRate: 0 }
+  });
+
+  const keydownTimesRef = useRef({});
+  const lastKeyupTimeRef = useRef(null);
+  const dwellTimesRef = useRef([]);
+  const flightTimesRef = useRef([]);
+  const backspaceCountRef = useRef(0);
+  const totalKeystrokesRef = useRef(0);
+  const anomalyTriggeredRef = useRef(false);
+
+  const profanityList = ['fuck', 'shit', 'bitch', 'asshole', 'damn', 'stupid', 'hate', 'useless', 'idiot'];
+  const anxietyList = ['worry', 'worried', 'stress', 'stressed', 'anxious', 'scared', 'terrified', 'overwhelmed', 'nervous', 'fail', 'failing', 'hopeless'];
+
+  const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio) => {
+    const telemetryData = {
+      timestamp: new Date().toISOString(),
+      reason: reason,
+      actionPlan: actionPlan || "We recommend pausing your current task. Take a 5-minute deep breathing break away from the screen before attempting to refocus.",
+      metrics: {
+        dwellTime: Math.round(dwell),
+        flightTime: Math.round(flight),
+        errorRate: Math.round(bsRatio * 100)
+      }
+    };
+    try {
+      localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemetryData));
+    } catch (e) {
+      console.warn("Telemetry storage failed:", e);
+    }
+
+    setTelemetryToast({
+      show: true,
+      reason: reason,
+      actionPlan: actionPlan,
+      metrics: telemetryData.metrics
+    });
+  };
+
+  const handleTelemetryKeyDown = (e) => {
+    if (anomalyTriggeredRef.current) return;
+    const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
+    if (ignoredKeys.includes(e.key)) return;
+
+    const now = performance.now();
+
+    if (e.repeat) {
+      const ignoreRepeatKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+      if (!ignoreRepeatKeys.includes(e.key)) {
+        if (keydownTimesRef.current[e.code]) {
+          const heldDuration = now - keydownTimesRef.current[e.code];
+          if (heldDuration > 1500) {
+            anomalyTriggeredRef.current = true;
+            const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
+            const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
+            const backspaceRatio = totalKeystrokesRef.current > 0 ? backspaceCountRef.current / totalKeystrokesRef.current : 0;
+            triggerTelemetryAlert(
+              "You seem to be holding down a key. This often indicates frustration or zoning out.",
+              "Take your hands off the keyboard for a moment. Close your eyes, take a deep breath, and reset before continuing.",
+              avgDwell, avgFlight, backspaceRatio
+            );
+          }
+        }
+      }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        backspaceCountRef.current++;
+        totalKeystrokesRef.current++;
+      }
+      return;
+    }
+
+    keydownTimesRef.current[e.code] = now;
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      backspaceCountRef.current++;
+    }
+    totalKeystrokesRef.current++;
+  };
+
+  const handleTelemetryKeyUp = (e) => {
+    if (anomalyTriggeredRef.current) return;
+    const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
+    if (ignoredKeys.includes(e.key)) return;
+
+    const now = performance.now();
+
+    if (keydownTimesRef.current[e.code]) {
+      const dwell = now - keydownTimesRef.current[e.code];
+      if (dwell > 0 && dwell < 2000) {
+        dwellTimesRef.current.push(dwell);
+        if (dwellTimesRef.current.length > 20) dwellTimesRef.current.shift();
+      }
+      delete keydownTimesRef.current[e.code];
+    }
+
+    if (lastKeyupTimeRef.current) {
+      const flight = now - lastKeyupTimeRef.current;
+      if (flight >= 0 && flight < 2000) {
+        flightTimesRef.current.push(flight);
+        if (flightTimesRef.current.length > 20) flightTimesRef.current.shift();
+      }
+    }
+    lastKeyupTimeRef.current = now;
+
+    // Check Metrics & Anomalies
+    if (totalKeystrokesRef.current >= 8) {
+      const avgDwell = dwellTimesRef.current.reduce((a, b) => a + b, 0) / (dwellTimesRef.current.length || 1);
+      const avgFlight = flightTimesRef.current.reduce((a, b) => a + b, 0) / (flightTimesRef.current.length || 1);
+      const backspaceRatio = backspaceCountRef.current / (totalKeystrokesRef.current || 1);
+
+      let detectedState = 'smooth';
+      if (backspaceRatio > 0.40) {
+        detectedState = 'friction';
+        if (!anomalyTriggeredRef.current) {
+          anomalyTriggeredRef.current = true;
+          triggerTelemetryAlert(
+            "High correction rate detected. You might be experiencing cognitive friction or feeling stuck.",
+            "Step away from the keyboard and explain the concept out loud. If still stuck, break the task into smaller steps.",
+            avgDwell, avgFlight, backspaceRatio
+          );
+        }
+      } else if (avgFlight < 45) {
+        detectedState = 'friction';
+        if (!anomalyTriggeredRef.current) {
+          anomalyTriggeredRef.current = true;
+          triggerTelemetryAlert(
+            "Rapid, agitated keystroke speed detected. Don't worry, take a moment to slow down.",
+            "Close your eyes and take 5 slow breaths. Disconnect for a moment to let your nervous system reset.",
+            avgDwell, avgFlight, backspaceRatio
+          );
+        }
+      } else if (avgDwell > 320) {
+        detectedState = 'hesitant';
+        if (!anomalyTriggeredRef.current) {
+          anomalyTriggeredRef.current = true;
+          triggerTelemetryAlert(
+            "Significant keystroke hesitation detected. Your brain might be experiencing mental fatigue.",
+            "Stand up, stretch your legs, and get a glass of water. A quick physical reset will restore your energy.",
+            avgDwell, avgFlight, backspaceRatio
+          );
+        }
+      }
+
+      setTelemetryStats({
+        flight: Math.round(avgFlight),
+        dwell: Math.round(avgDwell),
+        errorRate: Math.round(backspaceRatio * 100),
+        totalKeystrokes: totalKeystrokesRef.current,
+        state: detectedState
+      });
+    }
+  };
+
+  const handleTelemetryInput = (e) => {
+    const text = e.target.value.toLowerCase();
+    if (anomalyTriggeredRef.current) return;
+
+    let triggerWord = null;
+    let isProfanity = false;
+
+    for (let word of profanityList) {
+      if (text.includes(word)) {
+        triggerWord = word;
+        isProfanity = true;
+        break;
+      }
+    }
+
+    if (!triggerWord) {
+      for (let word of anxietyList) {
+        if (text.includes(word)) {
+          triggerWord = word;
+          isProfanity = false;
+          break;
+        }
+      }
+    }
+
+    if (triggerWord) {
+      anomalyTriggeredRef.current = true;
+      const reason = isProfanity
+        ? "Strong emotional frustration detected in your reflection. It is completely okay to feel stuck when studying."
+        : "You seem to be expressing worry or overwhelm. Remember that learning is a gradual process.";
+      const actionPlan = isProfanity
+        ? "Frustration blocks effective learning. Walk away for exactly 5 minutes, do something unrelated, and come back fresh."
+        : "When anxiety hits, try a quick grounding exercise or tackle a small bite-sized subtask to rebuild momentum.";
+
+      const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
+      const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
+      const backspaceRatio = totalKeystrokesRef.current > 0 ? backspaceCountRef.current / totalKeystrokesRef.current : 0;
+
+      triggerTelemetryAlert(reason, actionPlan, avgDwell, avgFlight, backspaceRatio);
+    }
+  };
+
+  const resetTelemetry = () => {
+    anomalyTriggeredRef.current = false;
+    totalKeystrokesRef.current = 0;
+    backspaceCountRef.current = 0;
+    flightTimesRef.current = [];
+    dwellTimesRef.current = [];
+    keydownTimesRef.current = {};
+    lastKeyupTimeRef.current = null;
+    setTelemetryStats({ flight: 0, dwell: 0, errorRate: 0, totalKeystrokes: 0, state: 'ready' });
+  };
+
   // Ambient Audio State
   const [currentTrack, setCurrentTrack] = useState('Chill Lofi');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -841,7 +1058,7 @@ export default function CommandCenterPage() {
           <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
           
           {/* Quick Starter Inspiration Chips */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.6rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.45rem' }}>
             {[
               { label: 'Stressed / Overwhelmed', text: "I'm feeling really stressed with all these deadlines, help me start small." },
               { label: 'Energetic & Ready', text: "I have high energy right now, want to tackle my hardest task first!" },
@@ -869,11 +1086,46 @@ export default function CommandCenterPage() {
             ))}
           </div>
 
-          {/* Expanded Textarea filling remaining vertical space */}
+          {/* Real-Time Keystroke Telemetrics Indicator Pill */}
+          {telemetryStats.totalKeystrokes >= 6 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.3rem 0.65rem',
+              marginBottom: '0.45rem',
+              background: telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(78, 130, 83, 0.08)',
+              border: `1px solid ${telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(78, 130, 83, 0.2)'}`,
+              borderRadius: '8px',
+              fontSize: '0.7rem',
+              color: telemetryStats.state === 'friction' ? '#dc2626' : 'var(--primary-accent)',
+              fontFamily: 'monospace'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: telemetryStats.state === 'friction' ? '#dc2626' : '#16a34a'
+                }}></span>
+                <span>Telemetry: Flight {telemetryStats.flight}ms • Dwell {telemetryStats.dwell}ms • Err {telemetryStats.errorRate}%</span>
+              </div>
+              <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 600 }}>
+                {telemetryStats.state === 'friction' ? 'Friction' : 'Active'}
+              </span>
+            </div>
+          )}
+
+          {/* Expanded Textarea with Telemetry Event Listeners */}
           <textarea 
             className="journal-textarea" 
             value={reflectionInput}
-            onChange={(e) => setReflectionInput(e.target.value)}
+            onChange={(e) => {
+              setReflectionInput(e.target.value);
+              handleTelemetryInput(e);
+            }}
+            onKeyDown={handleTelemetryKeyDown}
+            onKeyUp={handleTelemetryKeyUp}
             placeholder="Type how you feel or pick a starter above..."
             disabled={isSubmittingReflection}
             style={{ 
@@ -894,7 +1146,10 @@ export default function CommandCenterPage() {
           {/* Submit Button */}
           <button 
             className="btn-primary" 
-            onClick={submitReflection}
+            onClick={() => {
+              submitReflection();
+              resetTelemetry();
+            }}
             disabled={isSubmittingReflection || !reflectionInput.trim()}
             style={{ width: '100%', height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: '0 0 0.75rem 0' }}
           >
@@ -1086,6 +1341,60 @@ export default function CommandCenterPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
               <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, fontSize: '0.85rem', borderRadius: '9999px' }}>Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keystroke Telemetrics Intervention Toast */}
+      {telemetryToast.show && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          width: '330px',
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '16px',
+          padding: '1.15rem 1.25rem',
+          boxShadow: '0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(245, 158, 11, 0.2)',
+          zIndex: 9999,
+          animation: 'slideUpFade 0.3s ease-out'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
+              <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>Coach Intervened</h4>
+            </div>
+            <button
+              onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem', padding: '2px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0', lineHeight: '1.4' }}>
+            {telemetryToast.reason}
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              className="btn-primary"
+              onClick={() => router.push('/coach')}
+              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem', borderRadius: '9999px', margin: 0, height: '34px' }}
+            >
+              View Coach Strategy
+            </button>
+            <button
+              onClick={() => setTelemetryToast(prev => ({ ...prev, show: false }))}
+              style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.45rem 0.8rem', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}
