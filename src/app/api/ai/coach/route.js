@@ -72,6 +72,7 @@ Reply STRICTLY in valid JSON format like this, without markdown blocks:
 
     return NextResponse.json({
       state: parsed.state || "Engaged",
+      orderedIds: parsed.orderedIds || [],
       actionPlan: parsed.actionPlan || "Keep up the great work!"
     });
 
