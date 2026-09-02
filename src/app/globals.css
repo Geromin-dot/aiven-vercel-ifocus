@@ -159,6 +159,24 @@ strong, b {
     animation-delay: -6s;
 }
 
+.blob-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 36vw;
+    height: 36vw;
+    min-width: 380px;
+    min-height: 380px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(95, 175, 115, 0.75) 0%, rgba(220, 185, 105, 0.4) 40%, rgba(56, 178, 147, 0.15) 65%, transparent 80%);
+    filter: blur(65px);
+    opacity: 0.9;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform;
+}
+
 @keyframes floatOrb1 {
     0% { transform: translate(0px, 0px) scale(1); }
     50% { transform: translate(80px, -60px) scale(1.1); }
