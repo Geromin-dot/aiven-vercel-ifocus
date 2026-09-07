@@ -32,37 +32,61 @@ export default function Sidebar() {
 
       <div className="sidebar-bottom">
         {session ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', marginBottom: '0.5rem' }}>
-              {session.user.image ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img 
-                  src={session.user.image} 
-                  alt="User Avatar" 
-                  style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary-accent)' }} 
-                />
-              ) : (
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(95, 143, 94, 0.15)', color: 'var(--primary-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>
-                  {(session.user.name || session.user.username || 'U')[0].toUpperCase()}
-                </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {session.user.name?.split(' ')[0] || session.user.username || 'User'}
-                </span>
+          <Link 
+            href="/settings" 
+            className={`sidebar-user-pill ${pathname === '/settings' ? 'active' : ''}`}
+            title="Open Profile & Settings"
+          >
+            {session.user.image ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img 
+                src={session.user.image} 
+                alt="User Avatar" 
+                style={{ 
+                  width: '42px', 
+                  height: '42px', 
+                  borderRadius: '50%', 
+                  objectFit: 'cover', 
+                  border: '2px solid var(--primary-accent)',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                }} 
+              />
+            ) : (
+              <div 
+                style={{ 
+                  width: '42px', 
+                  height: '42px', 
+                  borderRadius: '50%', 
+                  background: 'rgba(95, 143, 94, 0.2)', 
+                  color: 'var(--primary-accent)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  fontWeight: 700, 
+                  fontSize: '1.1rem',
+                  flexShrink: 0 
+                }}
+              >
+                {(session.user.name || session.user.username || 'U')[0].toUpperCase()}
               </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span style={{ 
+                fontSize: '1.02rem', 
+                fontWeight: 700, 
+                color: 'var(--text-primary)', 
+                whiteSpace: 'nowrap', 
+                textOverflow: 'ellipsis', 
+                overflow: 'hidden' 
+              }}>
+                {session.user.name?.split(' ')[0] || session.user.username || 'User'}
+              </span>
+              <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                Settings & Profile
+              </span>
             </div>
-            <Link href="/settings" className={`sidebar-action ${pathname === '/settings' ? 'active' : ''}`}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Profile & Settings
-            </Link>
-            <button 
-              className="sidebar-action logout" 
-              onClick={() => signOut({ callbackUrl: '/' })}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-              Log Out
-            </button>
-          </>
+          </Link>
         ) : (
           <button 
             className="sidebar-action" 
