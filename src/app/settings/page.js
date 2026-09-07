@@ -3,20 +3,20 @@
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 
-// Curated avatar styles and presets for delightful customization
+// Curated avatar styles and presets for customization (clean names, no emojis)
 const AVATAR_PRESETS = [
-  { id: 'adv-1', label: 'Adventurer Felix', style: 'adventurer', seed: 'Felix', bg: 'b6e3f4' },
-  { id: 'adv-2', label: 'Adventurer Daisy', style: 'adventurer', seed: 'Daisy', bg: 'ffd5dc' },
-  { id: 'adv-3', label: 'Adventurer Milo', style: 'adventurer', seed: 'Milo', bg: 'c0aede' },
-  { id: 'adv-4', label: 'Adventurer Luna', style: 'adventurer', seed: 'Luna', bg: 'd1d4f9' },
-  { id: 'bot-1', label: 'Bot Spark', style: 'bottts', seed: 'Spark', bg: 'ffdfbf' },
-  { id: 'bot-2', label: 'Bot Echo', style: 'bottts', seed: 'Echo', bg: 'c0aede' },
-  { id: 'bot-3', label: 'Bot Bolt', style: 'bottts', seed: 'Bolt', bg: 'b6e3f4' },
-  { id: 'bot-4', label: 'Bot Byte', style: 'bottts', seed: 'Byte', bg: 'ffd5dc' },
-  { id: 'fun-1', label: 'Joyful Star', style: 'fun-emoji', seed: 'JoyStar', bg: 'ffdfbf' },
-  { id: 'fun-2', label: 'Zen Calm', style: 'fun-emoji', seed: 'ZenCalm', bg: 'c0aede' },
-  { id: 'lore-1', label: 'Scholar Maya', style: 'lorelei', seed: 'Maya', bg: 'd1d4f9' },
-  { id: 'lore-2', label: 'Scholar Leo', style: 'lorelei', seed: 'Leo', bg: 'b6e3f4' },
+  { id: 'adv-1', label: 'Felix', style: 'adventurer', seed: 'Felix', bg: 'b6e3f4' },
+  { id: 'adv-2', label: 'Daisy', style: 'adventurer', seed: 'Daisy', bg: 'ffd5dc' },
+  { id: 'adv-3', label: 'Milo', style: 'adventurer', seed: 'Milo', bg: 'c0aede' },
+  { id: 'adv-4', label: 'Luna', style: 'adventurer', seed: 'Luna', bg: 'd1d4f9' },
+  { id: 'bot-1', label: 'Spark', style: 'bottts', seed: 'Spark', bg: 'ffdfbf' },
+  { id: 'bot-2', label: 'Echo', style: 'bottts', seed: 'Echo', bg: 'c0aede' },
+  { id: 'bot-3', label: 'Bolt', style: 'bottts', seed: 'Bolt', bg: 'b6e3f4' },
+  { id: 'bot-4', label: 'Byte', style: 'bottts', seed: 'Byte', bg: 'ffd5dc' },
+  { id: 'fun-1', label: 'Joy', style: 'fun-emoji', seed: 'JoyStar', bg: 'ffdfbf' },
+  { id: 'fun-2', label: 'Zen', style: 'fun-emoji', seed: 'ZenCalm', bg: 'c0aede' },
+  { id: 'lore-1', label: 'Maya', style: 'lorelei', seed: 'Maya', bg: 'd1d4f9' },
+  { id: 'lore-2', label: 'Leo', style: 'lorelei', seed: 'Leo', bg: 'b6e3f4' },
 ];
 
 const getDicebearUrl = (style, seed, bg = 'c0aede') => {
@@ -46,8 +46,6 @@ export default function SettingsPage() {
   // Avatar Modal State
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
-  const [customSeed, setCustomSeed] = useState('');
-  const [customStyle, setCustomStyle] = useState('adventurer');
   const [customDirectUrl, setCustomDirectUrl] = useState('');
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
 
@@ -203,11 +201,6 @@ export default function SettingsPage() {
     ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '2026';
 
-  // Toggle or select active card
-  const handleCardClick = (sectionName) => {
-    setActiveSection(prev => prev === sectionName ? null : sectionName);
-  };
-
   // 2. Save Avatar Selection
   const handleSaveAvatar = async () => {
     let finalUrl = tempAvatarUrl;
@@ -229,7 +222,7 @@ export default function SettingsPage() {
         if (updateSession) {
           await updateSession({ user: { image: finalUrl } });
         }
-        showToast('success', 'Profile avatar updated successfully!');
+        showToast('success', 'Profile avatar updated.');
       }
     } catch (err) {
       console.error("Avatar save error:", err);
@@ -247,8 +240,6 @@ export default function SettingsPage() {
     const bgColors = ['b6e3f4', 'ffd5dc', 'c0aede', 'd1d4f9', 'ffdfbf'];
     const chosenBg = bgColors[Math.floor(Math.random() * bgColors.length)];
 
-    setCustomSeed(chosenSeed);
-    setCustomStyle(chosenStyle);
     setTempAvatarUrl(getDicebearUrl(chosenStyle, chosenSeed, chosenBg));
   };
 
@@ -265,7 +256,7 @@ export default function SettingsPage() {
     };
     try {
       localStorage.setItem('ifocus_timer_preferences', JSON.stringify(prefs));
-      showToast('success', 'Focus preferences saved successfully!');
+      showToast('success', 'Focus preferences saved.');
     } catch (err) {
       showToast('error', 'Failed to save preferences.');
     }
@@ -282,7 +273,7 @@ export default function SettingsPage() {
     };
     try {
       localStorage.setItem('ifocus_sound_preferences', JSON.stringify(prefs));
-      showToast('success', 'Notification preferences saved successfully!');
+      showToast('success', 'Notification preferences saved.');
     } catch (err) {
       showToast('error', 'Failed to save preferences.');
     }
@@ -325,7 +316,7 @@ export default function SettingsPage() {
         });
       }
 
-      showToast('success', 'Account details updated successfully!');
+      showToast('success', 'Account details updated.');
     } catch (err) {
       showToast('error', err.message);
     } finally {
@@ -362,7 +353,7 @@ export default function SettingsPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      showToast('success', 'Password updated successfully!');
+      showToast('success', 'Password updated successfully.');
     } catch (err) {
       showToast('error', err.message);
     } finally {
@@ -391,7 +382,7 @@ export default function SettingsPage() {
     setTimeout(() => {
       setIsSendingFeedback(false);
       setFeedbackText('');
-      showToast('success', 'Thank you! Your feedback has been sent to the iFocus team.');
+      showToast('success', 'Thank you! Your feedback has been sent.');
     }, 600);
   };
 
@@ -418,407 +409,386 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="page-layout" style={{ maxWidth: '1280px', margin: '0 auto' }}>
+    <div className="settings-viewport-layout">
       
       {/* Dynamic Toast Feedback Notification */}
       {toast.type && (
-        <div className={`settings-toast-banner ${toast.type}`}>
+        <div className={`settings-toast-banner ${toast.type}`} style={{ position: 'fixed', top: '1.5rem', right: '2rem', zIndex: 1100 }}>
           {toast.type === 'success' ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
           ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           )}
-          <span style={{ fontSize: '0.92rem', fontWeight: 600 }}>{toast.message}</span>
+          <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>{toast.message}</span>
         </div>
       )}
 
-      <div className="settings-grid-layout">
+      {/* ================= COLUMN 1: PROFILE OVERVIEW (Compact & Full Height) ================= */}
+      <div className="settings-left-card">
         
-        {/* ================= COLUMN 1: PROFILE OVERVIEW ================= */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2.5rem 2rem' }}>
-          
-          <div className="avatar-wrapper" style={{ position: 'relative', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <div style={{ position: 'relative', marginBottom: '0.85rem' }}>
             <div className="profile-avatar-glow" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={avatarUrl || getDicebearUrl('adventurer', username || 'Alex', 'c0aede')} 
               alt="Avatar" 
-              className="profile-avatar" 
-              style={{ width: '140px', height: '140px', borderRadius: '50%', border: '4px solid white', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', objectFit: 'cover', background: '#f0f4ee', position: 'relative', zIndex: 1 }} 
+              style={{ width: '92px', height: '92px', borderRadius: '50%', border: '3.5px solid white', boxShadow: '0 6px 18px rgba(0,0,0,0.1)', objectFit: 'cover', background: '#f0f4ee', position: 'relative', zIndex: 1 }} 
             />
             <button 
-              className="edit-avatar-btn" 
-              title="Edit Profile Picture"
+              title="Change Avatar"
               onClick={() => {
                 setTempAvatarUrl(avatarUrl);
                 setIsAvatarModalOpen(true);
               }}
-              style={{ position: 'absolute', bottom: '5px', right: '5px', zIndex: 2, background: 'var(--primary-accent)', color: 'white', border: 'none', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.2)', transition: 'transform 0.2s ease' }}
+              style={{ position: 'absolute', bottom: '2px', right: '2px', zIndex: 2, background: 'var(--primary-accent)', color: 'white', border: '2px solid white', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
             </button>
           </div>
 
-          <h3 className="profile-name" style={{ fontSize: '1.8rem', color: 'var(--text-primary)', margin: '0 0 0.35rem 0', fontWeight: 700, textAlign: 'center' }}>
+          <h3 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700, textAlign: 'center' }}>
             {name || username || 'Focus Member'}
           </h3>
-          <p style={{ color: 'var(--text-secondary)', margin: '0 0 2rem 0', fontSize: '0.95rem' }}>
+          <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0', fontSize: '0.8rem' }}>
             Focus Member since {memberSinceText}
           </p>
           
-          {/* Live Calculated Stats */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(255,255,255,0.7)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          {/* Live Calculated Stats (Compact) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: '#f8faf7', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 Total Sessions
               </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
                 {stats.totalSessions}
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(255,255,255,0.7)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: '#f8faf7', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
                 Focus Time
               </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
                 {stats.focusHours}h
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(255,255,255,0.7)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 0.85rem', background: '#f8faf7', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                 Current Streak
               </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary-accent)' }}>
                 {stats.streakDays} {stats.streakDays === 1 ? 'Day' : 'Days'}
               </span>
             </div>
           </div>
+        </div>
 
-          {/* Quick Sign Out Action */}
-          <div style={{ marginTop: '2rem', width: '100%' }}>
-            <button 
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="btn-secondary" 
-              style={{ width: '100%', justifyContent: 'center', fontSize: '0.88rem', padding: '0.65rem', color: 'var(--error)', borderColor: 'rgba(224, 62, 62, 0.25)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-              Log Out
-            </button>
+        {/* Bottom Sign Out */}
+        <div style={{ width: '100%', marginTop: '1rem' }}>
+          <button 
+            onClick={() => signOut({ callbackUrl: '/' })}
+            className="btn-secondary" 
+            style={{ width: '100%', justifyContent: 'center', fontSize: '0.82rem', padding: '0.5rem', color: 'var(--error)', borderColor: 'rgba(224, 62, 62, 0.25)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Log Out
+          </button>
+        </div>
+
+      </div>
+
+      {/* ================= COLUMN 2: 4 CATEGORIES & ACTIVE CONTROLS ================= */}
+      <div className="settings-right-card">
+        
+        {/* Header (Clean & Compact) */}
+        <div style={{ marginBottom: '0.75rem', flexShrink: 0 }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: '1.35rem', margin: '0 0 0.15rem 0', fontWeight: 700 }}>Profile & Settings</h2>
+          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.86rem' }}>
+            Customize your focus environment and coach behaviors.
+          </p>
+        </div>
+        
+        {/* 4 CATEGORIES BAR (1 compact row, clean SVG icons, no emojis) */}
+        <div className="settings-category-bar">
+          
+          {/* Card 1: Focus Preferences */}
+          <div 
+            className={`settings-cat-btn ${activeSection === 'focus' ? 'active' : ''}`}
+            onClick={() => setActiveSection('focus')}
+          >
+            <div className="settings-cat-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+            </div>
+            <div className="settings-cat-info">
+              <span className="settings-cat-title">Focus Preferences</span>
+              <span className="settings-cat-sub">Timer & intervals</span>
+            </div>
+          </div>
+
+          {/* Card 2: Notifications */}
+          <div 
+            className={`settings-cat-btn ${activeSection === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveSection('notifications')}
+          >
+            <div className="settings-cat-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            </div>
+            <div className="settings-cat-info">
+              <span className="settings-cat-title">Notifications</span>
+              <span className="settings-cat-sub">Reminders & audio</span>
+            </div>
+          </div>
+
+          {/* Card 3: Privacy & Security */}
+          <div 
+            className={`settings-cat-btn ${activeSection === 'privacy' ? 'active' : ''}`}
+            onClick={() => setActiveSection('privacy')}
+          >
+            <div className="settings-cat-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <div className="settings-cat-info">
+              <span className="settings-cat-title">Privacy & Security</span>
+              <span className="settings-cat-sub">Account & passwords</span>
+            </div>
+          </div>
+
+          {/* Card 4: Feedback & Support */}
+          <div 
+            className={`settings-cat-btn ${activeSection === 'feedback' ? 'active' : ''}`}
+            onClick={() => setActiveSection('feedback')}
+          >
+            <div className="settings-cat-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </div>
+            <div className="settings-cat-info">
+              <span className="settings-cat-title">Feedback & Support</span>
+              <span className="settings-cat-sub">Report bugs & help</span>
+            </div>
           </div>
 
         </div>
 
-        {/* ================= COLUMN 2: 4 SETTINGS CARDS & CONTROLS ================= */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '2.5rem 2.25rem' }}>
-          
-          <div style={{ marginBottom: '1.75rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '1.25rem' }}>
-            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.6rem', margin: '0 0 0.4rem 0' }}>Profile & Settings</h2>
-            <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.98rem' }}>
-              Customize your focus environment and coach behaviors. Click any card below to configure.
-            </p>
-          </div>
-          
-          {/* THE 4 CARDS (Exact match to prototype layout, fully interactive) */}
-          <div className="settings-list">
-            
-            {/* Card 1: Focus Preferences */}
-            <div 
-              className={`settings-item ${activeSection === 'focus' ? 'active' : ''}`}
-              onClick={() => handleCardClick('focus')}
-            >
-              <div className="settings-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-              </div>
-              <div className="settings-text">
-                <h4>Focus Preferences</h4>
-                <p>Timer length, break intervals</p>
-              </div>
-              <svg className="chevron" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
-            {/* Card 2: Notifications */}
-            <div 
-              className={`settings-item ${activeSection === 'notifications' ? 'active' : ''}`}
-              onClick={() => handleCardClick('notifications')}
-            >
-              <div className="settings-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-              </div>
-              <div className="settings-text">
-                <h4>Notifications</h4>
-                <p>Reminders, daily summaries</p>
-              </div>
-              <svg className="chevron" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
-            {/* Card 3: Privacy & Security */}
-            <div 
-              className={`settings-item ${activeSection === 'privacy' ? 'active' : ''}`}
-              onClick={() => handleCardClick('privacy')}
-            >
-              <div className="settings-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-              </div>
-              <div className="settings-text">
-                <h4>Privacy & Security</h4>
-                <p>Data sharing, local storage</p>
-              </div>
-              <svg className="chevron" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
-            {/* Card 4: Feedback & Support */}
-            <div 
-              className={`settings-item ${activeSection === 'feedback' ? 'active' : ''}`}
-              onClick={() => handleCardClick('feedback')}
-            >
-              <div className="settings-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-              </div>
-              <div className="settings-text">
-                <h4>Feedback & Support</h4>
-                <p>Report bugs, request features</p>
-              </div>
-              <svg className="chevron" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
-          </div>
-
-          {/* ================= FUNCTIONAL CONTROLS FOR SELECTED CARD ================= */}
+        {/* ================= ACTIVE SETTINGS PANE (Fitted on Screen) ================= */}
+        <div className="settings-detail-form-area">
           
           {/* 1. FOCUS PREFERENCES PANEL */}
           {activeSection === 'focus' && (
-            <div className="settings-detail-pane">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  ⚙️ Focus Preferences
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Configures Command Center timer defaults</span>
+            <form onSubmit={handleSaveFocusPreferences} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label className="settings-label" style={{ fontSize: '0.85rem' }}>Default Focus Work Duration</label>
+                <div className="option-chips-container" style={{ gap: '0.5rem', marginTop: '0.3rem' }}>
+                  {[15, 25, 45, 50, 90].map((mins) => (
+                    <button 
+                      key={mins} 
+                      type="button" 
+                      className={`option-chip ${focusDuration === mins ? 'selected' : ''}`}
+                      onClick={() => setFocusDuration(mins)}
+                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
+                    >
+                      {mins} min
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <form onSubmit={handleSaveFocusPreferences} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div className="settings-form-grid" style={{ gap: '0.85rem' }}>
+                <div className="settings-input-group">
+                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Short Break (Minutes)</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="30" 
+                    className="settings-input" 
+                    value={shortBreakDuration} 
+                    onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)} 
+                    style={{ padding: '0.55rem 0.85rem', fontSize: '0.88rem' }}
+                  />
+                </div>
+                <div className="settings-input-group">
+                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Long Break (Minutes)</label>
+                  <input 
+                    type="number" 
+                    min="5" 
+                    max="60" 
+                    className="settings-input" 
+                    value={longBreakDuration} 
+                    onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)} 
+                    style={{ padding: '0.55rem 0.85rem', fontSize: '0.88rem' }}
+                  />
+                </div>
+              </div>
+
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
-                  <label className="settings-label">Default Focus Work Duration</label>
-                  <div className="option-chips-container">
-                    {[15, 25, 45, 50, 90].map((mins) => (
-                      <button 
-                        key={mins} 
-                        type="button" 
-                        className={`option-chip ${focusDuration === mins ? 'selected' : ''}`}
-                        onClick={() => setFocusDuration(mins)}
-                      >
-                        ⏱️ {mins} Minutes
-                      </button>
-                    ))}
-                  </div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Auto-Start Break Sessions</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically begin the rest countdown when focus time ends.</p>
                 </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={autoStartBreaks} 
+                    onChange={(e) => setAutoStartBreaks(e.target.checked)} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
 
-                <div className="settings-form-grid">
-                  <div className="settings-input-group">
-                    <label className="settings-label">Short Break Duration (Minutes)</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="30" 
-                      className="settings-input" 
-                      value={shortBreakDuration} 
-                      onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)} 
-                    />
-                  </div>
-                  <div className="settings-input-group">
-                    <label className="settings-label">Long Break Duration (Minutes)</label>
-                    <input 
-                      type="number" 
-                      min="5" 
-                      max="60" 
-                      className="settings-input" 
-                      value={longBreakDuration} 
-                      onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)} 
-                    />
-                  </div>
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Completion Audio Chimes</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Play sound chime when work and rest cycles finish.</p>
                 </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={timerChimeSound} 
+                    onChange={(e) => setTimerChimeSound(e.target.checked)} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Auto-Start Break Sessions</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Start rest countdown automatically when focus work finishes.</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={autoStartBreaks} 
-                      onChange={(e) => setAutoStartBreaks(e.target.checked)} 
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Completion Audio Chimes</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Play gentle chime when focus and rest cycles end.</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={timerChimeSound} 
-                      onChange={(e) => setTimerChimeSound(e.target.checked)} 
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                  <button 
-                    type="button" 
-                    className="btn-secondary"
-                    onClick={playSampleChime}
-                    style={{ fontSize: '0.88rem', padding: '0.55rem 1rem' }}
-                  >
-                    🔔 Test Chime Sound
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="btn-primary" 
-                    style={{ padding: '0.65rem 1.4rem' }}
-                  >
-                    Save Focus Preferences
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={playSampleChime}
+                  style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  Test Chime
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}
+                >
+                  Save Focus Preferences
+                </button>
+              </div>
+            </form>
           )}
 
           {/* 2. NOTIFICATIONS & SOUND PANEL */}
           {activeSection === 'notifications' && (
-            <div className="settings-detail-pane">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  🔔 Notifications & Sound
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Manage soundscapes & reminders</span>
+            <form onSubmit={handleSaveNotifications} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div className="settings-input-group">
+                <label className="settings-label" style={{ fontSize: '0.85rem' }}>Default Ambient Soundscape</label>
+                <select 
+                  className="settings-select"
+                  value={defaultAmbientTrack}
+                  onChange={(e) => setDefaultAmbientTrack(e.target.value)}
+                  style={{ padding: '0.55rem 0.85rem', fontSize: '0.88rem' }}
+                >
+                  <option value="Chill Lofi">Chill Lofi (Calm)</option>
+                  <option value="Study Music">Study Music (Instrumental)</option>
+                  <option value="Rain Ambient">Rain Ambient (Raindrops)</option>
+                  <option value="None">Off (Silent)</option>
+                </select>
               </div>
 
-              <form onSubmit={handleSaveNotifications} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="settings-input-group">
-                  <label className="settings-label">Default Ambient Soundscape</label>
-                  <select 
-                    className="settings-select"
-                    value={defaultAmbientTrack}
-                    onChange={(e) => setDefaultAmbientTrack(e.target.value)}
-                  >
-                    <option value="Chill Lofi">🎵 Chill Lofi (Calm Lo-Fi Beats)</option>
-                    <option value="Study Music">🎹 Study Music (Acoustic Flow)</option>
-                    <option value="Rain Ambient">🌧️ Rain Ambient (Soothing Rain)</option>
-                    <option value="None">🔇 Off (Silent by default)</option>
-                  </select>
-                  <span className="settings-hint">Music track automatically loaded when entering Command Center.</span>
+              <div className="settings-input-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Default Music Volume</label>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-accent)' }}>{ambientVolume}%</span>
                 </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={ambientVolume} 
+                  onChange={(e) => setAmbientVolume(parseInt(e.target.value))}
+                  style={{ accentColor: 'var(--primary-accent)', width: '100%', height: '6px', cursor: 'pointer' }} 
+                />
+              </div>
 
-                <div className="settings-input-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="settings-label">Default Ambient Music Volume</label>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-accent)' }}>{ambientVolume}%</span>
-                  </div>
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Cognitive Friction Alert Chime</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Harmonic audio prompt when keystroke hesitation or fatigue is detected.</p>
+                </div>
+                <label className="toggle-switch">
                   <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    value={ambientVolume} 
-                    onChange={(e) => setAmbientVolume(parseInt(e.target.value))}
-                    style={{ accentColor: 'var(--primary-accent)', width: '100%', height: '6px', cursor: 'pointer' }} 
+                    type="checkbox" 
+                    checked={telemetryChime} 
+                    onChange={(e) => setTelemetryChime(e.target.checked)} 
                   />
-                </div>
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Cognitive Friction Alert Chime</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Play subtle iOS crystal chime when typing hesitation or fatigue is detected.</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={telemetryChime} 
-                      onChange={(e) => setTelemetryChime(e.target.checked)} 
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Daily Reflection Reminders</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Show quick reflection prompts after completing focus cycles.</p>
                 </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={dailyReminder} 
+                    onChange={(e) => setDailyReminder(e.target.checked)} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
 
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Daily Reflection Reminders</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Show quick reflection prompts after completing multiple focus cycles.</p>
-                  </div>
-                  <label className="toggle-switch">
-                    <input 
-                      type="checkbox" 
-                      checked={dailyReminder} 
-                      onChange={(e) => setDailyReminder(e.target.checked)} 
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                  <button 
-                    type="submit" 
-                    className="btn-primary" 
-                    style={{ padding: '0.65rem 1.4rem' }}
-                  >
-                    Save Notification Preferences
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}
+                >
+                  Save Notification Preferences
+                </button>
+              </div>
+            </form>
           )}
 
           {/* 3. PRIVACY & SECURITY PANEL */}
           {activeSection === 'privacy' && (
-            <div className="settings-detail-pane">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  🔒 Privacy, Account & Security
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Profile information & credentials</span>
-              </div>
-
-              {/* Edit Account Info */}
-              <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="settings-form-grid">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              
+              {/* Account Details */}
+              <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="settings-form-grid" style={{ gap: '0.75rem' }}>
                   <div className="settings-input-group">
-                    <label className="settings-label">Display Name</label>
+                    <label className="settings-label" style={{ fontSize: '0.82rem' }}>Display Name</label>
                     <input 
                       type="text" 
                       className="settings-input" 
                       value={name} 
                       onChange={(e) => setName(e.target.value)} 
-                      placeholder="e.g. Alex Johnson"
+                      placeholder="Display Name"
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem' }}
                       required
                     />
                   </div>
                   <div className="settings-input-group">
-                    <label className="settings-label">Username</label>
+                    <label className="settings-label" style={{ fontSize: '0.82rem' }}>Username</label>
                     <input 
                       type="text" 
                       className="settings-input" 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} 
-                      placeholder="e.g. alexj"
+                      placeholder="Username"
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem' }}
                       required
                     />
                   </div>
                   <div className="settings-input-group full-width">
-                    <label className="settings-label">Email Address</label>
+                    <label className="settings-label" style={{ fontSize: '0.82rem' }}>Email Address</label>
                     <input 
                       type="email" 
                       className="settings-input" 
                       value={email} 
                       disabled 
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem' }}
                     />
                   </div>
                 </div>
@@ -828,48 +798,46 @@ export default function SettingsPage() {
                     type="submit" 
                     className="btn-primary" 
                     disabled={isSavingProfile}
-                    style={{ padding: '0.65rem 1.4rem' }}
+                    style={{ padding: '0.45rem 1.15rem', fontSize: '0.85rem' }}
                   >
-                    {isSavingProfile ? 'Saving Account...' : 'Save Account Details'}
+                    {isSavingProfile ? 'Saving...' : 'Save Account Details'}
                   </button>
                 </div>
               </form>
 
               {/* Password Change */}
-              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)' }}>
-                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.05rem', color: 'var(--text-primary)' }}>Change Password</h4>
-                <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Minimum 6 characters with secure bcrypt hashing.</p>
-
-                <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="settings-form-grid">
+              <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--glass-border)' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.88rem', color: 'var(--text-primary)' }}>Change Password</h4>
+                <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  <div className="settings-form-grid" style={{ gap: '0.65rem' }}>
                     <div className="settings-input-group">
-                      <label className="settings-label">Current Password</label>
                       <input 
                         type="password" 
                         className="settings-input" 
                         value={currentPassword} 
                         onChange={(e) => setCurrentPassword(e.target.value)} 
-                        placeholder="••••••••"
+                        placeholder="Current Password"
+                        style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div className="settings-input-group">
-                      <label className="settings-label">New Password</label>
                       <input 
                         type="password" 
                         className="settings-input" 
                         value={newPassword} 
                         onChange={(e) => setNewPassword(e.target.value)} 
-                        placeholder="••••••••"
+                        placeholder="New Password (min 6)"
+                        style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
                       />
                     </div>
-                    <div className="settings-input-group">
-                      <label className="settings-label">Confirm New Password</label>
+                    <div className="settings-input-group full-width">
                       <input 
                         type="password" 
                         className="settings-input" 
                         value={confirmPassword} 
                         onChange={(e) => setConfirmPassword(e.target.value)} 
-                        placeholder="••••••••"
+                        placeholder="Confirm New Password"
+                        style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
                       />
                     </div>
                   </div>
@@ -879,45 +847,32 @@ export default function SettingsPage() {
                       type="submit" 
                       className="btn-secondary" 
                       disabled={isUpdatingPassword || !newPassword}
-                      style={{ padding: '0.6rem 1.25rem' }}
+                      style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }}
                     >
-                      {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
+                      {isUpdatingPassword ? 'Updating...' : 'Update Password'}
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Data Export & Local Storage Actions */}
-              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Export Study Data</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Download all your flashcards, decks, completed tasks, and study sessions as a JSON file.</p>
-                  </div>
-                  <a 
-                    href="/api/user/export"
-                    className="btn-secondary" 
-                    style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download JSON
-                  </a>
-                </div>
-
-                <div className="settings-toggle-row">
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Clear Session History</h4>
-                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Reset local offline session history cache.</p>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={handleClearCache}
-                    className="btn-secondary" 
-                    style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', color: 'var(--warning)', borderColor: 'rgba(217, 119, 6, 0.3)' }}
-                  >
-                    Clear Cache
-                  </button>
-                </div>
+              {/* Data Export & Cache */}
+              <div style={{ display: 'flex', gap: '0.65rem', paddingTop: '0.75rem', borderTop: '1px solid var(--glass-border)' }}>
+                <a 
+                  href="/api/user/export"
+                  className="btn-secondary" 
+                  style={{ flex: 1, justifyContent: 'center', padding: '0.45rem', fontSize: '0.82rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export Study Data (JSON)
+                </a>
+                <button 
+                  type="button"
+                  onClick={handleClearCache}
+                  className="btn-secondary" 
+                  style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem', color: 'var(--warning)', borderColor: 'rgba(217, 119, 6, 0.3)' }}
+                >
+                  Clear Cache
+                </button>
               </div>
 
             </div>
@@ -925,80 +880,58 @@ export default function SettingsPage() {
 
           {/* 4. FEEDBACK & SUPPORT PANEL */}
           {activeSection === 'feedback' && (
-            <div className="settings-detail-pane">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  💬 Feedback & Support
-                </h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Help us make iFocus better</span>
-              </div>
-
-              <form onSubmit={handleSendFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="settings-input-group">
-                  <label className="settings-label">Category</label>
-                  <div className="option-chips-container">
-                    {[
-                      { id: 'feedback', label: '💡 Feature Request' },
-                      { id: 'bug', label: '🐛 Bug Report' },
-                      { id: 'ui', label: '🎨 Design Suggestion' },
-                      { id: 'question', label: '❓ Question' }
-                    ].map((c) => (
-                      <button 
-                        key={c.id} 
-                        type="button" 
-                        className={`option-chip ${feedbackCategory === c.id ? 'selected' : ''}`}
-                        onClick={() => setFeedbackCategory(c.id)}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="settings-input-group">
-                  <label className="settings-label">Message</label>
-                  <textarea 
-                    rows={4} 
-                    className="settings-textarea" 
-                    placeholder="Describe your feedback, issue, or ideas in detail..."
-                    value={feedbackText}
-                    onChange={(e) => setFeedbackText(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button 
-                    type="submit" 
-                    className="btn-primary" 
-                    disabled={isSendingFeedback}
-                    style={{ padding: '0.65rem 1.4rem' }}
-                  >
-                    {isSendingFeedback ? 'Sending...' : 'Submit Feedback'}
-                  </button>
-                </div>
-              </form>
-
-              {/* Keyboard Shortcuts Reference */}
-              <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--glass-border)' }}>
-                <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '0.98rem', color: 'var(--text-primary)' }}>⚡ Useful Keyboard Shortcuts</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.6rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px', fontSize: '0.85rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Add Task</span>
-                    <kbd style={{ background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.75rem', fontWeight: 600 }}>Enter</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px', fontSize: '0.85rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Close Modals</span>
-                    <kbd style={{ background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.75rem', fontWeight: 600 }}>Esc</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px', fontSize: '0.85rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Focus Timer</span>
-                    <kbd style={{ background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.75rem', fontWeight: 600 }}>Space</kbd>
-                  </div>
+            <form onSubmit={handleSendFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label className="settings-label" style={{ fontSize: '0.82rem' }}>Category</label>
+                <div className="option-chips-container" style={{ gap: '0.45rem', marginTop: '0.25rem' }}>
+                  {[
+                    { id: 'feedback', label: 'Feature Request' },
+                    { id: 'bug', label: 'Bug Report' },
+                    { id: 'ui', label: 'Design Suggestion' },
+                    { id: 'question', label: 'General Inquiry' }
+                  ].map((c) => (
+                    <button 
+                      key={c.id} 
+                      type="button" 
+                      className={`option-chip ${feedbackCategory === c.id ? 'selected' : ''}`}
+                      onClick={() => setFeedbackCategory(c.id)}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-            </div>
+              <div className="settings-input-group">
+                <label className="settings-label" style={{ fontSize: '0.82rem' }}>Message</label>
+                <textarea 
+                  rows={3} 
+                  className="settings-textarea" 
+                  placeholder="Describe your feedback, bug report, or ideas..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  style={{ padding: '0.55rem 0.85rem', fontSize: '0.85rem', resize: 'none' }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Space</kbd> Timer</span>
+                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Enter</kbd> Add Task</span>
+                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Esc</kbd> Close</span>
+                </div>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  disabled={isSendingFeedback}
+                  style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                >
+                  {isSendingFeedback ? 'Sending...' : 'Submit Feedback'}
+                </button>
+              </div>
+            </form>
           )}
 
         </div>
@@ -1009,41 +942,41 @@ export default function SettingsPage() {
       {isAvatarModalOpen && (
         <div className="avatar-modal-overlay" onClick={() => setIsAvatarModalOpen(false)}>
           <div className="avatar-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="settings-card-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+            <div className="settings-card-header" style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--glass-border)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-primary)' }}>Choose Profile Picture</h3>
-                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Select a friendly character, roll a random avatar, or enter a custom image URL.
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>Choose Profile Picture</h3>
+                <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Select a character, roll a random avatar, or enter a custom image URL.
                 </p>
               </div>
               <button 
                 onClick={() => setIsAvatarModalOpen(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
 
-            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               
               {/* Preview Box */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', padding: '1rem', background: '#f8faf7', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', background: '#f8faf7', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
                   src={tempAvatarUrl || avatarUrl} 
                   alt="Avatar Preview" 
-                  style={{ width: '70px', height: '70px', borderRadius: '50%', border: '3px solid white', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', objectFit: 'cover' }}
+                  style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2.5px solid white', boxShadow: '0 3px 10px rgba(0,0,0,0.1)', objectFit: 'cover' }}
                 />
                 <div>
-                  <h4 style={{ margin: '0 0 0.2rem 0', fontSize: '0.98rem', color: 'var(--text-primary)' }}>Live Preview</h4>
-                  <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>This avatar will appear on your profile and sidebar.</p>
+                  <h4 style={{ margin: '0 0 0.15rem 0', fontSize: '0.92rem', color: 'var(--text-primary)' }}>Live Preview</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Appears on your profile and navigation sidebar.</p>
                 </div>
               </div>
 
-              {/* Preset Characters */}
+              {/* Preset Characters (Clean labels, no emojis) */}
               <div>
-                <label className="settings-label" style={{ marginBottom: '0.5rem', display: 'block' }}>Preset Characters</label>
-                <div className="avatar-presets-grid">
+                <label className="settings-label" style={{ marginBottom: '0.4rem', display: 'block', fontSize: '0.82rem' }}>Preset Characters</label>
+                <div className="avatar-presets-grid" style={{ maxHeight: '180px', gap: '0.65rem' }}>
                   {AVATAR_PRESETS.map((preset) => {
                     const url = getDicebearUrl(preset.style, preset.seed, preset.bg);
                     const isSelected = tempAvatarUrl === url;
@@ -1055,10 +988,11 @@ export default function SettingsPage() {
                           setTempAvatarUrl(url);
                           setCustomDirectUrl('');
                         }}
+                        style={{ padding: '0.45rem' }}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={preset.label} />
-                        <span className="avatar-preset-label">{preset.label.split(' ')[1]}</span>
+                        <img src={url} alt={preset.label} style={{ width: '48px', height: '48px' }} />
+                        <span className="avatar-preset-label">{preset.label}</span>
                       </div>
                     );
                   })}
@@ -1066,20 +1000,21 @@ export default function SettingsPage() {
               </div>
 
               {/* Randomize Action */}
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
                 <button 
                   type="button" 
                   className="btn-secondary"
                   onClick={handleRandomizeAvatar}
-                  style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem' }}
+                  style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem', fontSize: '0.82rem' }}
                 >
-                  🎲 Randomize Character
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+                  Randomize Avatar
                 </button>
               </div>
 
               {/* Custom Image URL Option */}
               <div className="settings-input-group">
-                <label className="settings-label">Or Custom Image URL</label>
+                <label className="settings-label" style={{ fontSize: '0.8rem' }}>Or Custom Image URL</label>
                 <input 
                   type="url" 
                   className="settings-input" 
@@ -1091,17 +1026,19 @@ export default function SettingsPage() {
                       setTempAvatarUrl(e.target.value);
                     }
                   }}
+                  style={{ padding: '0.45rem 0.75rem', fontSize: '0.82rem' }}
                 />
               </div>
 
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', borderTop: '1px solid var(--glass-border)', background: '#fafbfa' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', padding: '0.75rem 1.25rem', borderTop: '1px solid var(--glass-border)', background: '#fafbfa' }}>
               <button 
                 type="button" 
                 className="btn-secondary" 
                 onClick={() => setIsAvatarModalOpen(false)}
+                style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
               >
                 Cancel
               </button>
@@ -1110,6 +1047,7 @@ export default function SettingsPage() {
                 className="btn-primary" 
                 disabled={isSavingAvatar}
                 onClick={handleSaveAvatar}
+                style={{ padding: '0.45rem 1.15rem', fontSize: '0.82rem' }}
               >
                 {isSavingAvatar ? 'Applying...' : 'Apply Avatar'}
               </button>
