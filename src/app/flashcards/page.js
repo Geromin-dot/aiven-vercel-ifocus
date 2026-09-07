@@ -339,9 +339,9 @@ export default function FlashcardsPage() {
                 <Image 
                   src={emptyStateImg} 
                   alt="No collections yet" 
-                  width={130} 
-                  height={130} 
-                  style={{ objectFit: 'contain', width: 'auto', height: 'auto' }} 
+                  width={85} 
+                  height={85} 
+                  style={{ objectFit: 'contain', width: 'auto', height: 'auto', maxHeight: '85px' }} 
                   priority 
                 />
                 <div>
@@ -409,16 +409,18 @@ export default function FlashcardsPage() {
 
       {/* ================= 2. CREATE DECK VIEW ================= */}
       {view === 'create' && (
-        <div className="glass-panel" style={{ maxWidth: '840px', margin: '0 auto', minHeight: 'calc(100vh - 4.5rem)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h2 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', margin: 0 }}>Create Auto-Deck</h2>
-            <button className="btn-secondary small" onClick={() => setView('collections')}>
+        <div className="glass-panel" style={{ minHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', gap: '1rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>Create Auto-Deck</h2>
+              <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>
+                Paste lecture notes or upload a PDF syllabus to automatically extract flashcards using AI.
+              </p>
+            </div>
+            <button className="btn-secondary small" onClick={() => setView('collections')} style={{ cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
               ← Collections
             </button>
           </div>
-          <p style={{ color: 'var(--text-secondary)', margin: '0 0 1.5rem 0', fontSize: '0.92rem' }}>
-            Paste lecture notes or upload a PDF syllabus to automatically extract flashcards using AI.
-          </p>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1 }}>
             
@@ -472,11 +474,11 @@ export default function FlashcardsPage() {
             {activeTab === 'text' && (
               <div>
                 <textarea 
-                  rows={8}
+                  rows={10}
                   placeholder="Paste lecture notes, textbook definitions, or summaries here..."
                   value={notesText}
                   onChange={(e) => setNotesText(e.target.value)}
-                  style={{ width: '100%', background: '#ffffff', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '1rem', color: 'var(--text-primary)', fontSize: '0.95rem', resize: 'vertical' }}
+                  style={{ width: '100%', minHeight: '240px', background: '#ffffff', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '1rem', color: 'var(--text-primary)', fontSize: '0.95rem', resize: 'vertical' }}
                 />
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   Tip: Include terms and definitions for optimal flashcard generation.
@@ -507,7 +509,7 @@ export default function FlashcardsPage() {
                     }
                   }}
                   onClick={() => fileInputRef.current?.click()}
-                  style={{ cursor: 'pointer', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: isDragOver ? '2px dashed var(--primary-accent)' : '2px dashed var(--glass-border)', borderRadius: '12px', background: isDragOver ? 'rgba(95, 143, 94, 0.08)' : '#fafbfa', transition: 'all 0.2s ease' }}
+                  style={{ cursor: 'pointer', minHeight: '240px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: isDragOver ? '2px dashed var(--primary-accent)' : '2px dashed var(--glass-border)', borderRadius: '12px', background: isDragOver ? 'rgba(95, 143, 94, 0.08)' : '#fafbfa', transition: 'all 0.2s ease' }}
                 >
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary-accent)" strokeWidth="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
                   
