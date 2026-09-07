@@ -916,17 +916,12 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Space</kbd> Timer</span>
-                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Enter</kbd> Add Task</span>
-                  <span><kbd style={{ background: '#fff', border: '1px solid #ccc', borderRadius: '3px', padding: '0 4px' }}>Esc</kbd> Close</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
                 <button 
                   type="submit" 
                   className="btn-primary" 
                   disabled={isSendingFeedback}
-                  style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem' }}
                 >
                   {isSendingFeedback ? 'Sending...' : 'Submit Feedback'}
                 </button>
