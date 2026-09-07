@@ -318,23 +318,40 @@ export default function FlashcardsPage() {
             </button>
           </div>
 
-          <div style={{ marginTop: '1.5rem', flex: 1 }}>
+          <div style={{ marginTop: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {loadingDecks ? (
-              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
+              <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
                 <div className="spinner" style={{ margin: '0 auto 1rem auto', width: '40px', height: '40px' }}></div>
                 <p>Loading your collections...</p>
               </div>
             ) : decks.length === 0 ? (
-              <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '340px', gap: '1rem' }}>
-                <Image src={emptyStateImg} alt="No collections yet" width={110} height={110} style={{ objectFit: 'contain', width: 'auto', height: 'auto' }} priority />
+              <div style={{ 
+                textAlign: 'center', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flex: 1, 
+                width: '100%', 
+                gap: '1.25rem',
+                padding: '2rem 1rem'
+              }}>
+                <Image 
+                  src={emptyStateImg} 
+                  alt="No collections yet" 
+                  width={130} 
+                  height={130} 
+                  style={{ objectFit: 'contain', width: 'auto', height: 'auto' }} 
+                  priority 
+                />
                 <div>
-                  <h3 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>No flashcard decks yet</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>Create your first deck by uploading a PDF syllabus or pasting notes.</p>
+                  <h3 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', marginBottom: '0.35rem', fontWeight: 600 }}>No flashcard decks yet</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', margin: 0, maxWidth: '420px' }}>Create your first deck by uploading a PDF syllabus or pasting notes.</p>
                 </div>
                 <button 
                   className="btn-secondary"
                   onClick={() => setView('create')}
-                  style={{ marginTop: '0.5rem', fontSize: '0.88rem' }}
+                  style={{ padding: '0.65rem 1.5rem', fontSize: '0.9rem', cursor: 'pointer' }}
                 >
                   Create Deck
                 </button>
