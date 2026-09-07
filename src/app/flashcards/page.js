@@ -326,7 +326,7 @@ export default function FlashcardsPage() {
               </div>
             ) : decks.length === 0 ? (
               <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '340px', gap: '1rem' }}>
-                <Image src={emptyStateImg} alt="No collections yet" width={110} height={110} style={{ objectFit: 'contain' }} />
+                <Image src={emptyStateImg} alt="No collections yet" width={110} height={110} style={{ objectFit: 'contain', width: 'auto', height: 'auto' }} priority />
                 <div>
                   <h3 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>No flashcard decks yet</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>Create your first deck by uploading a PDF syllabus or pasting notes.</p>
