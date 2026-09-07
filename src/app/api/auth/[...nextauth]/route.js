@@ -55,9 +55,29 @@ export const authOptions = {
     strategy: "jwt",
   },
   callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.sub = user.id;
+        token.name = user.name || user.username;
+        token.username = user.username;
+        token.picture = user.image;
+        token.email = user.email;
+      }
+      if (trigger === "update" && session?.user) {
+        if (session.user.name !== undefined) token.name = session.user.name;
+        if (session.user.username !== undefined) token.username = session.user.username;
+        if (session.user.image !== undefined) token.picture = session.user.image;
+        if (session.user.email !== undefined) token.email = session.user.email;
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub;
+        if (token.name) session.user.name = token.name;
+        if (token.username) session.user.username = token.username;
+        if (token.picture) session.user.image = token.picture;
+        if (token.email) session.user.email = token.email;
       }
       return session;
     },

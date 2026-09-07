@@ -472,6 +472,48 @@ export default function CommandCenterPage() {
       
       if (isFocus) {
         setIsFocus(false);
+        const focusMins = timerPreset === 'Custom' 
+          ? Math.max(1, Math.round((customWorkTime.min * 60 + customWorkTime.sec) / 60))
+          : parseInt(timerPreset.split('/')[0]) || 25;
+
+        try {
+          const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+          history.push({
+            date: new Date().toISOString(),
+            duration: focusMins,
+            type: 'pomodoro'
+          });
+          if (history.length > 200) history.splice(0, history.length - 200);
+          localStorage.setItem('ifocus_session_history', JSON.stringify(history));
+
+          const today = new Date().toDateString();
+          const stats = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
+          const currentSessions = (stats.sessions || 0) + 1;
+          const currentMinutes = (stats.minutes || 0) + focusMins;
+          
+          const uniqueDates = new Set(history.map(s => new Date(s.date).toISOString().slice(0, 10)));
+          let streakCount = 0;
+          let checkDate = new Date();
+          while (true) {
+            const dateStr = checkDate.toISOString().slice(0, 10);
+            if (uniqueDates.has(dateStr)) {
+              streakCount++;
+              checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+              break;
+            }
+          }
+
+          localStorage.setItem('ifocus_focus_stats', JSON.stringify({
+            date: today,
+            sessions: currentSessions,
+            minutes: currentMinutes,
+            streak: Math.max(1, streakCount)
+          }));
+        } catch (e) {
+          console.warn("Could not record session stats:", e);
+        }
+
         const breakTime = timerPreset === 'Custom' 
           ? customBreakTime.min * 60 + customBreakTime.sec 
           : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
