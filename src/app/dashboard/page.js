@@ -1,6 +1,6 @@
 "use client";
 
-import BreakGateModal from '@/components/BreakGateModal';
+// BreakGateModal is managed globally in GlobalTimer
 
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -2128,12 +2128,7 @@ export default function CommandCenterPage() {
           </div>
         </div>
       )}
-      <BreakGateModal 
-        isOpen={showBreakGate} 
-        deck={activeBreakGateDeck} 
-        onComplete={handleBreakGateComplete} 
-        onSkip={handleBreakGateSkip} 
-      />
+      
     </div>
   );
 }

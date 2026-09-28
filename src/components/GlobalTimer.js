@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import BreakGateModal from "./BreakGateModal";
 
-// Web Audio Chime for Active Presence Check (Zero external audio asset dependency)
+// Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - zero external MP3 dependencies)
 const playPresenceChime = () => {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -12,32 +13,31 @@ const playPresenceChime = () => {
     if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
 
-    // Note 1: D5 (587.33 Hz)
+    // Harmonic double chime (D5 -> A5)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = "sine";
     osc1.frequency.setValueAtTime(587.33, now);
-    gain1.gain.setValueAtTime(0.2, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    gain1.gain.setValueAtTime(0.22, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
     osc1.start(now);
-    osc1.stop(now + 0.3);
+    osc1.stop(now + 0.35);
 
-    // Note 2: A5 (880 Hz)
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = "sine";
-    osc2.frequency.setValueAtTime(880, now + 0.15);
+    osc2.frequency.setValueAtTime(880, now + 0.14);
     gain2.gain.setValueAtTime(0, now);
-    gain2.gain.setValueAtTime(0.25, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    gain2.gain.setValueAtTime(0.26, now + 0.14);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 0.65);
+    osc2.start(now + 0.14);
+    osc2.stop(now + 0.7);
   } catch (e) {
-    console.warn("Presence chime audio blocked:", e);
+    console.warn("Presence chime audio prevented:", e);
   }
 };
 
@@ -49,21 +49,20 @@ const playCompletionAlarm = () => {
     if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
 
-    // Triple gentle ping
-    [0, 0.2, 0.4].forEach((delay, idx) => {
+    [0, 0.18, 0.36].forEach((delay, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
-      osc.frequency.setValueAtTime(783.99 + idx * 100, now + delay); // G5+
-      gain.gain.setValueAtTime(0.18, now + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.28);
+      osc.frequency.setValueAtTime(783.99 + idx * 80, now + delay);
+      gain.gain.setValueAtTime(0.2, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.3);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now + delay);
-      osc.stop(now + delay + 0.28);
+      osc.stop(now + delay + 0.3);
     });
   } catch (e) {
-    console.warn("Completion alarm audio blocked:", e);
+    console.warn("Completion alarm audio prevented:", e);
   }
 };
 
@@ -71,7 +70,7 @@ export default function GlobalTimer() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Timer state synced with localStorage
+  // Master Timer State
   const [timerState, setTimerState] = useState({
     isRunning: false,
     isFocus: true,
@@ -82,19 +81,25 @@ export default function GlobalTimer() {
     presencePaused: false,
     lastPresenceElapsed: 0,
     sessionCount: 1,
+    breakGatePending: false,
   });
 
   const [showPresenceModal, setShowPresenceModal] = useState(false);
+  const [showBreakGateModal, setShowBreakGateModal] = useState(false);
+  const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
+
   const stateRef = useRef(timerState);
   stateRef.current = timerState;
+
+  // Track User Activity across the entire screen for AFK Detection
+  const lastActivityRef = useRef(Date.now());
 
   // Read latest timer state from localStorage
   const readStorageState = useCallback(() => {
     try {
       const raw = localStorage.getItem("ifocus_timer_state");
       if (raw) {
-        const parsed = JSON.parse(raw);
-        return parsed;
+        return JSON.parse(raw);
       }
     } catch (e) {
       console.warn("Failed reading ifocus_timer_state:", e);
@@ -115,15 +120,67 @@ export default function GlobalTimer() {
     }
   }, []);
 
-  // Initialize and listen to sync events across tabs / components
+  // Trigger Active Presence Pause
+  const triggerPresencePause = useCallback(() => {
+    const current = readStorageState() || stateRef.current;
+    const remainingSeconds = current.targetEndTime
+      ? Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000))
+      : (current.timeLeft !== undefined ? current.timeLeft : 25 * 60);
+
+    const pausedState = {
+      ...current,
+      isRunning: false,
+      targetEndTime: null,
+      timeLeft: remainingSeconds,
+      presencePaused: true,
+      lastPresenceElapsed: current.totalTime ? Math.max(0, current.totalTime - remainingSeconds) : 0,
+    };
+
+    commitStorageState(pausedState, true);
+    setShowPresenceModal(true);
+    playPresenceChime();
+  }, [commitStorageState, readStorageState]);
+
+  // Global Inactivity (AFK) Listeners
+  useEffect(() => {
+    const handleUserActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    window.addEventListener("mousemove", handleUserActivity, { passive: true });
+    window.addEventListener("keydown", handleUserActivity, { passive: true });
+    window.addEventListener("mousedown", handleUserActivity, { passive: true });
+    window.addEventListener("touchstart", handleUserActivity, { passive: true });
+    window.addEventListener("scroll", handleUserActivity, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", handleUserActivity);
+      window.removeEventListener("keydown", handleUserActivity);
+      window.removeEventListener("mousedown", handleUserActivity);
+      window.removeEventListener("touchstart", handleUserActivity);
+      window.removeEventListener("scroll", handleUserActivity);
+    };
+  }, []);
+
+  // Initialize and listen to sync and test events
   useEffect(() => {
     const handleSync = (e) => {
       if (e?.detail) {
         setTimerState(e.detail);
         if (e.detail.presencePaused) {
           setShowPresenceModal(true);
-        } else if (!e.detail.presencePaused && showPresenceModal) {
+        } else if (!e.detail.presencePaused) {
           setShowPresenceModal(false);
+        }
+        if (e.detail.breakGatePending) {
+          // Check for active deck
+          try {
+            const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
+            if (rawDeck) {
+              setActiveBreakGateDeck(JSON.parse(rawDeck));
+              setShowBreakGateModal(true);
+            }
+          } catch(err) {}
         }
       } else {
         const saved = readStorageState();
@@ -134,10 +191,13 @@ export default function GlobalTimer() {
       }
     };
 
+    const handleTestPresence = () => {
+      triggerPresencePause();
+    };
+
     // Initial load from storage
     const initial = readStorageState();
     if (initial) {
-      // Calculate accurate current timeLeft if running
       if (initial.isRunning && initial.targetEndTime) {
         const remaining = Math.max(0, Math.round((initial.targetEndTime - Date.now()) / 1000));
         initial.timeLeft = remaining;
@@ -147,16 +207,16 @@ export default function GlobalTimer() {
     }
 
     window.addEventListener("ifocus_timer_sync", handleSync);
+    window.addEventListener("ifocus_test_presence", handleTestPresence);
     window.addEventListener("storage", (e) => {
-      if (e.key === "ifocus_timer_state") {
-        handleSync();
-      }
+      if (e.key === "ifocus_timer_state") handleSync();
     });
 
     return () => {
       window.removeEventListener("ifocus_timer_sync", handleSync);
+      window.removeEventListener("ifocus_test_presence", handleTestPresence);
     };
-  }, [readStorageState]);
+  }, [readStorageState, triggerPresencePause]);
 
   // Main Global Timer Loop (Runs continuously across all routes in background)
   useEffect(() => {
@@ -171,8 +231,8 @@ export default function GlobalTimer() {
       const totalTime = current.totalTime || 25 * 60;
       const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
 
-      // 1. Check Active Presence interval condition (during Focus mode)
-      if (current.isFocus && remainingSeconds > 0) {
+      // --- 1. ACTIVE PRESENCE CHECK ---
+      if (current.isFocus) {
         let activePresenceEnabled = true;
         let activePresenceInterval = 5; // default 5 minutes
         try {
@@ -188,17 +248,18 @@ export default function GlobalTimer() {
           }
         } catch (e) {}
 
-        const intervalSeconds = activePresenceInterval * 60;
+        const intervalSeconds = Math.max(30, activePresenceInterval * 60);
 
-        // Check if elapsed focus time crossed the next interval threshold
+        // A. AFK Inactivity Check (user hasn't moved mouse or pressed key for interval)
+        const idleTimeMs = now - lastActivityRef.current;
+        const isAfk = idleTimeMs >= intervalSeconds * 1000;
+
+        // B. Periodic Elapsed Focus Time Check
         const currentIntervalBucket = Math.floor(elapsedSeconds / intervalSeconds);
         const lastIntervalBucket = Math.floor((current.lastPresenceElapsed || 0) / intervalSeconds);
+        const isIntervalReached = currentIntervalBucket > 0 && currentIntervalBucket > lastIntervalBucket;
 
-        if (
-          activePresenceEnabled &&
-          currentIntervalBucket > 0 &&
-          currentIntervalBucket > lastIntervalBucket
-        ) {
+        if (activePresenceEnabled && (isAfk || isIntervalReached)) {
           // Immediately pause timer! It CANNOT continue until user clicks confirm!
           const pausedState = {
             ...current,
@@ -206,16 +267,17 @@ export default function GlobalTimer() {
             targetEndTime: null,
             timeLeft: remainingSeconds,
             presencePaused: true,
-            lastPresenceElapsed: currentIntervalBucket * intervalSeconds,
+            lastPresenceElapsed: Math.max(elapsedSeconds, currentIntervalBucket * intervalSeconds),
           };
           commitStorageState(pausedState, true);
           setShowPresenceModal(true);
           playPresenceChime();
+          lastActivityRef.current = Date.now();
           return;
         }
       }
 
-      // 2. Timer finished condition (remainingSeconds === 0)
+      // --- 2. TIMER FINISHED (remainingSeconds === 0) ---
       if (remainingSeconds <= 0) {
         playCompletionAlarm();
 
@@ -271,7 +333,39 @@ export default function GlobalTimer() {
               ? 20 * 60
               : 5 * 60;
 
-          // Transition to Break Mode
+          // Check if an active deck is set for BreakGate
+          let breakGateDeck = null;
+          try {
+            const stored = localStorage.getItem("ifocus_active_breakgate_deck");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed && parsed.cards && parsed.cards.length > 0) {
+                breakGateDeck = parsed;
+              }
+            }
+          } catch (e) {}
+
+          if (breakGateDeck) {
+            // Intercept break with retrieval challenge modal!
+            const breakGateState = {
+              ...current,
+              isFocus: false,
+              isRunning: false,
+              totalTime: breakDuration,
+              timeLeft: breakDuration,
+              targetEndTime: null,
+              lastPresenceElapsed: 0,
+              presencePaused: false,
+              breakGatePending: true,
+            };
+            commitStorageState(breakGateState, true);
+            setActiveBreakGateDeck(breakGateDeck);
+            setShowBreakGateModal(true);
+            window.dispatchEvent(new CustomEvent("ifocus_breakgate_trigger", { detail: breakGateDeck }));
+            return;
+          }
+
+          // No BreakGate deck active -> Auto-transition to Break mode
           const nextBreakState = {
             ...current,
             isFocus: false,
@@ -281,11 +375,12 @@ export default function GlobalTimer() {
             targetEndTime: Date.now() + breakDuration * 1000,
             lastPresenceElapsed: 0,
             presencePaused: false,
+            breakGatePending: false,
           };
           commitStorageState(nextBreakState, true);
           return;
         } else {
-          // Break is finished -> Switch back to focus session
+          // Break finished -> Switch to next focus session
           const focusDuration =
             current.timerPreset === "50/10"
               ? 50 * 60
@@ -298,12 +393,13 @@ export default function GlobalTimer() {
           const nextFocusState = {
             ...current,
             isFocus: true,
-            isRunning: false, // Wait for user to start next focus or start if configured
+            isRunning: false,
             totalTime: focusDuration,
             timeLeft: focusDuration,
             targetEndTime: null,
             lastPresenceElapsed: 0,
             presencePaused: false,
+            breakGatePending: false,
             sessionCount: (current.sessionCount || 1) + 1,
           };
           commitStorageState(nextFocusState, true);
@@ -311,13 +407,18 @@ export default function GlobalTimer() {
         }
       }
 
-      // 3. Normal 1-second Tick
+      // --- 3. NORMAL 1-SECOND TICK ---
       const updatedState = {
         ...current,
         timeLeft: remainingSeconds,
       };
+      
+      // Update both React state and localStorage on tick for 100% continuous persistence
       setTimerState(updatedState);
-      // Dispatch tick for smooth UI updates
+      try {
+        localStorage.setItem("ifocus_timer_state", JSON.stringify(updatedState));
+      } catch (e) {}
+
       window.dispatchEvent(
         new CustomEvent("ifocus_timer_tick", {
           detail: {
@@ -336,13 +437,16 @@ export default function GlobalTimer() {
   // Handle Active Presence Confirmation
   const handleConfirmPresence = () => {
     setShowPresenceModal(false);
+    lastActivityRef.current = Date.now();
     const current = readStorageState() || timerState;
-    // Resume timer and extend targetEndTime by current timeLeft
+    const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
+
     const resumedState = {
       ...current,
       isRunning: true,
       presencePaused: false,
-      targetEndTime: Date.now() + current.timeLeft * 1000,
+      timeLeft: remaining,
+      targetEndTime: Date.now() + remaining * 1000,
     };
     commitStorageState(resumedState, true);
   };
@@ -359,6 +463,30 @@ export default function GlobalTimer() {
     commitStorageState(pausedState, true);
   };
 
+  // Handle BreakGate Completion
+  const handleBreakGateComplete = () => {
+    setShowBreakGateModal(false);
+    const current = readStorageState() || timerState;
+    const breakDuration = current.totalTime || 5 * 60;
+
+    const breakState = {
+      ...current,
+      isFocus: false,
+      isRunning: true,
+      timeLeft: breakDuration,
+      totalTime: breakDuration,
+      targetEndTime: Date.now() + breakDuration * 1000,
+      breakGatePending: false,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+    };
+    commitStorageState(breakState, true);
+  };
+
+  const handleBreakGateSkip = () => {
+    handleBreakGateComplete();
+  };
+
   const toggleMiniTimerPlay = (e) => {
     e.stopPropagation();
     const current = readStorageState() || timerState;
@@ -372,35 +500,41 @@ export default function GlobalTimer() {
       commitStorageState(paused, true);
     } else {
       // Resume
+      const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
       const resumed = {
         ...current,
         isRunning: true,
         presencePaused: false,
-        targetEndTime: Date.now() + (current.timeLeft || 25 * 60) * 1000,
+        timeLeft: remaining,
+        targetEndTime: Date.now() + remaining * 1000,
       };
       commitStorageState(resumed, true);
     }
   };
 
-  // Format MM:SS
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Check if we should display the floating mini-timer:
-  // Show when NOT on /dashboard AND (timer is running OR paused by active presence)
   const isDashboard = pathname === "/dashboard";
-  const showFloatingMiniTimer = !isDashboard && (timerState.isRunning || timerState.presencePaused);
+  const showFloatingMiniTimer =
+    !isDashboard && (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
 
   return (
     <>
-      {/* Floating Mini-Timer Pill (Visible on /flashcards, /analytics, /coach, /settings, etc.) */}
+      {/* Floating Mini-Timer Pill (Visible on /flashcards, /analytics, /coach, /settings) */}
       {showFloatingMiniTimer && (
         <div
           id="globalMiniTimerPill"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => {
+            if (timerState.breakGatePending) {
+              setShowBreakGateModal(true);
+            } else {
+              router.push("/dashboard");
+            }
+          }}
           style={{
             position: "fixed",
             bottom: "24px",
@@ -410,11 +544,11 @@ export default function GlobalTimer() {
             alignItems: "center",
             gap: "0.85rem",
             padding: "0.65rem 1.15rem",
-            background: "rgba(15, 23, 42, 0.92)",
+            background: "rgba(15, 23, 42, 0.94)",
             color: "#ffffff",
             borderRadius: "9999px",
-            boxShadow: "0 12px 30px -8px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.12)",
-            backdropFilter: "blur(12px)",
+            boxShadow: "0 12px 30px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)",
+            backdropFilter: "blur(14px)",
             cursor: "pointer",
             transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
             userSelect: "none",
@@ -422,23 +556,25 @@ export default function GlobalTimer() {
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = "translateY(-3px) scale(1.02)";
             e.currentTarget.style.boxShadow =
-              "0 18px 36px -8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.2)";
+              "0 18px 36px -8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.25)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "translateY(0) scale(1)";
             e.currentTarget.style.boxShadow =
-              "0 12px 30px -8px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.12)";
+              "0 12px 30px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)";
           }}
-          title="Click to open Command Center"
+          title="Click to view Command Center or take BreakGate test"
         >
           {/* Status Indicator Dot */}
           <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span
               style={{
-                width: "9px",
-                height: "9px",
+                width: "10px",
+                height: "10px",
                 borderRadius: "50%",
-                background: timerState.presencePaused
+                background: timerState.breakGatePending
+                  ? "#f59e0b"
+                  : timerState.presencePaused
                   ? "#f59e0b"
                   : timerState.isFocus
                   ? "#10b981"
@@ -449,8 +585,8 @@ export default function GlobalTimer() {
               <span
                 style={{
                   position: "absolute",
-                  width: "17px",
-                  height: "17px",
+                  width: "18px",
+                  height: "18px",
                   borderRadius: "50%",
                   background: timerState.isFocus ? "rgba(16, 185, 129, 0.35)" : "rgba(56, 189, 248, 0.35)",
                   animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite",
@@ -461,30 +597,32 @@ export default function GlobalTimer() {
 
           {/* Time & Session Label */}
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span
-                style={{
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.75px",
-                  color: timerState.presencePaused
-                    ? "#fbbf24"
-                    : timerState.isFocus
-                    ? "#34d399"
-                    : "#7dd3fc",
-                }}
-              >
-                {timerState.presencePaused
-                  ? "Presence Paused"
-                  : timerState.isFocus
-                  ? "Focus Session"
-                  : "Break Time"}
-              </span>
-            </div>
             <span
               style={{
-                fontSize: "1.15rem",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.75px",
+                color: timerState.breakGatePending
+                  ? "#fbbf24"
+                  : timerState.presencePaused
+                  ? "#fbbf24"
+                  : timerState.isFocus
+                  ? "#34d399"
+                  : "#7dd3fc",
+              }}
+            >
+              {timerState.breakGatePending
+                ? "BreakGate Ready"
+                : timerState.presencePaused
+                ? "Presence Paused"
+                : timerState.isFocus
+                ? "Focus Session"
+                : "Break Time"}
+            </span>
+            <span
+              style={{
+                fontSize: "1.18rem",
                 fontWeight: 700,
                 letterSpacing: "0.5px",
                 fontFamily: "monospace",
@@ -496,40 +634,42 @@ export default function GlobalTimer() {
           </div>
 
           {/* Play / Pause Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleMiniTimerPlay}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "28px",
-              height: "28px",
-              borderRadius: "50%",
-              border: "none",
-              background: "rgba(255, 255, 255, 0.12)",
-              color: "#ffffff",
-              cursor: "pointer",
-              transition: "background 0.2s",
-              marginLeft: "4px",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.24)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.12)")}
-            title={timerState.isRunning ? "Pause Session" : "Resume Session"}
-          >
-            {timerState.isRunning ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-            )}
-          </button>
+          {!timerState.breakGatePending && (
+            <button
+              type="button"
+              onClick={toggleMiniTimerPlay}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255, 255, 255, 0.12)",
+                color: "#ffffff",
+                cursor: "pointer",
+                transition: "background 0.2s",
+                marginLeft: "4px",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.24)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.12)")}
+              title={timerState.isRunning ? "Pause Session" : "Resume Session"}
+            >
+              {timerState.isRunning ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              )}
+            </button>
+          )}
 
-          {/* Quick jump arrow */}
+          {/* Jump Arrow */}
           <svg
             width="14"
             height="14"
@@ -547,14 +687,14 @@ export default function GlobalTimer() {
         </div>
       )}
 
-      {/* Global Active Presence Check Modal (100% Emoji-Free, Blocks session continuation until confirmed) */}
+      {/* Global Active Presence Check Modal (100% Emoji-Free) */}
       {showPresenceModal && (
         <div
           id="globalActivePresenceModal"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(15, 23, 42, 0.72)",
+            background: "rgba(15, 23, 42, 0.75)",
             backdropFilter: "blur(10px)",
             zIndex: 99999,
             display: "flex",
@@ -580,7 +720,7 @@ export default function GlobalTimer() {
               gap: "1.2rem",
             }}
           >
-            {/* Visual Icon Header (Zero Emojis, Clean SVG) */}
+            {/* Visual Icon */}
             <div
               style={{
                 width: "56px",
@@ -650,8 +790,8 @@ export default function GlobalTimer() {
                   lineHeight: 1.55,
                 }}
               >
-                The timer has paused to verify you are actively studying. Your session will remain on hold until
-                you confirm your presence.
+                The timer won't run if you aren't there! We paused your Pomodoro session to keep your focus stats accurate.
+                Click Continue to resume your session.
               </p>
             </div>
 
@@ -713,12 +853,21 @@ export default function GlobalTimer() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border-color, #e2e8f0)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-secondary, #f1f5f9)")}
               >
-                Keep Paused
+                Stay Paused
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Global BreakGate Retrieval Modal (Accessible across any page when focus session concludes) */}
+      <BreakGateModal
+        isOpen={showBreakGateModal}
+        deck={activeBreakGateDeck}
+        onClose={() => setShowBreakGateModal(false)}
+        onComplete={handleBreakGateComplete}
+        onSkip={handleBreakGateSkip}
+      />
     </>
   );
 }

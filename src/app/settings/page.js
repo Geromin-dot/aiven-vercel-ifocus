@@ -690,7 +690,7 @@ export default function SettingsPage() {
                 <div style={{ padding: '0.2rem 0' }}>
                   <label className="settings-label" style={{ fontSize: '0.82rem' }}>Active Presence Check Interval</label>
                   <div className="option-chips-container" style={{ gap: '0.5rem', marginTop: '0.3rem' }}>
-                    {[3, 5, 10, 15].map((mins) => (
+                    {[1, 3, 5, 10, 15].map((mins) => (
                       <button 
                         key={mins} 
                         type="button" 
@@ -707,7 +707,7 @@ export default function SettingsPage() {
                         }}
                         style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
                       >
-                        Every {mins} min
+                        {mins === 1 ? '1 min (Test)' : `Every ${mins} min`}
                       </button>
                     ))}
                   </div>
@@ -715,15 +715,30 @@ export default function SettingsPage() {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-                <button 
-                  type="button" 
-                  className="btn-secondary"
-                  onClick={playSampleChime}
-                  style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                  Test Chime
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button 
+                    type="button" 
+                    className="btn-secondary"
+                    onClick={playSampleChime}
+                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    Test Chime
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-secondary"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('ifocus_test_presence'));
+                      }
+                    }}
+                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Test Presence Popup
+                  </button>
+                </div>
                 <button 
                   type="submit" 
                   className="btn-primary" 
