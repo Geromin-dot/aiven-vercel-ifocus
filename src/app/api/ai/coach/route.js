@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { callGemini } from '@/lib/gemini';
 
 export async function POST(request) {
   try {
@@ -6,11 +7,6 @@ export async function POST(request) {
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "AI is not configured (Missing API Key)." }, { status: 500 });
     }
     
     const taskListStr = tasks && tasks.length > 0 
@@ -50,32 +46,13 @@ Reply STRICTLY in valid JSON format like this:
 (Make sure orderedIds contains the exact 'id' strings from Current Tasks, containing ALL task IDs in the recommended order.)
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: "application/json"
-        }
-      })
+    const parsed = await callGemini({
+      parts: [{ text: prompt }],
+      generationConfig: {
+        temperature: 0.3,
+        responseMimeType: "application/json"
+      }
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini API Error:", errText);
-      return NextResponse.json({ error: "Failed to generate AI response: " + errText }, { status: response.status });
-    }
-
-    const data = await response.json();
-    let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    
-    // Safety fallback in case it still wraps in markdown
-    aiText = aiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-    const parsed = JSON.parse(aiText);
 
     return NextResponse.json({
       state: parsed.state || "Engaged",
@@ -85,6 +62,6 @@ Reply STRICTLY in valid JSON format like this:
 
   } catch (error) {
     console.error("AI Coach Route Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
