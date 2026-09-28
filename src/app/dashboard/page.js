@@ -69,6 +69,10 @@ export default function CommandCenterPage() {
   const [showBreakGate, setShowBreakGate] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
 
+  // Active Presence Check (AFK 5 minutes detector)
+  const [showActivePresenceModal, setShowActivePresenceModal] = useState(false);
+  const lastActivityTimeRef = useRef(Date.now());
+
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -555,6 +559,56 @@ export default function CommandCenterPage() {
     }
     return () => clearInterval(interval);
   }, [isActive, timeLeft, isFocus, timerPreset, customWorkTime, customBreakTime]);
+
+  // Active Presence Detection & Chime Sound
+  const playPresenceChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.8);
+    } catch(e) {}
+  };
+
+  useEffect(() => {
+    if (!isActive || !isFocus) return;
+
+    const handleUserActivity = () => {
+      lastActivityTimeRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('click', handleUserActivity);
+    window.addEventListener('scroll', handleUserActivity);
+
+    // Check every 3 seconds if user has been AFK for 5 minutes (300,000 ms)
+    const afkChecker = setInterval(() => {
+      const idleTimeMs = Date.now() - lastActivityTimeRef.current;
+      if (idleTimeMs >= 5 * 60 * 1000) {
+        setIsActive(false); // Pause timer
+        setShowActivePresenceModal(true);
+        playPresenceChime();
+        lastActivityTimeRef.current = Date.now();
+      }
+    }, 3000);
+
+    return () => {
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener('scroll', handleUserActivity);
+      clearInterval(afkChecker);
+    };
+  }, [isActive, isFocus]);
 
   const handleBreakGateComplete = () => {
     setShowBreakGate(false);
@@ -1301,7 +1355,7 @@ export default function CommandCenterPage() {
                       }}
                       title="Save changes"
                     >
-                      ✓
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </button>
                     <button
                       onClick={() => setEditingTodoId(null)}
@@ -2034,6 +2088,126 @@ export default function CommandCenterPage() {
           </div>
         </div>
       )}
+      {/* Active Presence Check Modal (AFK 5 Minutes) */}
+      {showActivePresenceModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.68)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '20px',
+            boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.3)',
+            border: '1px solid rgba(0, 0, 0, 0.08)',
+            width: '100%',
+            maxWidth: '460px',
+            padding: '2.2rem 2rem',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: '1.25rem',
+            animation: 'flashcardFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            {/* Radar / Clock Icon */}
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(217, 119, 6, 0.12)',
+              color: '#d97706',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+
+            <div>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: 'rgba(217, 119, 6, 0.1)',
+                color: '#d97706',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '999px',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                marginBottom: '0.65rem'
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706' }} />
+                Active Presence Check
+              </div>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.45rem 0' }}>
+                Are you still there?
+              </h3>
+              <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
+                The timer won't run if you aren't there! We paused your Pomodoro session after 5 minutes of inactivity so your focus stats stay accurate.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActivePresenceModal(false);
+                  lastActivityTimeRef.current = Date.now();
+                  setIsActive(true);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'var(--primary-accent)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.8rem',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(78, 130, 83, 0.3)'
+                }}
+              >
+                Continue Session
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowActivePresenceModal(false);
+                }}
+                className="btn-secondary"
+                style={{
+                  flex: 1,
+                  padding: '0.8rem',
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderColor: 'var(--glass-border)',
+                  color: 'var(--text-primary)',
+                  textAlign: 'center'
+                }}
+              >
+                Stay Paused
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BreakGateModal 
         isOpen={showBreakGate} 
         deck={activeBreakGateDeck} 
