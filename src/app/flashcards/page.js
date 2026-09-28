@@ -36,6 +36,94 @@ export default function FlashcardsPage() {
   const [isSavingDeck, setIsSavingDeck] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
+  // BreakGate Active Deck Tracker
+  const [activeBreakGateId, setActiveBreakGateId] = useState(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('ifocus_active_breakgate_deck');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && (parsed.id || parsed.title)) {
+          setActiveBreakGateId(parsed.id || parsed.title);
+        }
+      }
+    } catch(e) {}
+  }, []);
+
+  const handleToggleActivateBreakGate = (deck, e) => {
+    if (e) e.stopPropagation();
+    const currentId = deck.id || deck.title;
+    if (activeBreakGateId === currentId) {
+      localStorage.removeItem('ifocus_active_breakgate_deck');
+      setActiveBreakGateId(null);
+      showToast('Deck deactivated from Pomodoro BreakGate.');
+    } else {
+      localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(deck));
+      setActiveBreakGateId(currentId);
+      showToast(`🎯 "${deck.title}" is now active in Pomodoro BreakGate!`);
+    }
+  };
+
+  // Practice Exam State
+  const [examIndex, setExamIndex] = useState(0);
+  const [examScore, setExamScore] = useState(0);
+  const [examOptions, setExamOptions] = useState([]);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [isOptionChecked, setIsOptionChecked] = useState(false);
+  const [examFinished, setExamFinished] = useState(false);
+
+  const generateExamOptions = (cardIndex, cardsList) => {
+    if (!cardsList || cardsList.length === 0) return [];
+    const correct = cardsList[cardIndex]?.back || '';
+    const distractors = cardsList
+      .filter((_, i) => i !== cardIndex)
+      .map(c => c.back)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 3);
+    
+    while (distractors.length < 3) {
+      distractors.push(`Alternative concept definition #${distractors.length + 1}`);
+    }
+
+    return [correct, ...distractors].sort(() => 0.5 - Math.random());
+  };
+
+  const handleStartExam = (deck) => {
+    setActiveDeck(deck);
+    setExamIndex(0);
+    setExamScore(0);
+    setSelectedOption(null);
+    setIsOptionChecked(false);
+    setExamFinished(false);
+    setExamOptions(generateExamOptions(0, deck.cards));
+    setView('exam');
+  };
+
+  const handleSelectOption = (option) => {
+    if (isOptionChecked) return;
+    setSelectedOption(option);
+    setIsOptionChecked(true);
+
+    const currentQ = activeDeck?.cards?.[examIndex];
+    if (option === currentQ?.back) {
+      setExamScore(s => s + 1);
+      setMasteredCards(prev => new Set([...prev, examIndex]));
+    }
+  };
+
+  const handleNextExamQuestion = () => {
+    const nextIdx = examIndex + 1;
+    if (nextIdx < (activeDeck?.cards?.length || 0)) {
+      setExamIndex(nextIdx);
+      setSelectedOption(null);
+      setIsOptionChecked(false);
+      setExamOptions(generateExamOptions(nextIdx, activeDeck.cards));
+    } else {
+      setExamFinished(true);
+    }
+  };
+
   const showToast = (message) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3500);
@@ -388,14 +476,46 @@ export default function FlashcardsPage() {
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>{cardTotal} {cardTotal === 1 ? 'Card' : 'Cards'} • {createdDate}</p>
                       </div>
 
-                      {/* Action Button */}
-                      <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
+                      {/* Action Buttons: Study, Exam, and Activate */}
+                      <div style={{ marginTop: 'auto', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                          <button 
+                            className="btn-primary" 
+                            onClick={() => handleStartStudy(deck)}
+                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center' }}
+                          >
+                            📖 Study
+                          </button>
+                          <button 
+                            className="btn-secondary" 
+                            onClick={() => handleStartExam(deck)}
+                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center', borderColor: '#2e7d32', color: '#2e7d32', fontWeight: 600 }}
+                          >
+                            🎓 Exam
+                          </button>
+                        </div>
+
                         <button 
-                          className="btn-primary" 
-                          onClick={() => handleStartStudy(deck)}
-                          style={{ width: '100%', padding: '0.5rem 1rem', fontSize: '0.85rem', margin: 0 }}
+                          onClick={(e) => handleToggleActivateBreakGate(deck, e)}
+                          style={{
+                            width: '100%',
+                            padding: '0.4rem 0.5rem',
+                            fontSize: '0.78rem',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem',
+                            background: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'rgba(46, 125, 50, 0.12)' : 'transparent',
+                            border: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '1px solid #2e7d32' : '1px dashed var(--glass-border)',
+                            color: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '#2e7d32' : 'var(--text-secondary)',
+                            transition: 'all 0.2s ease'
+                          }}
                         >
-                          Study Deck
+                          <span>🎯</span>
+                          {(activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'Active for BreakGate' : 'Activate for BreakGate'}
                         </button>
                       </div>
                     </div>
@@ -448,6 +568,10 @@ export default function FlashcardsPage() {
                   <option value={8}>8 Cards</option>
                   <option value={10}>10 Cards</option>
                   <option value={15}>15 Cards</option>
+                  <option value={20}>20 Cards</option>
+                  <option value={25}>25 Cards</option>
+                  <option value={30}>30 Cards</option>
+                  <option value={0}>Auto (All Key Concepts)</option>
                 </select>
               </div>
             </div>
@@ -584,6 +708,30 @@ export default function FlashcardsPage() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  className="btn-secondary small"
+                  onClick={() => handleStartExam(activeDeck)}
+                  style={{ borderColor: '#2e7d32', color: '#2e7d32', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  🎓 Take Exam
+                </button>
+
+                <button
+                  className="btn-secondary small"
+                  onClick={(e) => handleToggleActivateBreakGate(activeDeck, e)}
+                  style={{
+                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'rgba(46, 125, 50, 0.15)' : 'transparent',
+                    borderColor: '#2e7d32',
+                    color: '#2e7d32',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  🎯 {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'BreakGate Active' : 'Activate BreakGate'}
+                </button>
+
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                   <input 
                     type="checkbox" 
@@ -792,6 +940,240 @@ export default function FlashcardsPage() {
 
           </div>
 
+        </div>
+      )}
+
+
+
+      {/* ================= 5. PRACTICE EXAM / QUIZ MODE ================= */}
+      {view === 'exam' && activeDeck && (
+        <div style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
+          {/* Exam Header */}
+          <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                  <span style={{ background: 'rgba(95, 143, 94, 0.15)', color: '#2e7d32', padding: '0.25rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700 }}>
+                    🎓 PRACTICE EXAM
+                  </span>
+                  <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: 0, fontWeight: 700 }}>
+                    {activeDeck.title}
+                  </h2>
+                </div>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  {!examFinished ? `Question ${examIndex + 1} of ${activeDeck.cards.length} • Score: ${examScore}` : 'Exam Complete'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button 
+                  className="btn-secondary small" 
+                  onClick={() => handleStartStudy(activeDeck)}
+                >
+                  📖 Switch to Flashcards
+                </button>
+                <button 
+                  className="btn-secondary small" 
+                  onClick={() => setView('collections')}
+                >
+                  ← Collections
+                </button>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div style={{ width: '100%', height: '6px', background: 'rgba(0, 0, 0, 0.06)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${examFinished ? 100 : ((examIndex + 1) / (activeDeck.cards.length || 1)) * 100}%`, 
+                height: '100%', 
+                background: 'linear-gradient(90deg, #5f8f5e, #2e7d32)', 
+                borderRadius: '999px', 
+                transition: 'width 0.4s ease' 
+              }} />
+            </div>
+          </div>
+
+          {/* Exam Question or Results */}
+          {examFinished ? (
+            /* Results Screen */
+            <div className="glass-panel" style={{ flex: 1, minHeight: '380px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2.5rem', gap: '1.5rem' }}>
+              <div style={{
+                width: '90px',
+                height: '90px',
+                borderRadius: '50%',
+                background: (examScore / (activeDeck.cards.length || 1)) >= 0.75 ? 'rgba(46, 125, 50, 0.12)' : 'rgba(217, 119, 6, 0.12)',
+                color: (examScore / (activeDeck.cards.length || 1)) >= 0.75 ? '#2e7d32' : '#d97706',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2.5rem',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
+              }}>
+                {(examScore / (activeDeck.cards.length || 1)) >= 0.75 ? '🎓' : '📖'}
+              </div>
+
+              <div>
+                <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 0.4rem 0' }}>
+                  {examScore} / {activeDeck.cards.length} Correct ({Math.round((examScore / (activeDeck.cards.length || 1)) * 100)}%)
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', margin: 0, maxWidth: '520px' }}>
+                  {(examScore / (activeDeck.cards.length || 1)) >= 0.75 
+                    ? 'Outstanding performance! You have mastered the core concepts of this deck.'
+                    : 'Good effort! Review the flashcards to strengthen your retention on missed concepts.'}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '0.5rem' }}>
+                <button
+                  onClick={() => handleToggleActivateBreakGate(activeDeck)}
+                  style={{
+                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#2e7d32' : 'var(--primary-accent)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '0.8rem 1.6rem',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 14px rgba(95, 143, 94, 0.3)'
+                  }}
+                >
+                  <span>🎯</span>
+                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '✓ Active in Pomodoro BreakGate' : 'Activate for Pomodoro BreakGate'}
+                </button>
+
+                <button
+                  className="btn-secondary"
+                  onClick={() => handleStartExam(activeDeck)}
+                  style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  🔄 Retake Exam
+                </button>
+
+                <button
+                  className="btn-secondary"
+                  onClick={() => handleStartStudy(activeDeck)}
+                  style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  📖 Study Flashcards
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Active Question Card */
+            <div className="glass-panel" style={{ flex: 1, minHeight: '380px', display: 'flex', flexDirection: 'column', padding: '2rem 2.5rem', gap: '1.25rem', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{
+                  background: 'rgba(95, 143, 94, 0.12)',
+                  color: 'var(--primary-accent)',
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '999px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700
+                }}>
+                  {activeDeck.cards[examIndex]?.tag || 'Question'}
+                </span>
+
+                <h3 style={{ fontSize: 'clamp(1.3rem, 2.2vw, 1.75rem)', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.65rem', lineHeight: 1.35 }}>
+                  {activeDeck.cards[examIndex]?.front}
+                </h3>
+
+                {isOptionChecked && activeDeck.cards[examIndex]?.keyword && (
+                  <div style={{ marginTop: '0.65rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(95, 143, 94, 0.1)', border: '1px solid rgba(95, 143, 94, 0.25)', borderRadius: '20px', padding: '0.3rem 0.85rem', fontSize: '0.85rem', color: '#2e7d32', fontWeight: 700 }}>
+                    💡 Key Concept: {activeDeck.cards[examIndex].keyword}
+                  </div>
+                )}
+              </div>
+
+              {/* 4 Choices */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.65rem' }}>
+                {examOptions.map((opt, i) => {
+                  const isCorrect = opt === activeDeck.cards[examIndex]?.back;
+                  const isSelected = selectedOption === opt;
+                  
+                  let btnBg = '#ffffff';
+                  let btnBorder = '1.5px solid rgba(0,0,0,0.1)';
+                  let btnColor = 'var(--text-primary)';
+
+                  if (isOptionChecked) {
+                    if (isCorrect) {
+                      btnBg = 'rgba(46, 125, 50, 0.12)';
+                      btnBorder = '2px solid #2e7d32';
+                      btnColor = '#1b5e20';
+                    } else if (isSelected) {
+                      btnBg = 'rgba(224, 62, 62, 0.1)';
+                      btnBorder = '2px solid var(--error)';
+                      btnColor = 'var(--error)';
+                    } else {
+                      btnBg = 'rgba(0,0,0,0.02)';
+                      btnBorder = '1px solid rgba(0,0,0,0.06)';
+                      btnColor = 'var(--text-secondary)';
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleSelectOption(opt)}
+                      disabled={isOptionChecked}
+                      style={{
+                        background: btnBg,
+                        border: btnBorder,
+                        borderRadius: '14px',
+                        padding: '0.9rem 1.25rem',
+                        fontSize: '0.96rem',
+                        color: btnColor,
+                        fontWeight: 500,
+                        textAlign: 'left',
+                        cursor: isOptionChecked ? 'default' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.85rem',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                      }}
+                    >
+                      <span style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        background: isOptionChecked && isCorrect ? '#2e7d32' : 'rgba(0,0,0,0.06)',
+                        color: isOptionChecked && isCorrect ? '#ffffff' : 'var(--text-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <span style={{ flex: 1, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{opt}</span>
+                      {isOptionChecked && isCorrect && <span style={{ color: '#2e7d32', fontWeight: 700 }}>✓ Correct</span>}
+                      {isOptionChecked && isSelected && !isCorrect && <span style={{ color: 'var(--error)', fontWeight: 700 }}>✗ Incorrect</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Footer / Next Action */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                {isOptionChecked && (
+                  <button
+                    className="btn-primary"
+                    onClick={handleNextExamQuestion}
+                    style={{ padding: '0.75rem 2rem', fontSize: '0.98rem', margin: 0 }}
+                  >
+                    {examIndex < (activeDeck.cards.length - 1) ? 'Next Question →' : 'Finish Exam & View Score'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

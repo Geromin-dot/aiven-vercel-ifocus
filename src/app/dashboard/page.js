@@ -1,5 +1,7 @@
 "use client";
 
+import BreakGateModal from '@/components/BreakGateModal';
+
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -63,6 +65,10 @@ export default function CommandCenterPage() {
   const [timerPreset, setTimerPreset] = useState('25/5');
   const [sessionCount, setSessionCount] = useState(1);
   
+  // BreakGate Modal State
+  const [showBreakGate, setShowBreakGate] = useState(false);
+  const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
+
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -517,6 +523,26 @@ export default function CommandCenterPage() {
         const breakTime = timerPreset === 'Custom' 
           ? customBreakTime.min * 60 + customBreakTime.sec 
           : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+
+        // Check if an active deck is set for BreakGate
+        let breakGateDeck = null;
+        try {
+          const stored = localStorage.getItem('ifocus_active_breakgate_deck');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.cards && parsed.cards.length > 0) {
+              breakGateDeck = parsed;
+            }
+          }
+        } catch (e) {}
+
+        if (breakGateDeck) {
+          setActiveBreakGateDeck(breakGateDeck);
+          setShowBreakGate(true);
+          setTimeLeft(breakTime);
+          return;
+        }
+
         setTimeLeft(breakTime);
       } else {
         setIsFocus(true);
@@ -529,6 +555,16 @@ export default function CommandCenterPage() {
     }
     return () => clearInterval(interval);
   }, [isActive, timeLeft, isFocus, timerPreset, customWorkTime, customBreakTime]);
+
+  const handleBreakGateComplete = () => {
+    setShowBreakGate(false);
+    setIsActive(true); // Automatically run break countdown
+  };
+
+  const handleBreakGateSkip = () => {
+    setShowBreakGate(false);
+    setIsActive(true); // Automatically run break countdown
+  };
 
   const toggleTimer = () => setIsActive(!isActive);
 
@@ -1998,6 +2034,12 @@ export default function CommandCenterPage() {
           </div>
         </div>
       )}
+      <BreakGateModal 
+        isOpen={showBreakGate} 
+        deck={activeBreakGateDeck} 
+        onComplete={handleBreakGateComplete} 
+        onSkip={handleBreakGateSkip} 
+      />
     </div>
   );
 }

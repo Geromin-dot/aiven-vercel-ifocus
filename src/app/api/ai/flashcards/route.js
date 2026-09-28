@@ -20,16 +20,26 @@ export async function POST(request) {
       return NextResponse.json({ error: "Please provide notes or text to generate flashcards." }, { status: 400 });
     }
 
-    const systemInstructions = `
-You are an expert educational AI, cognitive mnemonic specialist, and memory retention coach.
-Your task is to analyze the provided educational material and generate exactly ${cardCount} high-yield flashcards optimized for instant recall and easy memorization.
+    const isAutoCount = !cardCount || cardCount === 0 || cardCount === 'auto';
+    const countPrompt = isAutoCount
+      ? "comprehensively extract and generate flashcards covering ALL primary concepts, definitions, formulas, and enumerations found in the material (typically between 12 to 30 cards depending on document depth)."
+      : `generate exactly ${cardCount} high-yield flashcards covering the most critical and testable concepts.`;
 
-CRITICAL FLASHCARD RULES FOR FAST MEMORIZATION:
+    const systemInstructions = `
+You are an expert educational AI, cognitive mnemonic specialist, and active-recall test designer.
+Your task is to analyze the provided educational material and ${countPrompt}
+
+CRITICAL FLASHCARD & ENUMERATION RULES:
 1. The "front" MUST ONLY be the term, core concept, formula name, or a concise, clear question. It MUST NOT give away the answer or definition.
-2. The "keyword" (MANDATORY): Provide a short, punchy 1-4 word MEMORY ANCHOR or quick summary keyword/phrase that makes the concept instantly memorable for students (e.g. "Never Trust, Always Verify", "Cell Energy Factory", "Signed Data Token").
+2. The "keyword" (MANDATORY): Provide a short, punchy 1-4 word MEMORY ANCHOR or quick summary phrase that triggers instant recall (e.g. "Never Trust, Always Verify", "Cell Energy Factory", "Signed Data Token").
 3. The "back" MUST contain the concise definition, key points, or formula. Keep it punchy, memorable, and clear (1-3 sentences max).
-4. The "tag" MUST categorize the card: "Definition", "Concept", "Formula", "Date", or "Fact".
-5. GROUP ENUMERATIONS: If the material contains a list or sequence, ask for the list on the front (e.g. "Stages of Mitosis") and list the items on the back using newline breaks.
+4. SMART ENUMERATIONS & LISTS (HIGH PRIORITY):
+   - Whenever the notes contain lists, sequences, steps, or categories (e.g., '4 Principles of OOP', '5 Phases of SDLC', '7 OSI Layers', 'Types of Memory'):
+   - Create a dedicated enumeration flashcard!
+   - The "front" MUST explicitly ask for the list (e.g. "Enumerate the 4 Principles of OOP" or "List the 5 Phases of the Software Lifecycle").
+   - The "back" MUST format each item with clear numbering and short summary on new lines:
+     "1. Encapsulation (Bundling data and methods)\n2. Abstraction (Hiding complex implementation)\n3. Inheritance (Reusing class hierarchy)\n4. Polymorphism (Multiple forms for single interface)"
+5. The "tag" MUST categorize the card: "Definition", "Enumeration", "Concept", "Formula", "Date", or "Fact".
 6. If the material is messy or OCR-extracted, intelligently ignore formatting glitches, headers, or page numbers.
 
 Return the output STRICTLY as a valid JSON array of objects with this schema:
@@ -46,7 +56,6 @@ Return the output STRICTLY as a valid JSON array of objects with this schema:
     let parts = [];
 
     if (type === 'pdf') {
-      // Clean base64 string if it includes data URL prefix
       const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim();
       parts.push({
         inlineData: {
@@ -55,11 +64,10 @@ Return the output STRICTLY as a valid JSON array of objects with this schema:
         }
       });
       parts.push({
-        text: `${systemInstructions}\n\nAnalyze the uploaded PDF document and generate ${cardCount} flashcards according to the rules above.`
+        text: `${systemInstructions}\n\nAnalyze the uploaded PDF document and generate flashcards according to the rules above.`
       });
     } else {
-      // Truncate text to avoid token limits on free tier (approx 30,000 characters)
-      const truncatedText = text.substring(0, 30000);
+      const truncatedText = text.substring(0, 35000);
       parts.push({
         text: `${systemInstructions}\n\nMaterial to study:\n"""\n${truncatedText}\n"""`
       });
@@ -80,7 +88,7 @@ Return the output STRICTLY as a valid JSON array of objects with this schema:
     return NextResponse.json({
       cards: flashcards.map((c, index) => ({
         id: `gen-${Date.now()}-${index}`,
-        tag: c.tag || 'Concept',
+        tag: c.tag || (c.front && c.front.toLowerCase().includes('enumerate') ? 'Enumeration' : 'Concept'),
         front: c.front || 'Concept',
         keyword: c.keyword || '',
         back: c.back || 'Definition'
