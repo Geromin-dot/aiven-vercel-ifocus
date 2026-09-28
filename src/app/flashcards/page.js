@@ -622,12 +622,12 @@ export default function FlashcardsPage() {
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`}>
               
               {/* Card Front Face */}
-              <div className="card-face card-front" style={{ background: '#ffffff', border: '1.5px solid var(--glass-border)', borderRadius: '20px', position: 'relative' }}>
+              <div className="card-face card-front" style={{ background: '#ffffff', border: '1.5px solid var(--glass-border)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
                 <span className="tag" style={{ position: 'absolute', top: '1.25rem', left: '1.5rem', background: 'rgba(95, 143, 94, 0.12)', color: 'var(--primary-accent)', padding: '0.25rem 0.75rem', borderRadius: '14px', fontSize: '0.75rem', fontWeight: 600 }}>
                   {currentCard?.tag || 'Concept'}
                 </span>
 
-                <div className="card-content" style={{ fontSize: '1.45rem', fontWeight: 600, color: 'var(--text-primary)', padding: '1rem' }}>
+                <div className="card-content" style={{ fontSize: '1.45rem', fontWeight: 600, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '90%' }}>
                   {definitionFirst ? currentCard?.back : currentCard?.front}
                 </div>
 
@@ -638,12 +638,12 @@ export default function FlashcardsPage() {
               </div>
 
               {/* Card Back Face */}
-              <div className="card-face card-back" style={{ background: '#fbfdfa', border: '1.5px solid var(--primary-accent)', borderRadius: '20px', position: 'relative' }}>
+              <div className="card-face card-back" style={{ background: '#fbfdfa', border: '1.5px solid var(--primary-accent)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
                 <span className="tag" style={{ position: 'absolute', top: '1.25rem', left: '1.5rem', background: 'rgba(95, 143, 94, 0.18)', color: 'var(--primary-accent)', padding: '0.25rem 0.75rem', borderRadius: '14px', fontSize: '0.75rem', fontWeight: 600 }}>
                   Answer / Definition
                 </span>
 
-                <div className="card-content" style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-primary)', padding: '1rem', whiteSpace: 'pre-wrap' }}>
+                <div className="card-content" style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '90%', whiteSpace: 'pre-wrap' }}>
                   {definitionFirst ? currentCard?.front : currentCard?.back}
                 </div>
 
