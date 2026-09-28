@@ -571,7 +571,7 @@ export default function FlashcardsPage() {
 
       {/* ================= 4. STUDY / REVIEW VIEW (Interactive 3D Card) ================= */}
       {view === 'study' && activeDeck && (
-        <div style={{ maxWidth: '840px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
           
           {/* Deck Header & Animated Mastery Progress Bar */}
           <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -651,9 +651,7 @@ export default function FlashcardsPage() {
 
           {/* Interactive 3D Flip Flashcard */}
           <div 
-            className="flashcard-container" 
-            onClick={() => setIsFlipped(f => !f)}
-            style={{ height: '360px', cursor: 'pointer', userSelect: 'none' }}
+            className="flashcard-container" onClick={() => setIsFlipped(f => !f)} style={{ flex: 1, minHeight: '380px', width: '100%', cursor: 'pointer', userSelect: 'none' }}
           >
             <div className={`flashcard ${isFlipped ? 'flipped' : ''}`}>
               
@@ -663,7 +661,7 @@ export default function FlashcardsPage() {
                   {currentCard?.tag || 'Concept'}
                 </span>
 
-                <div className="card-content" style={{ fontSize: '1.45rem', fontWeight: 600, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '90%' }}>
+                <div className="card-content" style={{ fontSize: 'clamp(1.5rem, 2.4vw, 2.2rem)', fontWeight: 600, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '85%', lineHeight: 1.4 }}>
                   {definitionFirst ? currentCard?.back : currentCard?.front}
                 </div>
 
@@ -698,7 +696,7 @@ export default function FlashcardsPage() {
                     </div>
                   )}
 
-                  <div className="card-content" style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-primary)', padding: '0.5rem', textAlign: 'center', maxWidth: '100%', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                  <div className="card-content" style={{ fontSize: 'clamp(1.2rem, 1.8vw, 1.55rem)', fontWeight: 500, color: 'var(--text-primary)', padding: '0.75rem', textAlign: 'center', maxWidth: '90%', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                     {definitionFirst ? currentCard?.front : currentCard?.back}
                   </div>
                 </div>
