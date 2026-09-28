@@ -175,8 +175,8 @@ export default function AnalyticsPage() {
             const idx = items[0].dataIndex;
             const stress = stressData[idx];
             const focus = focusData[idx];
-            if (stress >= 7) return `⚠️ High stress correlated with ${focus}h focus`;
-            if (stress <= 3) return `✅ Low stress — excellent focus day!`;
+            if (stress >= 7) return `High stress correlated with ${focus}h focus`;
+            if (stress <= 3) return `Low stress - excellent focus day!`;
             return '';
           }
         }
@@ -226,8 +226,8 @@ export default function AnalyticsPage() {
           label: (ctx) => {
             const v = ctx.parsed.y;
             const focus = focusData[ctx.dataIndex];
-            let severity = v >= 7 ? '🔴 High' : v >= 4 ? '🟡 Medium' : '🟢 Low';
-            return [`${severity} — ${v} distractions`, `Focus: ${focus} hours that day`];
+            let severity = v >= 7 ? 'High' : v >= 4 ? 'Medium' : 'Low';
+            return [`${severity} - ${v} distractions`, `Focus: ${focus} hours that day`];
           }
         }
       }

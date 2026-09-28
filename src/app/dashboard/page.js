@@ -226,21 +226,21 @@ export default function CommandCenterPage() {
     const bsRatio = bsCount / total;
 
     let detectedState = 'flow';
-    let label = '🟢 Steady Flow';
+    let label = 'Steady Flow';
 
     // Disregard fast typing as friction (fast typers are just fast!)
     if (avgFlight > 0 && avgFlight < 75) {
       detectedState = 'fast';
-      label = '⚡ Fast Flow';
+      label = 'Fast Flow';
     } else if (bsRatio > 0.40 && bsCount >= 6) {
       detectedState = 'friction';
-      label = '🔴 High Friction';
+      label = 'High Friction';
     } else if (avgDwell > 300) {
       detectedState = 'hesitant';
-      label = '🟡 Hesitant';
+      label = 'Hesitant';
     } else if (totalKeystrokesRef.current < 4) {
       detectedState = 'idle';
-      label = '⌨️ Calibrating...';
+      label = 'Calibrating...';
     }
 
     setTelemetryStats({

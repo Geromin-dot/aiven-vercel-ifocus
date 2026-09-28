@@ -36,8 +36,35 @@ export default function FlashcardsPage() {
   const [isSavingDeck, setIsSavingDeck] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // BreakGate Active Deck Tracker
+  // BreakGate Dynamic HUD & Activation Animation States
   const [activeBreakGateId, setActiveBreakGateId] = useState(null);
+  const [breakGateHUD, setBreakGateHUD] = useState(null);
+  const [hudExiting, setHudExiting] = useState(false);
+  const [activatingId, setActivatingId] = useState(null);
+  const hudTimeoutRef = useRef(null);
+
+  const triggerHUD = (hudState) => {
+    if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
+    setHudExiting(false);
+    setBreakGateHUD(hudState);
+
+    hudTimeoutRef.current = setTimeout(() => {
+      setHudExiting(true);
+      setTimeout(() => {
+        setBreakGateHUD(null);
+        setHudExiting(false);
+      }, 300);
+    }, 4200);
+  };
+
+  const closeHUD = () => {
+    if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
+    setHudExiting(true);
+    setTimeout(() => {
+      setBreakGateHUD(null);
+      setHudExiting(false);
+    }, 300);
+  };
 
   useEffect(() => {
     try {
@@ -54,14 +81,19 @@ export default function FlashcardsPage() {
   const handleToggleActivateBreakGate = (deck, e) => {
     if (e) e.stopPropagation();
     const currentId = deck.id || deck.title;
+    
+    // Trigger tactile burst animation on the card
+    setActivatingId(currentId);
+    setTimeout(() => setActivatingId(null), 650);
+
     if (activeBreakGateId === currentId) {
       localStorage.removeItem('ifocus_active_breakgate_deck');
       setActiveBreakGateId(null);
-      showToast('Deck deactivated from Pomodoro BreakGate.');
+      triggerHUD({ active: false, title: deck.title, id: currentId });
     } else {
       localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(deck));
       setActiveBreakGateId(currentId);
-      showToast(`🎯 "${deck.title}" is now active in Pomodoro BreakGate!`);
+      triggerHUD({ active: true, title: deck.title, id: currentId });
     }
   };
 
@@ -377,9 +409,98 @@ export default function FlashcardsPage() {
 
   return (
     <>
-      {/* Dynamic Toast */}
+      {/* Top-Center Dynamic Island HUD for BreakGate Activation */}
+      {breakGateHUD && (
+        <div 
+          className={`breakgate-hud-banner ${!breakGateHUD.active ? 'breakgate-hud-deactivated' : ''} ${hudExiting ? 'exiting' : ''}`}
+        >
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: breakGateHUD.active ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+            border: breakGateHUD.active ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(148, 163, 184, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: breakGateHUD.active ? '#10b981' : '#94a3b8',
+            flexShrink: 0
+          }}>
+            {breakGateHUD.active ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+              </svg>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.06em',
+                color: breakGateHUD.active ? '#10b981' : '#94a3b8',
+                textTransform: 'uppercase'
+              }}>
+                {breakGateHUD.active ? 'BREAKGATE ARMED' : 'BREAKGATE DISCONNECTED'}
+              </span>
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)' }} />
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500 }}>
+                Pomodoro Focus Guard
+              </span>
+            </div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#f8fafc' }}>
+              {breakGateHUD.active 
+                ? `"${breakGateHUD.title}" will challenge you before your break unlocks.`
+                : `Deck "${breakGateHUD.title}" removed from Pomodoro break challenge.`}
+            </div>
+          </div>
+
+          <button
+            onClick={closeHUD}
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
+              borderRadius: '999px',
+              padding: '0.35rem 0.85rem',
+              color: '#e2e8f0',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginLeft: '0.5rem',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* General Notification Toast (Clean, Zero Emojis) */}
       {toastMessage && (
-        <div style={{ position: 'fixed', top: '1.5rem', right: '2rem', zIndex: 1200, background: '#ffffff', border: '1px solid var(--primary-accent)', borderRadius: '8px', padding: '0.65rem 1.25rem', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 600 }}>
+        <div style={{ 
+          position: 'fixed', 
+          bottom: '2rem', 
+          left: '50%', 
+          transform: 'translateX(-50%)', 
+          zIndex: 1200, 
+          background: 'rgba(15, 23, 42, 0.92)', 
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)', 
+          borderRadius: '999px', 
+          padding: '0.55rem 1.4rem', 
+          boxShadow: '0 12px 28px rgba(0,0,0,0.25)', 
+          color: '#f8fafc', 
+          fontSize: '0.86rem', 
+          fontWeight: 600,
+          animation: 'flashcardFadeIn 0.2s ease'
+        }}>
           {toastMessage}
         </div>
       )}
@@ -453,21 +574,30 @@ export default function FlashcardsPage() {
                   return (
                     <div 
                       key={deck.id} 
-                      className="collection-card" 
-                      style={{ position: 'relative', border: '1px solid var(--glass-border)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ffffff', borderRadius: 'var(--radius-md)', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
+                      className={`collection-card ${(activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'breakgate-card-active' : ''} ${(activatingId === deck.id || activatingId === deck.title) ? 'breakgate-card-burst' : ''}`} 
+                      style={{ position: 'relative', border: '1px solid var(--glass-border)', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem', background: '#ffffff', borderRadius: 'var(--radius-md)', transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease' }}
                     >
                       {/* Card Header & Delete Action */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ background: 'rgba(95, 143, 94, 0.12)', color: 'var(--primary-accent)', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
                         </div>
-                        <button 
-                          onClick={(e) => handleDeleteDeck(deck.id, e)}
-                          title="Delete Deck"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        </button>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {(activeBreakGateId === deck.id || activeBreakGateId === deck.title) && (
+                            <span className="breakgate-live-badge" title="Active Pomodoro Focus Guard">
+                              <span className="breakgate-live-dot" />
+                              BreakGate
+                            </span>
+                          )}
+                          <button 
+                            onClick={(e) => handleDeleteDeck(deck.id, e)}
+                            title="Delete Deck"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Title and Card Count */}
@@ -482,16 +612,18 @@ export default function FlashcardsPage() {
                           <button 
                             className="btn-primary" 
                             onClick={() => handleStartStudy(deck)}
-                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center' }}
+                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
                           >
-                            📖 Study
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                            Study
                           </button>
                           <button 
                             className="btn-secondary" 
                             onClick={() => handleStartExam(deck)}
-                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center', borderColor: '#2e7d32', color: '#2e7d32', fontWeight: 600 }}
+                            style={{ padding: '0.5rem 0.5rem', fontSize: '0.82rem', margin: 0, textAlign: 'center', borderColor: '#2e7d32', color: '#2e7d32', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
                           >
-                            🎓 Exam
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                            Exam
                           </button>
                         </div>
 
@@ -499,7 +631,7 @@ export default function FlashcardsPage() {
                           onClick={(e) => handleToggleActivateBreakGate(deck, e)}
                           style={{
                             width: '100%',
-                            padding: '0.4rem 0.5rem',
+                            padding: '0.45rem 0.5rem',
                             fontSize: '0.78rem',
                             borderRadius: '8px',
                             cursor: 'pointer',
@@ -507,15 +639,28 @@ export default function FlashcardsPage() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.35rem',
-                            background: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'rgba(46, 125, 50, 0.12)' : 'transparent',
-                            border: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '1px solid #2e7d32' : '1px dashed var(--glass-border)',
-                            color: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '#2e7d32' : 'var(--text-secondary)',
-                            transition: 'all 0.2s ease'
+                            gap: '0.4rem',
+                            background: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
+                            border: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '1.5px solid #10b981' : '1px dashed var(--glass-border)',
+                            color: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '#059669' : 'var(--text-secondary)',
+                            transition: 'all 0.25s ease'
                           }}
                         >
-                          <span>🎯</span>
-                          {(activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'Active for BreakGate' : 'Activate for BreakGate'}
+                          {(activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? (
+                            <>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                              </svg>
+                              Active for BreakGate
+                            </>
+                          ) : (
+                            <>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                              </svg>
+                              Activate for BreakGate
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -713,23 +858,30 @@ export default function FlashcardsPage() {
                   onClick={() => handleStartExam(activeDeck)}
                   style={{ borderColor: '#2e7d32', color: '#2e7d32', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}
                 >
-                  🎓 Take Exam
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                  Take Exam
                 </button>
 
                 <button
                   className="btn-secondary small"
                   onClick={(e) => handleToggleActivateBreakGate(activeDeck, e)}
                   style={{
-                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'rgba(46, 125, 50, 0.15)' : 'transparent',
-                    borderColor: '#2e7d32',
-                    color: '#2e7d32',
+                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                    borderColor: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#10b981' : '#2e7d32',
+                    color: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#059669' : '#2e7d32',
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.35rem'
+                    gap: '0.35rem',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  🎯 {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'BreakGate Active' : 'Activate BreakGate'}
+                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  )}
+                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'BreakGate Active' : 'Activate BreakGate'}
                 </button>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
@@ -954,7 +1106,7 @@ export default function FlashcardsPage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
                   <span style={{ background: 'rgba(95, 143, 94, 0.15)', color: '#2e7d32', padding: '0.25rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700 }}>
-                    🎓 PRACTICE EXAM
+                    PRACTICE EXAM
                   </span>
                   <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: 0, fontWeight: 700 }}>
                     {activeDeck.title}
@@ -970,7 +1122,7 @@ export default function FlashcardsPage() {
                   className="btn-secondary small" 
                   onClick={() => handleStartStudy(activeDeck)}
                 >
-                  📖 Switch to Flashcards
+                  Switch to Flashcards
                 </button>
                 <button 
                   className="btn-secondary small" 
@@ -1006,10 +1158,19 @@ export default function FlashcardsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '2.5rem',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
               }}>
-                {(examScore / (activeDeck.cards.length || 1)) >= 0.75 ? '🎓' : '📖'}
+                {(examScore / (activeDeck.cards.length || 1)) >= 0.75 ? (
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="7"/>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+                  </svg>
+                ) : (
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                  </svg>
+                )}
               </div>
 
               <div>
@@ -1028,7 +1189,7 @@ export default function FlashcardsPage() {
                 <button
                   onClick={() => handleToggleActivateBreakGate(activeDeck)}
                   style={{
-                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#2e7d32' : 'var(--primary-accent)',
+                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#059669' : 'var(--primary-accent)',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '12px',
@@ -1039,11 +1200,16 @@ export default function FlashcardsPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.5rem',
-                    boxShadow: '0 4px 14px rgba(95, 143, 94, 0.3)'
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)',
+                    transition: 'all 0.25s ease'
                   }}
                 >
-                  <span>🎯</span>
-                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '✓ Active in Pomodoro BreakGate' : 'Activate for Pomodoro BreakGate'}
+                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  )}
+                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'Active in Pomodoro BreakGate' : 'Activate for Pomodoro BreakGate'}
                 </button>
 
                 <button
@@ -1051,7 +1217,7 @@ export default function FlashcardsPage() {
                   onClick={() => handleStartExam(activeDeck)}
                   style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  🔄 Retake Exam
+                  Retake Exam
                 </button>
 
                 <button
@@ -1059,7 +1225,7 @@ export default function FlashcardsPage() {
                   onClick={() => handleStartStudy(activeDeck)}
                   style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  📖 Study Flashcards
+                  Study Flashcards
                 </button>
               </div>
             </div>
@@ -1084,7 +1250,7 @@ export default function FlashcardsPage() {
 
                 {isOptionChecked && activeDeck.cards[examIndex]?.keyword && (
                   <div style={{ marginTop: '0.65rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(95, 143, 94, 0.1)', border: '1px solid rgba(95, 143, 94, 0.25)', borderRadius: '20px', padding: '0.3rem 0.85rem', fontSize: '0.85rem', color: '#2e7d32', fontWeight: 700 }}>
-                    💡 Key Concept: {activeDeck.cards[examIndex].keyword}
+                    KEY CONCEPT: {activeDeck.cards[examIndex].keyword}
                   </div>
                 )}
               </div>
@@ -1153,8 +1319,8 @@ export default function FlashcardsPage() {
                         {String.fromCharCode(65 + i)}
                       </span>
                       <span style={{ flex: 1, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{opt}</span>
-                      {isOptionChecked && isCorrect && <span style={{ color: '#2e7d32', fontWeight: 700 }}>✓ Correct</span>}
-                      {isOptionChecked && isSelected && !isCorrect && <span style={{ color: 'var(--error)', fontWeight: 700 }}>✗ Incorrect</span>}
+                      {isOptionChecked && isCorrect && <span style={{ color: '#2e7d32', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Correct</span>}
+                      {isOptionChecked && isSelected && !isCorrect && <span style={{ color: 'var(--error)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Incorrect</span>}
                     </button>
                   );
                 })}
