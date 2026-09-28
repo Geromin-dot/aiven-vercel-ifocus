@@ -573,43 +573,79 @@ export default function FlashcardsPage() {
       {view === 'study' && activeDeck && (
         <div style={{ maxWidth: '840px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           
-          {/* Deck Header */}
-          <div className="glass-panel" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700 }}>{activeDeck.title}</h2>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Card {currentCardIndex + 1} of {totalCards} • {masteredCards.size} Mastered
-              </span>
-            </div>
+          {/* Deck Header & Animated Mastery Progress Bar */}
+          <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.3rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700 }}>{activeDeck.title}</h2>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  Card {currentCardIndex + 1} of {totalCards}
+                </span>
+              </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={definitionFirst} 
-                  onChange={(e) => setDefinitionFirst(e.target.checked)}
-                  style={{ accentColor: 'var(--primary-accent)' }}
-                />
-                Definition First
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={definitionFirst} 
+                    onChange={(e) => setDefinitionFirst(e.target.checked)}
+                    style={{ accentColor: 'var(--primary-accent)' }}
+                  />
+                  Definition First
+                </label>
 
-              {!isSaved && (
+                {!isSaved && (
+                  <button 
+                    className="btn-secondary small" 
+                    onClick={handleSaveDeck}
+                    disabled={isSavingDeck}
+                    style={{ borderColor: 'var(--primary-accent)', color: 'var(--primary-accent)', fontWeight: 600 }}
+                  >
+                    {isSavingDeck ? 'Saving...' : 'Save to Collections'}
+                  </button>
+                )}
+
                 <button 
                   className="btn-secondary small" 
-                  onClick={handleSaveDeck}
-                  disabled={isSavingDeck}
-                  style={{ borderColor: 'var(--primary-accent)', color: 'var(--primary-accent)', fontWeight: 600 }}
+                  onClick={() => setView('collections')}
                 >
-                  {isSavingDeck ? 'Saving...' : 'Save to Collections'}
+                  ← Back
                 </button>
-              )}
+              </div>
+            </div>
 
-              <button 
-                className="btn-secondary small" 
-                onClick={() => setView('collections')}
-              >
-                ← Back
-              </button>
+            {/* Smooth Animated Progress Bar */}
+            <div style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', fontSize: '0.82rem' }}>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                  Mastered: <strong style={{ color: 'var(--text-primary)' }}>{masteredCards.size}</strong> of {totalCards} cards
+                </span>
+                <span style={{ 
+                  fontWeight: 700, 
+                  color: totalCards > 0 && masteredCards.size === totalCards ? '#2e7d32' : 'var(--primary-accent)',
+                  fontSize: '0.88rem' 
+                }}>
+                  {totalCards > 0 ? Math.round((masteredCards.size / totalCards) * 100) : 0}% Mastered
+                </span>
+              </div>
+              <div style={{ 
+                width: '100%', 
+                height: '8px', 
+                background: 'rgba(0, 0, 0, 0.06)', 
+                borderRadius: '999px', 
+                overflow: 'hidden'
+              }}>
+                <div style={{ 
+                  width: `${totalCards > 0 ? (masteredCards.size / totalCards) * 100 : 0}%`, 
+                  height: '100%', 
+                  background: totalCards > 0 && masteredCards.size === totalCards 
+                    ? 'linear-gradient(90deg, #5f8f5e, #2e7d32)' 
+                    : 'linear-gradient(90deg, #5f8f5e, #7cb342)', 
+                  borderRadius: '999px', 
+                  transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease',
+                  boxShadow: '0 0 8px rgba(95, 143, 94, 0.3)'
+                }} />
+              </div>
             </div>
           </div>
 
@@ -638,13 +674,33 @@ export default function FlashcardsPage() {
               </div>
 
               {/* Card Back Face */}
-              <div className="card-face card-back" style={{ background: '#fbfdfa', border: '1.5px solid var(--primary-accent)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+              <div className="card-face card-back" style={{ background: '#fbfdfa', border: '1.5px solid var(--primary-accent)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <span className="tag" style={{ position: 'absolute', top: '1.25rem', left: '1.5rem', background: 'rgba(95, 143, 94, 0.18)', color: 'var(--primary-accent)', padding: '0.25rem 0.75rem', borderRadius: '14px', fontSize: '0.75rem', fontWeight: 600 }}>
                   Answer / Definition
                 </span>
 
-                <div className="card-content" style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '90%', whiteSpace: 'pre-wrap' }}>
-                  {definitionFirst ? currentCard?.front : currentCard?.back}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', maxWidth: '88%', textAlign: 'center' }}>
+                  {currentCard?.keyword && (
+                    <div style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.45rem', 
+                      background: 'rgba(95, 143, 94, 0.12)', 
+                      border: '1px solid rgba(95, 143, 94, 0.3)', 
+                      borderRadius: '20px', 
+                      padding: '0.35rem 0.95rem', 
+                      fontSize: '0.85rem', 
+                      fontWeight: 700, 
+                      color: '#2e7d32' 
+                    }}>
+                      <span>Key Concept:</span>
+                      <span style={{ textDecoration: 'underline' }}>{currentCard.keyword}</span>
+                    </div>
+                  )}
+
+                  <div className="card-content" style={{ fontSize: '1.2rem', fontWeight: 500, color: 'var(--text-primary)', padding: '0.5rem', textAlign: 'center', maxWidth: '100%', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                    {definitionFirst ? currentCard?.front : currentCard?.back}
+                  </div>
                 </div>
 
                 <div style={{ position: 'absolute', bottom: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
@@ -689,15 +745,16 @@ export default function FlashcardsPage() {
                 onClick={toggleMastery}
                 className="btn-secondary small"
                 style={{ 
-                  padding: '0.4rem 0.85rem', 
-                  fontSize: '0.82rem',
-                  background: masteredCards.has(currentCardIndex) ? 'rgba(15, 123, 108, 0.15)' : 'transparent',
-                  borderColor: masteredCards.has(currentCardIndex) ? 'var(--success)' : 'var(--glass-border)',
-                  color: masteredCards.has(currentCardIndex) ? 'var(--success)' : 'var(--text-secondary)',
-                  fontWeight: 600
+                  padding: '0.45rem 1rem', 
+                  fontSize: '0.85rem',
+                  background: masteredCards.has(currentCardIndex) ? '#2e7d32' : 'transparent',
+                  borderColor: masteredCards.has(currentCardIndex) ? '#2e7d32' : 'var(--glass-border)',
+                  color: masteredCards.has(currentCardIndex) ? '#ffffff' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  transition: 'all 0.25s ease'
                 }}
               >
-                {masteredCards.has(currentCardIndex) ? '✓ Mastered' : 'Mark as Mastered'}
+                {masteredCards.has(currentCardIndex) ? 'Mastered' : 'Mark as Mastered'}
               </button>
             </div>
 
