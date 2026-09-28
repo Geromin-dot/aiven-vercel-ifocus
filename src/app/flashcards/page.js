@@ -36,35 +36,14 @@ export default function FlashcardsPage() {
   const [isSavingDeck, setIsSavingDeck] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // BreakGate Dynamic HUD & Activation Animation States
+  // BreakGate Pop-up Modal State
   const [activeBreakGateId, setActiveBreakGateId] = useState(null);
-  const [breakGateHUD, setBreakGateHUD] = useState(null);
-  const [hudExiting, setHudExiting] = useState(false);
+  const [breakGateModalDeck, setBreakGateModalDeck] = useState(null);
   const [activatingId, setActivatingId] = useState(null);
-  const hudTimeoutRef = useRef(null);
 
-  const triggerHUD = (hudState) => {
-    if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
-    setHudExiting(false);
-    setBreakGateHUD(hudState);
-
-    hudTimeoutRef.current = setTimeout(() => {
-      setHudExiting(true);
-      setTimeout(() => {
-        setBreakGateHUD(null);
-        setHudExiting(false);
-      }, 300);
-    }, 4200);
-  };
-
-  const closeHUD = () => {
-    if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
-    setHudExiting(true);
-    setTimeout(() => {
-      setBreakGateHUD(null);
-      setHudExiting(false);
-    }, 300);
-  };
+  // Delete Deck Confirmation Modal State
+  const [deckToDelete, setDeckToDelete] = useState(null);
+  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
 
   useEffect(() => {
     try {
@@ -89,11 +68,12 @@ export default function FlashcardsPage() {
     if (activeBreakGateId === currentId) {
       localStorage.removeItem('ifocus_active_breakgate_deck');
       setActiveBreakGateId(null);
-      triggerHUD({ active: false, title: deck.title, id: currentId });
+      showToast('BreakGate deactivated for this deck.');
     } else {
       localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(deck));
       setActiveBreakGateId(currentId);
-      triggerHUD({ active: true, title: deck.title, id: currentId });
+      // Open clean on-screen pop-up modal
+      setBreakGateModalDeck(deck);
     }
   };
 
@@ -322,21 +302,28 @@ export default function FlashcardsPage() {
     }
   };
 
-  // 5. Delete Deck from Database
-  const handleDeleteDeck = async (id, e) => {
-    if (e) e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this deck?")) return;
+  // 5. Delete Deck Confirmation Handler
+  const handleConfirmDeleteDeck = async () => {
+    if (!deckToDelete) return;
+    setIsDeletingDeck(true);
 
     try {
-      const res = await fetch(`/api/decks/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/decks/${deckToDelete.id}`, { method: 'DELETE' });
       if (res.ok) {
-        setDecks(prev => prev.filter(d => d.id !== id));
-        showToast('Deck deleted.');
+        setDecks(prev => prev.filter(d => d.id !== deckToDelete.id));
+        if (activeBreakGateId === deckToDelete.id || activeBreakGateId === deckToDelete.title) {
+          localStorage.removeItem('ifocus_active_breakgate_deck');
+          setActiveBreakGateId(null);
+        }
+        showToast('Deck deleted successfully.');
+        setDeckToDelete(null);
       } else {
-        alert("Failed to delete deck.");
+        showToast('Failed to delete deck. Please try again.');
       }
     } catch (err) {
-      alert("Error deleting deck: " + err.message);
+      showToast('Error deleting deck: ' + err.message);
+    } finally {
+      setIsDeletingDeck(false);
     }
   };
 
@@ -409,76 +396,223 @@ export default function FlashcardsPage() {
 
   return (
     <>
-      {/* Top-Center Dynamic Island HUD for BreakGate Activation */}
-      {breakGateHUD && (
-        <div 
-          className={`breakgate-hud-banner ${!breakGateHUD.active ? 'breakgate-hud-deactivated' : ''} ${hudExiting ? 'exiting' : ''}`}
-        >
+      {/* 1. BreakGate Activation Pop-Up Modal */}
+      {breakGateModalDeck && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem'
+        }}>
           <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: breakGateHUD.active ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
-            border: breakGateHUD.active ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(148, 163, 184, 0.3)',
+            background: '#ffffff',
+            borderRadius: '20px',
+            boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.28)',
+            border: '1px solid rgba(0, 0, 0, 0.08)',
+            width: '100%',
+            maxWidth: '480px',
+            padding: '2.2rem 2rem',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: breakGateHUD.active ? '#10b981' : '#94a3b8',
-            flexShrink: 0
+            textAlign: 'center',
+            gap: '1.25rem',
+            animation: 'flashcardFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1)'
           }}>
-            {breakGateHUD.active ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            {/* Top Shield Icon */}
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(46, 125, 50, 0.12)',
+              color: '#2e7d32',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-              </svg>
-            )}
-          </div>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <span style={{
-                fontSize: '0.72rem',
-                fontWeight: 800,
-                letterSpacing: '0.06em',
-                color: breakGateHUD.active ? '#10b981' : '#94a3b8',
-                textTransform: 'uppercase'
-              }}>
-                {breakGateHUD.active ? 'BREAKGATE ARMED' : 'BREAKGATE DISCONNECTED'}
-              </span>
-              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)' }} />
-              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500 }}>
-                Pomodoro Focus Guard
+            <div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(46, 125, 50, 0.1)', color: '#2e7d32', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '0.65rem' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2e7d32' }} />
+                BreakGate Activated
+              </div>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.45rem 0' }}>
+                Linked to Pomodoro Breaks
+              </h3>
+              <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
+                <strong style={{ color: 'var(--text-primary)' }}>"{breakGateModalDeck.title}"</strong> is now set as your active study guard. When your Pomodoro timer finishes, you will be challenged with flashcards before your break unlocks.
+              </p>
+            </div>
+
+            {/* Info Card Surface */}
+            <div style={{
+              width: '100%',
+              background: '#f8faf9',
+              border: '1px solid rgba(46, 125, 50, 0.2)',
+              borderRadius: '12px',
+              padding: '0.9rem 1.1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              textAlign: 'left'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {breakGateModalDeck.title}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  {breakGateModalDeck.cards ? breakGateModalDeck.cards.length : 0} retrieval cards ready
+                </div>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2e7d32', background: 'rgba(46, 125, 50, 0.1)', padding: '0.25rem 0.6rem', borderRadius: '6px' }}>
+                Armed
               </span>
             </div>
-            <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#f8fafc' }}>
-              {breakGateHUD.active 
-                ? `"${breakGateHUD.title}" will challenge you before your break unlocks.`
-                : `Deck "${breakGateHUD.title}" removed from Pomodoro break challenge.`}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => setBreakGateModalDeck(null)}
+                style={{
+                  flex: 1,
+                  background: '#2e7d32',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '0.8rem',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(46, 125, 50, 0.3)'
+                }}
+              >
+                Got It
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBreakGateModalDeck(null);
+                  window.location.href = '/dashboard';
+                }}
+                className="btn-secondary"
+                style={{
+                  flex: 1,
+                  padding: '0.8rem',
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderColor: 'var(--glass-border)',
+                  color: 'var(--text-primary)',
+                  textAlign: 'center'
+                }}
+              >
+                Open Pomodoro
+              </button>
             </div>
           </div>
+        </div>
+      )}
 
-          <button
-            onClick={closeHUD}
-            style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid rgba(255, 255, 255, 0.16)',
-              borderRadius: '999px',
-              padding: '0.35rem 0.85rem',
-              color: '#e2e8f0',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              marginLeft: '0.5rem',
-              transition: 'all 0.2s ease',
-              flexShrink: 0
-            }}
-          >
-            Dismiss
-          </button>
+      {/* 2. Delete Collection Confirmation Modal */}
+      {deckToDelete && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.25rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '18px',
+            boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid rgba(0, 0, 0, 0.08)',
+            width: '100%',
+            maxWidth: '440px',
+            padding: '2rem',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: '1.2rem',
+            animation: 'flashcardFadeIn 0.22s ease'
+          }}>
+            {/* Warning Icon */}
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.4rem 0' }}>
+                Delete Collection?
+              </h3>
+              <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                Are you sure you want to delete <strong style={{ color: 'var(--text-primary)' }}>"{deckToDelete.title}"</strong>? All cards in this deck will be permanently removed.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setDeckToDelete(null)}
+                disabled={isDeletingDeck}
+                className="btn-secondary"
+                style={{ flex: 1, padding: '0.75rem', margin: 0, fontSize: '0.92rem', cursor: 'pointer', textAlign: 'center' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteDeck}
+                disabled={isDeletingDeck}
+                style={{
+                  flex: 1,
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.25)',
+                  textAlign: 'center'
+                }}
+              >
+                {isDeletingDeck ? 'Deleting...' : 'Delete Deck'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -591,7 +725,10 @@ export default function FlashcardsPage() {
                             </span>
                           )}
                           <button 
-                            onClick={(e) => handleDeleteDeck(deck.id, e)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeckToDelete(deck);
+                            }}
                             title="Delete Deck"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
                           >

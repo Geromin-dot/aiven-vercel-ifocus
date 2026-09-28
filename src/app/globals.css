@@ -2941,34 +2941,8 @@ input:checked + .toggle-slider:before {
 
 
 /* ========================================================
-   BREAKGATE INTERACTION & ANIMATION SYSTEM
+   BREAKGATE INTERACTION & CARD ACCENT SYSTEM
    ======================================================== */
-
-@keyframes breakGateSlideDown {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -36px) scale(0.92);
-  }
-  65% {
-    opacity: 1;
-    transform: translate(-50%, 4px) scale(1.015);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-}
-
-@keyframes breakGateSlideUp {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -28px) scale(0.95);
-  }
-}
 
 @keyframes activePulseRadar {
   0% {
@@ -2994,37 +2968,6 @@ input:checked + .toggle-slider:before {
   100% {
     transform: scale(1);
   }
-}
-
-.breakgate-hud-banner {
-  position: fixed;
-  top: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.5), 0 0 30px rgba(16, 185, 129, 0.22);
-  border-radius: 9999px;
-  padding: 0.7rem 1.4rem;
-  color: #f8fafc;
-  animation: breakGateSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  max-width: calc(100vw - 2rem);
-  pointer-events: auto;
-}
-
-.breakgate-hud-banner.exiting {
-  animation: breakGateSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.breakgate-hud-deactivated {
-  border-color: rgba(148, 163, 184, 0.35) !important;
-  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.4) !important;
 }
 
 .breakgate-card-active {
