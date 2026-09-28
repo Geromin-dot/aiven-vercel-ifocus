@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Chart as ChartJS,
@@ -25,7 +25,7 @@ ChartJS.register(
 export default function AnalyticsPage() {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // Base Historical Stats from LocalStorage
+  // Historical Session Data from LocalStorage (Lightweight, 100% Client-side, Zero Backend Bandwidth)
   const [baseStats, setBaseStats] = useState({
     todayMinutes: 0,
     weekMinutes: [0, 0, 0, 0, 0, 0, 0],
@@ -35,24 +35,14 @@ export default function AnalyticsPage() {
     todayIndex: 0,
   });
 
-  // Flashcards Mastered State
   const [masteredCount, setMasteredCount] = useState(0);
   const [totalFlashcards, setTotalFlashcards] = useState(0);
 
-  // Live Timer State (Synchronized across all tabs & pages)
-  const [liveSession, setLiveSession] = useState({
-    isRunning: false,
-    isFocus: true,
-    timeLeft: 25 * 60,
-    totalTime: 25 * 60,
-    elapsedSeconds: 0,
-  });
+  // User Scale Selection: '10mins' (every 10 minutes) or 'hours' (per hour)
+  const [scaleMode, setScaleMode] = useState('10mins');
 
-  // Scale Unit: 'minutes' or 'hours' (defaults to minutes so short sessions like 1m, 5m are prominent)
-  const [unitMode, setUnitMode] = useState('minutes');
-
-  // Load Historical Analytics from LocalStorage
-  const loadHistoricalStats = useCallback(() => {
+  // Load Historical Stats
+  const loadStats = useCallback(() => {
     try {
       const sessionHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
       const focusStats = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
@@ -62,7 +52,7 @@ export default function AnalyticsPage() {
       const currentDay = now.getDay();
       const adjustedTodayIdx = currentDay === 0 ? 6 : currentDay - 1; // Mon=0, Sun=6
 
-      // Determine Monday of current week
+      // Calculate Monday to Sunday dates
       const diffToMon = currentDay === 0 ? -6 : 1 - currentDay;
       const monday = new Date(now);
       monday.setDate(now.getDate() + diffToMon);
@@ -103,19 +93,20 @@ export default function AnalyticsPage() {
         todayIndex: adjustedTodayIdx,
       });
 
-      // If user has over 2 hours of study time, default view to hours, else minutes
+      // Default to 10mins if under 2 hours for maximum clarity, else hours
       const totalWeekMinutes = weekMins.reduce((a, b) => a + b, 0);
       if (totalWeekMinutes >= 120) {
-        setUnitMode('hours');
+        setScaleMode('hours');
+      } else {
+        setScaleMode('10mins');
       }
     } catch (e) {
-      console.warn('Failed loading historical stats:', e);
+      console.warn('Failed loading stats:', e);
     }
   }, []);
 
-  // Initialize and listen to Live Global Timer Ticks & State Sync
   useEffect(() => {
-    // Elegant Chart.js defaults
+    // Elegant Chart.js typography & tooltip defaults
     ChartJS.defaults.color = '#64748b';
     ChartJS.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
     ChartJS.defaults.plugins.tooltip.backgroundColor = 'rgba(15, 23, 42, 0.94)';
@@ -126,15 +117,15 @@ export default function AnalyticsPage() {
     ChartJS.defaults.plugins.tooltip.cornerRadius = 8;
     ChartJS.defaults.plugins.tooltip.padding = 10;
 
-    loadHistoricalStats();
+    loadStats();
 
-    // Load Mastered Flashcards
+    // Load Mastered Cards
     try {
       const storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
       setMasteredCount(storedMastered.length);
     } catch (e) {}
 
-    // Fetch deck count
+    // Load Deck Count
     fetch('/api/decks')
       .then(res => res.ok ? res.json() : [])
       .then(decks => {
@@ -145,168 +136,83 @@ export default function AnalyticsPage() {
       })
       .catch(() => {});
 
-    // Initial check of live timer in localStorage
-    try {
-      const savedTimer = localStorage.getItem('ifocus_timer_state');
-      if (savedTimer) {
-        const parsed = JSON.parse(savedTimer);
-        if (parsed.isRunning && parsed.targetEndTime && parsed.isFocus) {
-          const rem = Math.max(0, Math.round((parsed.targetEndTime - Date.now()) / 1000));
-          const total = parsed.totalTime || 25 * 60;
-          const elapsed = Math.max(0, total - rem);
-          setLiveSession({
-            isRunning: true,
-            isFocus: true,
-            timeLeft: rem,
-            totalTime: total,
-            elapsedSeconds: elapsed,
-          });
-        }
-      }
-    } catch (e) {}
-
-    // Listen to real-time timer ticks
-    const handleTick = (e) => {
-      if (e?.detail) {
-        const isRunning = Boolean(e.detail.isRunning);
-        const isFocus = Boolean(e.detail.isFocus);
-        const timeLeft = Number(e.detail.timeLeft) || 0;
-        const totalTime = Number(e.detail.totalTime) || 25 * 60;
-        const elapsed = Math.max(0, totalTime - timeLeft);
-
-        setLiveSession({
-          isRunning,
-          isFocus,
-          timeLeft,
-          totalTime,
-          elapsedSeconds: elapsed,
-        });
-      }
-    };
-
+    // Only refresh when a completed session is dispatched (no aggressive 1-second live loop)
     const handleSync = (e) => {
-      // Reload stats in case a session finished or state updated
-      loadHistoricalStats();
-      if (e?.detail) {
-        const isRunning = Boolean(e.detail.isRunning);
-        const isFocus = Boolean(e.detail.isFocus);
-        const timeLeft = Number(e.detail.timeLeft) || 0;
-        const totalTime = Number(e.detail.totalTime) || 25 * 60;
-        const elapsed = Math.max(0, totalTime - timeLeft);
-
-        setLiveSession({
-          isRunning,
-          isFocus,
-          timeLeft,
-          totalTime,
-          elapsedSeconds: elapsed,
-        });
+      // If timer is not running or a session just finished, reload stats
+      if (!e?.detail?.isRunning) {
+        loadStats();
       }
     };
 
-    window.addEventListener('ifocus_timer_tick', handleTick);
     window.addEventListener('ifocus_timer_sync', handleSync);
 
+    // Refresh every 10 minutes while tab is open
+    const gentleRefresh = setInterval(() => {
+      loadStats();
+    }, 10 * 60 * 1000);
+
     return () => {
-      window.removeEventListener('ifocus_timer_tick', handleTick);
       window.removeEventListener('ifocus_timer_sync', handleSync);
+      clearInterval(gentleRefresh);
     };
-  }, [loadHistoricalStats]);
+  }, [loadStats]);
 
-  // Compute Live Metrics
-  const liveElapsedMins = (liveSession.isRunning && liveSession.isFocus)
-    ? liveSession.elapsedSeconds / 60
-    : 0;
+  // Total Week Hours formatted
+  const totalWeekMinutes = baseStats.weekMinutes.reduce((a, b) => a + b, 0);
+  const weekHoursFormatted = (totalWeekMinutes / 60).toFixed(1);
 
-  const currentTodayTotalMinutes = baseStats.todayMinutes + liveElapsedMins;
-  const currentWeekTotalMinutes = baseStats.weekMinutes.reduce((a, b) => a + b, 0) + liveElapsedMins;
-  const currentWeekHoursFormatted = (currentWeekTotalMinutes / 60).toFixed(1);
+  // Today Focus Display
+  const todayFocusFormatted = baseStats.todayMinutes < 60
+    ? `${baseStats.todayMinutes}m`
+    : `${(baseStats.todayMinutes / 60).toFixed(1)}h`;
 
-  // Format MM:SS helper
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Format Today's Display string
-  const formatTodayDisplay = () => {
-    const totalSec = Math.round(currentTodayTotalMinutes * 60);
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-
-    if (m === 0) {
-      return `${s}s`;
+  // Chart data computed based on scaleMode (10mins vs hours)
+  const chartData = useMemo(() => {
+    if (scaleMode === '10mins') {
+      return baseStats.weekMinutes.map(m => Math.round(m));
+    } else {
+      return baseStats.weekMinutes.map(m => Math.round((m / 60) * 10) / 10);
     }
-    if (m < 60) {
-      return `${m}m${liveSession.isRunning && liveSession.isFocus && s > 0 ? ` ${s}s` : ''}`;
-    }
-    return `${(totalSec / 3600).toFixed(1)}h`;
-  };
+  }, [baseStats.weekMinutes, scaleMode]);
 
-  // Live Chart Values (Adjusted dynamically for Today's bar)
-  const liveChartData = useMemo(() => {
-    return baseStats.weekMinutes.map((mins, idx) => {
-      let dayMins = mins;
-      if (idx === baseStats.todayIndex) {
-        dayMins += liveElapsedMins;
-      }
-      if (unitMode === 'hours') {
-        return Math.round((dayMins / 60) * 100) / 100; // e.g. 0.25h, 1.2h
-      } else {
-        return Math.round(dayMins * 10) / 10; // e.g. 1.2m, 25m
-      }
-    });
-  }, [baseStats.weekMinutes, baseStats.todayIndex, liveElapsedMins, unitMode]);
+  const maxVal = Math.max(...chartData, 0);
 
-  // Chart Configuration
+  // Suggested Max with 10-minute steps
+  const suggestedMaxY = scaleMode === '10mins'
+    ? Math.max(30, Math.ceil((maxVal + 5) / 10) * 10)
+    : Math.max(1, Math.ceil((maxVal + 0.5) * 2) / 2);
+
   const focusChartData = {
     labels: days,
     datasets: [{
-      label: unitMode === 'hours' ? 'Focus Hours' : 'Focus Minutes',
-      data: liveChartData,
-      backgroundColor: days.map((_, i) => {
-        if (i === baseStats.todayIndex) {
-          return liveSession.isRunning && liveSession.isFocus
-            ? '#16a34a' // Vibrant active green when ticking live
-            : '#2e7d32'; // Forest green
-        }
-        return 'rgba(95, 143, 94, 0.35)'; // Soft sage
-      }),
-      borderColor: days.map((_, i) => {
-        if (i === baseStats.todayIndex) {
-          return liveSession.isRunning && liveSession.isFocus ? '#15803d' : '#1b5e20';
-        }
-        return 'rgba(95, 143, 94, 0.7)';
-      }),
+      label: scaleMode === '10mins' ? 'Focus Minutes (10m Intervals)' : 'Focus Hours',
+      data: chartData,
+      backgroundColor: days.map((_, i) =>
+        i === baseStats.todayIndex ? '#2e7d32' : 'rgba(95, 143, 94, 0.45)'
+      ),
+      borderColor: days.map((_, i) =>
+        i === baseStats.todayIndex ? '#1b5e20' : 'rgba(95, 143, 94, 0.85)'
+      ),
       borderWidth: 1.5,
       borderRadius: 8,
       borderSkipped: false,
     }]
   };
 
-  const maxVal = Math.max(...liveChartData, 0);
-  const suggestedMaxY = unitMode === 'minutes'
-    ? Math.max(30, Math.ceil((maxVal + 5) / 10) * 10)
-    : Math.max(1, Math.ceil((maxVal + 0.5) * 2) / 2);
-
   const focusChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: {
-      duration: liveSession.isRunning ? 0 : 350, // Zero animation lag on live ticks for silky smoothness
-    },
     plugins: {
       legend: { display: false },
       tooltip: {
         callbacks: {
           label: (ctx) => {
             const val = ctx.parsed.y;
-            if (unitMode === 'hours') {
-              const approxMins = Math.round(val * 60);
-              return `${val}h (${approxMins} mins focus)`;
+            if (scaleMode === '10mins') {
+              const blocks = (val / 10).toFixed(1);
+              return `${val} min studied (${blocks} × 10m intervals)`;
             } else {
-              return `${val} minutes studied`;
+              return `${val} hours studied`;
             }
           }
         }
@@ -317,8 +223,9 @@ export default function AnalyticsPage() {
         beginAtZero: true,
         suggestedMax: suggestedMaxY,
         grid: { color: 'rgba(0, 0, 0, 0.05)' },
-        ticks: { 
-          callback: (v) => `${v}${unitMode === 'minutes' ? 'm' : 'h'}` 
+        ticks: {
+          stepSize: scaleMode === '10mins' ? 10 : 1, // Steps of 10 minutes or 1 hour
+          callback: (v) => `${v}${scaleMode === '10mins' ? 'm' : 'h'}`
         }
       },
       x: {
@@ -327,7 +234,7 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Format timestamp helper
+  // Format session timestamp helper
   const formatSessionTime = (isoString) => {
     try {
       const d = new Date(isoString);
@@ -357,32 +264,8 @@ export default function AnalyticsPage() {
             Study Analytics
           </h2>
           <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>
-            Your live focus time and memory progress at a glance.
+            Your focus time and memory progress at a glance.
           </p>
-        </div>
-
-        {/* Live System Beacon */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: liveSession.isRunning ? 'rgba(34, 197, 94, 0.1)' : 'rgba(100, 116, 139, 0.08)',
-          border: liveSession.isRunning ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(100, 116, 139, 0.15)',
-          padding: '0.4rem 0.85rem',
-          borderRadius: '9999px',
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          color: liveSession.isRunning ? '#15803d' : '#64748b'
-        }}>
-          <span style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: liveSession.isRunning ? '#16a34a' : '#94a3b8',
-            boxShadow: liveSession.isRunning ? '0 0 8px #16a34a' : 'none',
-            display: 'inline-block'
-          }} />
-          {liveSession.isRunning ? 'Live Engine Active' : 'Timer Ready'}
         </div>
       </div>
 
@@ -390,23 +273,15 @@ export default function AnalyticsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
         
         {/* 1. Today's Focus */}
-        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', position: 'relative', overflow: 'hidden' }}>
-          {liveSession.isRunning && liveSession.isFocus && (
-            <div style={{ position: 'absolute', top: '10px', right: '12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
-              Live
-            </div>
-          )}
+        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
             Today's Focus
           </div>
           <div style={{ fontSize: '2.1rem', fontWeight: 800, color: '#2e7d32', lineHeight: 1.1 }}>
-            {formatTodayDisplay()}
+            {todayFocusFormatted}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            {liveSession.isRunning && liveSession.isFocus
-              ? `Ticking live: +${formatTime(liveSession.elapsedSeconds)} in progress`
-              : 'Total studied today'}
+            Total completed today
           </div>
         </div>
 
@@ -416,10 +291,10 @@ export default function AnalyticsPage() {
             This Week
           </div>
           <div style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--primary-accent)', lineHeight: 1.1 }}>
-            {currentWeekHoursFormatted}<span style={{ fontSize: '1.2rem', fontWeight: 600, marginLeft: '2px' }}>h</span>
+            {weekHoursFormatted}<span style={{ fontSize: '1.2rem', fontWeight: 600, marginLeft: '2px' }}>h</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Across {baseStats.completedSessionsCount + (liveSession.isRunning ? 1 : 0)} sessions
+            Across {baseStats.completedSessionsCount} completed sessions
           </div>
         </div>
 
@@ -451,119 +326,23 @@ export default function AnalyticsPage() {
 
       </div>
 
-      {/* Live Focus Session Active Banner (Appears when Pomodoro is running) */}
-      {liveSession.isRunning && liveSession.isFocus && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(240, 253, 244, 0.95), rgba(220, 252, 231, 0.7))',
-          border: '1px solid rgba(34, 197, 94, 0.35)',
-          borderRadius: '16px',
-          padding: '1rem 1.4rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          boxShadow: '0 4px 16px -2px rgba(34, 197, 94, 0.12)',
-          backdropFilter: 'blur(8px)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: '#16a34a',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                  Live Session Active
-                </span>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
-              </div>
-              <div style={{ fontSize: '0.98rem', fontWeight: 700, color: '#0f172a' }}>
-                {formatTime(liveSession.elapsedSeconds)} elapsed of {Math.round(liveSession.totalTime / 60)}m session
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <span style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Remaining
-              </span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.15rem', color: '#14532d' }}>
-                {formatTime(liveSession.timeLeft)}
-              </span>
-            </div>
-
-            <Link
-              href="/dashboard"
-              style={{
-                background: '#16a34a',
-                color: '#ffffff',
-                padding: '0.55rem 1.15rem',
-                borderRadius: '9999px',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)',
-                transition: 'opacity 0.2s',
-              }}
-            >
-              <span>Command Center</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Single Clean Weekly Focus Bar Chart (Live Sync) */}
+      {/* Weekly Focus Bar Chart (Per 10 Mins / Per Hours Scale) */}
       <div className="glass-panel" style={{ padding: '1.5rem 1.75rem', background: '#ffffff', borderRadius: '16px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                Weekly Focus Time
-              </h3>
-              {liveSession.isRunning && liveSession.isFocus && (
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 800,
-                  color: '#15803d',
-                  background: 'rgba(34, 197, 94, 0.12)',
-                  border: '1px solid rgba(34, 197, 94, 0.25)',
-                  padding: '0.15rem 0.5rem',
-                  borderRadius: '9999px',
-                  letterSpacing: '0.5px',
-                  textTransform: 'uppercase',
-                }}>
-                  Live Sync
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-              Hours studied each day from Monday to Sunday. (Emerald bar pulses with your live study time).
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.15rem 0' }}>
+              Weekly Focus Activity
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              {scaleMode === '10mins'
+                ? 'Focus time measured in 10-minute intervals. (Green bar indicates today).'
+                : 'Focus time measured in total hours. (Green bar indicates today).'}
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            {/* View Unit Mode Toggle: Minutes vs Hours */}
+            {/* Resolution Toggle: Per 10 Mins vs Per Hour */}
             <div style={{
               display: 'flex',
               background: '#f1f5f9',
@@ -573,49 +352,49 @@ export default function AnalyticsPage() {
             }}>
               <button
                 type="button"
-                onClick={() => setUnitMode('minutes')}
+                onClick={() => setScaleMode('10mins')}
                 style={{
                   border: 'none',
-                  background: unitMode === 'minutes' ? '#ffffff' : 'transparent',
-                  color: unitMode === 'minutes' ? '#0f172a' : '#64748b',
+                  background: scaleMode === '10mins' ? '#ffffff' : 'transparent',
+                  color: scaleMode === '10mins' ? '#0f172a' : '#64748b',
                   fontSize: '0.78rem',
-                  fontWeight: unitMode === 'minutes' ? 700 : 500,
-                  padding: '0.3rem 0.7rem',
+                  fontWeight: scaleMode === '10mins' ? 700 : 500,
+                  padding: '0.35rem 0.75rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  boxShadow: unitMode === 'minutes' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  boxShadow: scaleMode === '10mins' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   transition: 'all 0.15s ease'
                 }}
               >
-                Minutes
+                Per 10 Mins
               </button>
               <button
                 type="button"
-                onClick={() => setUnitMode('hours')}
+                onClick={() => setScaleMode('hours')}
                 style={{
                   border: 'none',
-                  background: unitMode === 'hours' ? '#ffffff' : 'transparent',
-                  color: unitMode === 'hours' ? '#0f172a' : '#64748b',
+                  background: scaleMode === 'hours' ? '#ffffff' : 'transparent',
+                  color: scaleMode === 'hours' ? '#0f172a' : '#64748b',
                   fontSize: '0.78rem',
-                  fontWeight: unitMode === 'hours' ? 700 : 500,
-                  padding: '0.3rem 0.7rem',
+                  fontWeight: scaleMode === 'hours' ? 700 : 500,
+                  padding: '0.35rem 0.75rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  boxShadow: unitMode === 'hours' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  boxShadow: scaleMode === 'hours' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   transition: 'all 0.15s ease'
                 }}
               >
-                Hours
+                Per Hours
               </button>
             </div>
 
             <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2e7d32', background: 'rgba(46, 125, 50, 0.1)', padding: '0.3rem 0.8rem', borderRadius: '999px' }}>
-              {currentWeekHoursFormatted}h Total This Week
+              {weekHoursFormatted}h Total
             </div>
           </div>
         </div>
 
-        {/* Real-time Dynamic Chart Container */}
+        {/* Dynamic Chart Container */}
         <div style={{ position: 'relative', height: '270px', width: '100%', padding: '0.5rem 0' }}>
           <Bar data={focusChartData} options={focusChartOptions} />
         </div>
@@ -639,65 +418,9 @@ export default function AnalyticsPage() {
           </Link>
         </div>
 
-        {/* If session is currently running, show it as an ongoing top row item */}
-        {liveSession.isRunning && liveSession.isFocus && (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '0.75rem 1rem',
-              background: 'rgba(34, 197, 94, 0.06)',
-              borderRadius: '10px',
-              border: '1px dashed rgba(34, 197, 94, 0.35)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                background: '#16a34a',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>Focus Session in Progress</span>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                  {formatTime(liveSession.elapsedSeconds)} elapsed • Ticking now
-                </div>
-              </div>
-            </div>
-
-            <span style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: '#15803d',
-              background: 'rgba(34, 197, 94, 0.15)',
-              padding: '0.2rem 0.65rem',
-              borderRadius: '999px',
-              letterSpacing: '0.03em',
-              textTransform: 'uppercase'
-            }}>
-              Ongoing
-            </span>
-          </div>
-        )}
-
-        {baseStats.recentSessions.length === 0 && (!liveSession.isRunning || !liveSession.isFocus) ? (
+        {baseStats.recentSessions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '1.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            No focus sessions logged yet. Complete a Pomodoro session in the timer to see live activity here!
+            No focus sessions logged yet. Complete a Pomodoro session in the timer to see activity here!
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
