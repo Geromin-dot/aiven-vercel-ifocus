@@ -121,6 +121,13 @@ export default function FlashcardsPage() {
     if (option === currentQ?.back) {
       setExamScore(s => s + 1);
       setMasteredCards(prev => new Set([...prev, examIndex]));
+      try {
+        const storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+        if (currentQ?.front && !storedMastered.includes(currentQ.front)) {
+          storedMastered.push(currentQ.front);
+          localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+        }
+      } catch(e) {}
     }
   };
 
@@ -332,7 +339,21 @@ export default function FlashcardsPage() {
     setActiveDeck(deck);
     setCurrentCardIndex(0);
     setIsFlipped(false);
-    setMasteredCards(new Set());
+
+    // Pre-populate mastered cards from localStorage
+    let storedMastered = [];
+    try {
+      storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+    } catch(e) {}
+
+    const preMastered = new Set();
+    (deck.cards || []).forEach((c, idx) => {
+      if (storedMastered.includes(c.front)) {
+        preMastered.add(idx);
+      }
+    });
+
+    setMasteredCards(preMastered);
     setIsSaved(true); // Already in database
     setView('study');
   };
@@ -366,13 +387,26 @@ export default function FlashcardsPage() {
 
   const toggleMastery = () => {
     if (!currentCard) return;
+    const cardKey = currentCard.front;
+    let storedMastered = [];
+    try {
+      storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+    } catch(e) {}
+
     setMasteredCards(prev => {
       const next = new Set(prev);
       if (next.has(currentCardIndex)) {
         next.delete(currentCardIndex);
+        storedMastered = storedMastered.filter(k => k !== cardKey);
       } else {
         next.add(currentCardIndex);
+        if (!storedMastered.includes(cardKey)) {
+          storedMastered.push(cardKey);
+        }
       }
+      try {
+        localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+      } catch(e) {}
       return next;
     });
   };

@@ -122,6 +122,13 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
 
     if (opt === currentCard?.back) {
       setScore(prev => prev + 1);
+      try {
+        const stored = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+        if (currentCard?.front && !stored.includes(currentCard.front)) {
+          stored.push(currentCard.front);
+          localStorage.setItem('ifocus_mastered_cards', JSON.stringify(stored));
+        }
+      } catch(e) {}
     }
   };
 

@@ -1,47 +1,37 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
   BarElement,
-  ArcElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
   BarElement,
-  ArcElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 );
 
 export default function AnalyticsPage() {
-  const [activeTab, setActiveTab] = useState('focus'); // 'focus' | 'mood' | 'distractions' | 'types'
-  const [focusData, setFocusData] = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [stressData, setStressData] = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [motivationData, setMotivationData] = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [distractionData, setDistractionData] = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [sessionDistribution, setSessionDistribution] = useState([0, 0, 0, 0]);
-  const [stats, setStats] = useState({
-    totalHours: '0.0',
-    tasksCompleted: 0,
-    avgDistractions: '0.0',
-    streakDays: 0
-  });
+  const [todayFocusDisplay, setTodayFocusDisplay] = useState('0m');
+  const [weekFocusHours, setWeekFocusHours] = useState('0.0');
+  const [sessionCount, setSessionCount] = useState(0);
+  const [streakDays, setStreakDays] = useState(0);
+  const [masteredCount, setMasteredCount] = useState(0);
+  const [totalFlashcards, setTotalFlashcards] = useState(0);
+  const [weeklyBarData, setWeeklyBarData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [todayDayIdx, setTodayDayIdx] = useState(0);
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -58,73 +48,128 @@ export default function AnalyticsPage() {
     ChartJS.defaults.plugins.tooltip.padding = 10;
 
     try {
+      // 1. Load Session History
       const sessionHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
       const focusStats = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
       
-      let localFocusData = [0, 0, 0, 0, 0, 0, 0];
-      let localSessionTypes = [0, 0, 0, 0]; // [25m, 50m, 15m, 90m]
+      const now = new Date();
+      const todayStr = now.toDateString();
+      const currentDay = now.getDay();
+      const adjustedTodayIdx = currentDay === 0 ? 6 : currentDay - 1; // Mon=0, Sun=6
+      setTodayDayIdx(adjustedTodayIdx);
 
-      if (sessionHistory.length > 0) {
-        sessionHistory.forEach(s => {
-          const sDate = new Date(s.date);
-          const dur = Number(s.duration) || 25;
+      // Current week Monday to Sunday
+      const diffToMon = currentDay === 0 ? -6 : 1 - currentDay;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMon);
+      monday.setHours(0, 0, 0, 0);
 
-          if (dur <= 15) localSessionTypes[2]++;
-          else if (dur <= 30) localSessionTypes[0]++;
-          else if (dur <= 60) localSessionTypes[1]++;
-          else localSessionTypes[3]++;
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
 
-          const dayIndex = sDate.getDay();
-          const adjustedIdx = dayIndex === 0 ? 6 : dayIndex - 1; // Mon=0, Sun=6
-          localFocusData[adjustedIdx] += Math.round((dur / 60) * 10) / 10;
-        });
+      let todayMins = 0;
+      let weekMins = [0, 0, 0, 0, 0, 0, 0];
+      let validSessionsCount = 0;
+
+      sessionHistory.forEach(s => {
+        const sDate = new Date(s.date);
+        const dur = Number(s.duration) || 0;
+
+        if (sDate.toDateString() === todayStr) {
+          todayMins += dur;
+        }
+
+        if (sDate >= monday && sDate <= sunday) {
+          const d = sDate.getDay();
+          const idx = d === 0 ? 6 : d - 1;
+          weekMins[idx] += dur;
+          validSessionsCount++;
+        }
+      });
+
+      // Format Today's Focus
+      if (todayMins < 60) {
+        setTodayFocusDisplay(`${todayMins}m`);
       } else {
-        // High-aesthetic realistic baseline sample data
-        localFocusData = [1.8, 2.4, 2.1, 1.5, 3.2, 1.4, 0.8];
-        localSessionTypes = [9, 5, 4, 2];
+        setTodayFocusDisplay(`${(todayMins / 60).toFixed(1)}h`);
       }
 
-      setFocusData(localFocusData);
-      setSessionDistribution(localSessionTypes);
+      // Format Weekly Hours
+      const totalWeekMinutes = weekMins.reduce((a, b) => a + b, 0);
+      const totalWeekH = (totalWeekMinutes / 60).toFixed(1);
+      setWeekFocusHours(totalWeekH);
+      setSessionCount(validSessionsCount || (focusStats.sessions || 0));
 
-      const sampleStress = [4, 5, 3, 6, 4, 3, 2];
-      const sampleMotivation = [7, 6, 8, 5, 8, 7, 8];
-      const sampleDistractions = [2, 3, 1, 4, 2, 1, 0];
+      // Bar Chart Data (Hours per day)
+      const weekHoursArray = weekMins.map(m => Math.round((m / 60) * 10) / 10);
+      setWeeklyBarData(weekHoursArray);
 
-      setStressData(sampleStress);
-      setMotivationData(sampleMotivation);
-      setDistractionData(sampleDistractions);
+      // Streak
+      setStreakDays(focusStats.streak || 0);
 
-      const totalH = localFocusData.reduce((a, b) => a + b, 0).toFixed(1);
-      const totalSessions = sessionHistory.length > 0 
-        ? sessionHistory.length 
-        : (focusStats.sessions || 14);
-      const avgDist = (sampleDistractions.reduce((a, b) => a + b, 0) / 7).toFixed(1);
+      // 2. Load Mastered Flashcards
+      const storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+      setMasteredCount(storedMastered.length);
 
-      setStats({
-        totalHours: totalH,
-        tasksCompleted: totalSessions,
-        avgDistractions: avgDist,
-        streakDays: focusStats.streak || 5
-      });
+      // 3. Load Recent Activity (last 5 sessions)
+      const recent = [...sessionHistory].reverse().slice(0, 5);
+      setRecentSessions(recent);
+
+      // 4. Fetch total flashcard count across user's decks
+      fetch('/api/decks')
+        .then(res => res.ok ? res.json() : [])
+        .then(decks => {
+          if (Array.isArray(decks)) {
+            const count = decks.reduce((acc, d) => acc + (d.cards ? d.cards.length : 0), 0);
+            setTotalFlashcards(count);
+          }
+        })
+        .catch(() => {});
+
     } catch (e) {
-      console.error('Error loading analytics data', e);
+      console.error('Error loading analytics', e);
     }
   }, []);
 
-  // ===== Chart 1: Focus Hours (Bar) =====
+  // Format timestamp helper
+  const formatSessionTime = (isoString) => {
+    try {
+      const d = new Date(isoString);
+      const now = new Date();
+      const isToday = d.toDateString() === now.toDateString();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const isYesterday = d.toDateString() === yesterday.toDateString();
+
+      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+      if (isToday) return `Today, ${timeStr}`;
+      if (isYesterday) return `Yesterday, ${timeStr}`;
+      return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${timeStr}`;
+    } catch (e) {
+      return 'Recent session';
+    }
+  };
+
+  // Weekly Focus Chart Data & Configuration
   const focusChartData = {
     labels: days,
     datasets: [{
       label: 'Focus Hours',
-      data: focusData,
-      backgroundColor: 'rgba(95, 143, 94, 0.45)',
-      borderColor: 'rgba(95, 143, 94, 1)',
+      data: weeklyBarData,
+      backgroundColor: days.map((_, i) => 
+        i === todayDayIdx ? '#2e7d32' : 'rgba(95, 143, 94, 0.45)'
+      ),
+      borderColor: days.map((_, i) => 
+        i === todayDayIdx ? '#1b5e20' : 'rgba(95, 143, 94, 0.9)'
+      ),
       borderWidth: 1.5,
-      borderRadius: 8,
+      borderRadius: 6,
       borderSkipped: false,
     }]
   };
+
   const focusChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -140,335 +185,196 @@ export default function AnalyticsPage() {
       y: {
         beginAtZero: true,
         grid: { color: 'rgba(0, 0, 0, 0.05)' },
-        ticks: { callback: (v) => v + 'h' }
+        ticks: { 
+          stepSize: 1,
+          callback: (v) => `${v}h` 
+        }
       },
       x: {
         grid: { display: false }
-      }
-    }
-  };
-
-  // ===== Chart 2: Emotional Trendline (Line) =====
-  const emotionalChartData = {
-    labels: days,
-    datasets: [
-      {
-        label: 'Stress Level',
-        data: stressData,
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.08)',
-        tension: 0.35,
-        fill: true,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        pointBackgroundColor: '#ef4444',
-      },
-      {
-        label: 'Motivation',
-        data: motivationData,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-        tension: 0.35,
-        fill: true,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        pointBackgroundColor: '#10b981',
-      }
-    ]
-  };
-  const emotionalChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: {
-          usePointStyle: true,
-          pointStyle: 'circle',
-          padding: 16,
-          boxWidth: 8
-        }
-      },
-      tooltip: {
-        callbacks: {
-          afterBody: (items) => {
-            const idx = items[0].dataIndex;
-            const stress = stressData[idx];
-            const focus = focusData[idx];
-            if (stress >= 7) return `High stress correlated with ${focus}h focus`;
-            if (stress <= 3) return `Low stress - optimal focus state`;
-            return '';
-          }
-        }
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 10,
-        grid: { color: 'rgba(0, 0, 0, 0.05)' },
-        ticks: { stepSize: 2 }
-      },
-      x: {
-        grid: { display: false }
-      }
-    }
-  };
-
-  // ===== Chart 3: Distraction Heatmap (Bar) =====
-  const distractionChartData = {
-    labels: days,
-    datasets: [{
-      label: 'Distractions',
-      data: distractionData,
-      backgroundColor: distractionData.map(v => {
-        if (v >= 4) return 'rgba(239, 68, 68, 0.7)';
-        if (v >= 2) return 'rgba(245, 158, 11, 0.7)';
-        return 'rgba(16, 185, 129, 0.6)';
-      }),
-      borderColor: distractionData.map(v => {
-        if (v >= 4) return '#ef4444';
-        if (v >= 2) return '#f59e0b';
-        return '#10b981';
-      }),
-      borderWidth: 1.5,
-      borderRadius: 8,
-      borderSkipped: false,
-    }]
-  };
-  const distractionChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => {
-            const v = ctx.parsed.y;
-            let severity = v >= 4 ? 'High' : v >= 2 ? 'Medium' : 'Low';
-            return [`${severity} - ${v} interruptions`, `Study day: ${days[ctx.dataIndex]}`];
-          }
-        }
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: { color: 'rgba(0, 0, 0, 0.05)' },
-        ticks: { stepSize: 1 }
-      },
-      x: {
-        grid: { display: false }
-      }
-    }
-  };
-
-  // ===== Chart 4: Session Type Distribution (Doughnut) =====
-  const sessionChartData = {
-    labels: ['25 min Focus', '50 min Deep Work', '15 min Quick', '90 min Flow'],
-    datasets: [{
-      data: sessionDistribution,
-      backgroundColor: [
-        'rgba(95, 143, 94, 0.85)',
-        'rgba(99, 102, 241, 0.75)',
-        'rgba(245, 158, 11, 0.75)',
-        'rgba(236, 72, 153, 0.75)',
-      ],
-      borderColor: '#ffffff',
-      borderWidth: 3,
-      hoverOffset: 6,
-    }]
-  };
-  const sessionChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '70%',
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          usePointStyle: true,
-          pointStyle: 'circle',
-          padding: 16,
-          boxWidth: 8
-        }
       }
     }
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', animation: 'flashcardFadeIn 0.25s ease' }}>
+    <div style={{ maxWidth: '980px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', animation: 'flashcardFadeIn 0.25s ease' }}>
       
-      {/* Header & Minimalist Tab Switcher */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>
-            Study Analytics
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>
-            Track focus continuity, cognitive load, and study habits.
-          </p>
-        </div>
-
-        {/* Tab Controls */}
-        <div style={{
-          display: 'inline-flex',
-          background: 'rgba(0, 0, 0, 0.05)',
-          padding: '4px',
-          borderRadius: '12px',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
-          gap: '2px'
-        }}>
-          {[
-            { id: 'focus', label: 'Focus Time' },
-            { id: 'mood', label: 'Mood & Stress' },
-            { id: 'distractions', label: 'Distractions' },
-            { id: 'types', label: 'Session Breakdown' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                border: 'none',
-                background: activeTab === tab.id ? '#ffffff' : 'transparent',
-                color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                fontSize: '0.84rem',
-                padding: '0.5rem 0.95rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                boxShadow: activeTab === tab.id ? '0 2px 6px rgba(0, 0, 0, 0.06)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* Header */}
+      <div>
+        <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>
+          Study Analytics
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>
+          Your focus time and memory progress at a glance.
+        </p>
       </div>
 
-      {/* 4 Minimalist Stat Cards */}
+      {/* 4 Core Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
-        <div className="stat-card" style={{ background: '#ffffff', padding: '1.25rem 1.5rem', textAlign: 'left', borderRadius: '14px', border: '1px solid var(--glass-border)' }}>
+        
+        {/* 1. Today's Focus */}
+        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-            Weekly Focus
-          </div>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--primary-accent)', lineHeight: 1.1 }}>
-            {stats.totalHours}<span style={{ fontSize: '1.2rem', fontWeight: 600, marginLeft: '2px' }}>h</span>
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Across {stats.tasksCompleted} study sessions
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ background: '#ffffff', padding: '1.25rem 1.5rem', textAlign: 'left', borderRadius: '14px', border: '1px solid var(--glass-border)' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-            Daily Average
+            Today's Focus
           </div>
           <div style={{ fontSize: '2.1rem', fontWeight: 800, color: '#2e7d32', lineHeight: 1.1 }}>
-            {(stats.totalHours / 7).toFixed(1)}<span style={{ fontSize: '1.2rem', fontWeight: 600, marginLeft: '2px' }}>h</span>
+            {todayFocusDisplay}
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Active daily study rate
+            Time studied today
           </div>
         </div>
 
-        <div className="stat-card" style={{ background: '#ffffff', padding: '1.25rem 1.5rem', textAlign: 'left', borderRadius: '14px', border: '1px solid var(--glass-border)' }}>
+        {/* 2. Weekly Focus */}
+        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+            This Week
+          </div>
+          <div style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--primary-accent)', lineHeight: 1.1 }}>
+            {weekFocusHours}<span style={{ fontSize: '1.2rem', fontWeight: 600, marginLeft: '2px' }}>h</span>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+            Across {sessionCount} completed sessions
+          </div>
+        </div>
+
+        {/* 3. Study Streak */}
+        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
             Study Streak
           </div>
           <div style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--secondary-accent, #6366f1)', lineHeight: 1.1 }}>
-            {stats.streakDays} <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Days</span>
+            {streakDays} <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>{streakDays === 1 ? 'Day' : 'Days'}</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Consecutive active days
+            Consecutive active study
           </div>
         </div>
 
-        <div className="stat-card" style={{ background: '#ffffff', padding: '1.25rem 1.5rem', textAlign: 'left', borderRadius: '14px', border: '1px solid var(--glass-border)' }}>
+        {/* 4. Mastered Flashcards */}
+        <div style={{ background: '#ffffff', padding: '1.25rem 1.4rem', borderRadius: '14px', border: '1px solid var(--glass-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-            Avg Interruptions
+            Mastered Cards
           </div>
-          <div style={{ fontSize: '2.1rem', fontWeight: 800, color: '#d97706', lineHeight: 1.1 }}>
-            {stats.avgDistractions} <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>/day</span>
+          <div style={{ fontSize: '2.1rem', fontWeight: 800, color: '#059669', lineHeight: 1.1 }}>
+            {masteredCount} <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Cards</span>
           </div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Low cognitive friction
+            {totalFlashcards > 0 ? `${Math.round((masteredCount / totalFlashcards) * 100)}% of ${totalFlashcards} total cards` : 'Memorized concepts'}
           </div>
         </div>
+
       </div>
 
-      {/* Single Main Chart Panel */}
-      <div className="glass-panel" style={{ padding: '1.75rem', background: '#ffffff', borderRadius: '18px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Single Clean Weekly Focus Bar Chart */}
+      <div className="glass-panel" style={{ padding: '1.5rem 1.75rem', background: '#ffffff', borderRadius: '16px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         
-        {/* Chart Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(0, 0, 0, 0.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingBottom: '0.65rem', borderBottom: '1px solid rgba(0, 0, 0, 0.05)' }}>
           <div>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.15rem 0' }}>
-              {activeTab === 'focus' && 'Weekly Focus Hours'}
-              {activeTab === 'mood' && 'Emotional Trendline (Stress vs Motivation)'}
-              {activeTab === 'distractions' && 'Daily Distractions Frequency'}
-              {activeTab === 'types' && 'Session Duration Breakdown'}
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.15rem 0' }}>
+              Weekly Focus Hours
             </h3>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
-              {activeTab === 'focus' && 'Total hours dedicated to focused Pomodoro sessions per day.'}
-              {activeTab === 'mood' && 'Relationship between study workload, cognitive stress, and motivation.'}
-              {activeTab === 'distractions' && 'Count of interruptions recorded during active sessions.'}
-              {activeTab === 'types' && 'Distribution of Pomodoro timers used across the week.'}
+              Hours studied each day from Monday to Sunday. (Green bar indicates today).
             </p>
           </div>
 
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary-accent)', background: 'rgba(95, 143, 94, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '999px' }}>
-            {activeTab === 'focus' && `${stats.totalHours}h Total Focus`}
-            {activeTab === 'mood' && 'Optimal Flow Balance'}
-            {activeTab === 'distractions' && `${stats.avgDistractions} Avg Interruption`}
-            {activeTab === 'types' && `${stats.tasksCompleted} Total Sessions`}
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2e7d32', background: 'rgba(46, 125, 50, 0.1)', padding: '0.25rem 0.75rem', borderRadius: '999px' }}>
+            {weekFocusHours}h Total This Week
           </div>
         </div>
 
-        {/* Chart Canvas: Only the chosen tab renders */}
-        <div style={{ position: 'relative', height: '330px', width: '100%', padding: '0.5rem 0' }}>
-          {activeTab === 'focus' && <Bar data={focusChartData} options={focusChartOptions} />}
-          {activeTab === 'mood' && <Line data={emotionalChartData} options={emotionalChartOptions} />}
-          {activeTab === 'distractions' && <Bar data={distractionChartData} options={distractionChartOptions} />}
-          {activeTab === 'types' && (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '320px', height: '100%' }}>
-                <Doughnut data={sessionChartData} options={sessionChartOptions} />
-              </div>
-            </div>
-          )}
+        <div style={{ position: 'relative', height: '260px', width: '100%', padding: '0.5rem 0' }}>
+          <Bar data={focusChartData} options={focusChartOptions} />
+        </div>
+      </div>
+
+      {/* Recent Study Activity Log */}
+      <div className="glass-panel" style={{ padding: '1.5rem 1.75rem', background: '#ffffff', borderRadius: '16px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 0, 0, 0.05)', paddingBottom: '0.65rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.15rem 0' }}>
+              Recent Study Sessions
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Your logged Pomodoro focus sessions.
+            </p>
+          </div>
+
+          <Link href="/dashboard" style={{ fontSize: '0.82rem', color: 'var(--primary-accent)', fontWeight: 600, textDecoration: 'none' }}>
+            Open Timer
+          </Link>
         </div>
 
-        {/* Minimalist Key Insight Footer */}
-        <div style={{
-          marginTop: '0.25rem',
-          padding: '0.75rem 1rem',
-          background: '#f8faf9',
-          border: '1px solid rgba(0, 0, 0, 0.05)',
-          borderRadius: '10px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem',
-          fontSize: '0.84rem',
-          color: 'var(--text-secondary)'
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          <span>
-            {activeTab === 'focus' && 'Insight: Consistent 25-minute intervals with BreakGate recall challenges yield 34% higher retention.'}
-            {activeTab === 'mood' && 'Insight: Stress remains lowest on days when 5-minute restorative breaks are taken on schedule.'}
-            {activeTab === 'distractions' && 'Insight: Minimizing tab switching during the first 10 minutes preserves deep flow state.'}
-            {activeTab === 'types' && 'Insight: 25-minute standard sessions represent the most reliable structure for cognitive stamina.'}
-          </span>
-        </div>
+        {recentSessions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '1.75rem 1rem', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
+            No focus sessions logged yet. Complete a Pomodoro session in the timer to see live activity here!
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {recentSessions.map((session, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 1rem',
+                  background: '#fbfdfa',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(0, 0, 0, 0.04)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '8px',
+                    background: session.type === 'breakgate' ? 'rgba(46, 125, 50, 0.12)' : 'rgba(95, 143, 94, 0.12)',
+                    color: session.type === 'breakgate' ? '#2e7d32' : 'var(--primary-accent)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    {session.type === 'breakgate' ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {session.duration} min {session.type === 'breakgate' ? 'BreakGate Micro-Challenge' : 'Pomodoro Focus Session'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      {formatSessionTime(session.date)}
+                    </div>
+                  </div>
+                </div>
+
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: '#2e7d32',
+                  background: 'rgba(46, 125, 50, 0.1)',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '999px',
+                  letterSpacing: '0.03em',
+                  textTransform: 'uppercase'
+                }}>
+                  Completed
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
       </div>
 
