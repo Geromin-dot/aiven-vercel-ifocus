@@ -649,63 +649,87 @@ export default function FlashcardsPage() {
             </div>
           </div>
 
-          {/* Interactive 3D Flip Flashcard */}
+          {/* Interactive Modern Flashcard (Smooth Fade) */}
           <div 
-            className="flashcard-container" onClick={() => setIsFlipped(f => !f)} style={{ flex: 1, minHeight: '380px', width: '100%', cursor: 'pointer', userSelect: 'none' }}
+            className={`flashcard-card ${isFlipped ? 'flipped' : ''}`}
+            onClick={() => setIsFlipped(f => !f)}
+            style={{ flex: 1, minHeight: '380px', width: '100%' }}
           >
-            <div className={`flashcard ${isFlipped ? 'flipped' : ''}`}>
-              
-              {/* Card Front Face */}
-              <div className="card-face card-front" style={{ background: '#ffffff', border: '1.5px solid var(--glass-border)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                <span className="tag" style={{ position: 'absolute', top: '1.25rem', left: '1.5rem', background: 'rgba(95, 143, 94, 0.12)', color: 'var(--primary-accent)', padding: '0.25rem 0.75rem', borderRadius: '14px', fontSize: '0.75rem', fontWeight: 600 }}>
-                  {currentCard?.tag || 'Concept'}
-                </span>
+            {/* Top Left Tag */}
+            <span 
+              className="tag" 
+              style={{ 
+                position: 'absolute', 
+                top: '1.4rem', 
+                left: '1.75rem', 
+                background: isFlipped ? 'rgba(95, 143, 94, 0.18)' : 'rgba(95, 143, 94, 0.12)', 
+                color: 'var(--primary-accent)', 
+                padding: '0.35rem 0.85rem', 
+                borderRadius: '999px', 
+                fontSize: '0.78rem', 
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.25s ease'
+              }}
+            >
+              {isFlipped ? 'Answer / Definition' : (currentCard?.tag || 'Concept')}
+            </span>
 
-                <div className="card-content" style={{ fontSize: 'clamp(1.5rem, 2.4vw, 2.2rem)', fontWeight: 600, color: 'var(--text-primary)', padding: '2rem', textAlign: 'center', maxWidth: '85%', lineHeight: 1.4 }}>
+            {/* Front View (Smooth Fade) */}
+            {!isFlipped && (
+              <div key={`front-${currentCardIndex}`} className="flashcard-content-fade" style={{ textAlign: 'center', maxWidth: '85%' }}>
+                <div style={{ 
+                  fontSize: 'clamp(1.6rem, 2.6vw, 2.4rem)', 
+                  fontWeight: 700, 
+                  color: 'var(--text-primary)', 
+                  lineHeight: 1.35, 
+                  letterSpacing: '-0.02em',
+                  padding: '1rem' 
+                }}>
                   {definitionFirst ? currentCard?.back : currentCard?.front}
                 </div>
-
-                <div style={{ position: 'absolute', bottom: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                  Click or press Space to flip
-                </div>
               </div>
+            )}
 
-              {/* Card Back Face */}
-              <div className="card-face card-back" style={{ background: '#fbfdfa', border: '1.5px solid var(--primary-accent)', borderRadius: '20px', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="tag" style={{ position: 'absolute', top: '1.25rem', left: '1.5rem', background: 'rgba(95, 143, 94, 0.18)', color: 'var(--primary-accent)', padding: '0.25rem 0.75rem', borderRadius: '14px', fontSize: '0.75rem', fontWeight: 600 }}>
-                  Answer / Definition
-                </span>
-
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', maxWidth: '88%', textAlign: 'center' }}>
-                  {currentCard?.keyword && (
-                    <div style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '0.45rem', 
-                      background: 'rgba(95, 143, 94, 0.12)', 
-                      border: '1px solid rgba(95, 143, 94, 0.3)', 
-                      borderRadius: '20px', 
-                      padding: '0.35rem 0.95rem', 
-                      fontSize: '0.85rem', 
-                      fontWeight: 700, 
-                      color: '#2e7d32' 
-                    }}>
-                      <span>Key Concept:</span>
-                      <span style={{ textDecoration: 'underline' }}>{currentCard.keyword}</span>
-                    </div>
-                  )}
-
-                  <div className="card-content" style={{ fontSize: 'clamp(1.2rem, 1.8vw, 1.55rem)', fontWeight: 500, color: 'var(--text-primary)', padding: '0.75rem', textAlign: 'center', maxWidth: '90%', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                    {definitionFirst ? currentCard?.front : currentCard?.back}
+            {/* Back View (Smooth Fade) */}
+            {isFlipped && (
+              <div key={`back-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', textAlign: 'center', maxWidth: '88%' }}>
+                {currentCard?.keyword && (
+                  <div style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.45rem', 
+                    background: 'rgba(95, 143, 94, 0.12)', 
+                    border: '1px solid rgba(95, 143, 94, 0.28)', 
+                    borderRadius: '999px', 
+                    padding: '0.4rem 1.1rem', 
+                    fontSize: '0.88rem', 
+                    fontWeight: 700, 
+                    color: '#2e7d32',
+                    boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)'
+                  }}>
+                    <span>Key Concept:</span>
+                    <span style={{ textDecoration: 'underline' }}>{currentCard.keyword}</span>
                   </div>
-                </div>
+                )}
 
-                <div style={{ position: 'absolute', bottom: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                  Click to flip back
+                <div style={{ 
+                  fontSize: 'clamp(1.2rem, 1.8vw, 1.55rem)', 
+                  fontWeight: 500, 
+                  color: 'var(--text-primary)', 
+                  lineHeight: 1.6, 
+                  padding: '0.5rem', 
+                  whiteSpace: 'pre-wrap' 
+                }}>
+                  {definitionFirst ? currentCard?.front : currentCard?.back}
                 </div>
               </div>
+            )}
 
+            {/* Bottom Flip Hint */}
+            <div style={{ position: 'absolute', bottom: '1.4rem', color: 'var(--text-secondary)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+              {isFlipped ? 'Click or press Space to view question' : 'Click or press Space to reveal answer'}
             </div>
           </div>
 
