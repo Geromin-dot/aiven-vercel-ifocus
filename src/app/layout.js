@@ -9,10 +9,11 @@ const inter = Inter({
 import BackgroundBlobs from "@/components/BackgroundBlobs";
 import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
+import GlobalTimer from "@/components/GlobalTimer";
 
 export const metadata = {
   title: "iFocus | Smart Flash Cards",
-  description: "iFocus AI Auto-Deck Generator — paste notes or upload PDFs to generate custom flashcard decks.",
+  description: "iFocus AI Auto-Deck Generator - paste notes or upload PDFs to generate custom flashcard decks.",
 };
 
 export default function RootLayout({ children }) {
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
               {children}
             </main>
           </div>
+          <GlobalTimer />
         </Providers>
       </body>
     </html>

@@ -69,9 +69,7 @@ export default function CommandCenterPage() {
   const [showBreakGate, setShowBreakGate] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
 
-  // Active Presence Check (AFK 5 minutes detector)
-  const [showActivePresenceModal, setShowActivePresenceModal] = useState(false);
-  const lastActivityTimeRef = useRef(Date.now());
+  // Active presence is managed globally by GlobalTimer across all pages
 
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
@@ -466,170 +464,146 @@ export default function CommandCenterPage() {
     }
   }, [isPlaying, currentTrack, volume]);
 
-  // Pomodoro Logic
+  // Pomodoro Logic & Global Timer Synchronization
   useEffect(() => {
-    let interval = null;
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft(time => time - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isActive) {
-      setIsActive(false);
-      try {
-        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-        audio.play().catch(e => console.log("Audio play prevented", e));
-      } catch (e) {}
-      
-      if (isFocus) {
-        setIsFocus(false);
-        const focusMins = timerPreset === 'Custom' 
-          ? Math.max(1, Math.round((customWorkTime.min * 60 + customWorkTime.sec) / 60))
-          : parseInt(timerPreset.split('/')[0]) || 25;
-
-        try {
-          const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-          history.push({
-            date: new Date().toISOString(),
-            duration: focusMins,
-            type: 'pomodoro'
-          });
-          if (history.length > 200) history.splice(0, history.length - 200);
-          localStorage.setItem('ifocus_session_history', JSON.stringify(history));
-
-          const today = new Date().toDateString();
-          const stats = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
-          const currentSessions = (stats.sessions || 0) + 1;
-          const currentMinutes = (stats.minutes || 0) + focusMins;
-          
-          const uniqueDates = new Set(history.map(s => new Date(s.date).toISOString().slice(0, 10)));
-          let streakCount = 0;
-          let checkDate = new Date();
-          while (true) {
-            const dateStr = checkDate.toISOString().slice(0, 10);
-            if (uniqueDates.has(dateStr)) {
-              streakCount++;
-              checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-              break;
-            }
-          }
-
-          localStorage.setItem('ifocus_focus_stats', JSON.stringify({
-            date: today,
-            sessions: currentSessions,
-            minutes: currentMinutes,
-            streak: Math.max(1, streakCount)
-          }));
-        } catch (e) {
-          console.warn("Could not record session stats:", e);
-        }
-
-        const breakTime = timerPreset === 'Custom' 
-          ? customBreakTime.min * 60 + customBreakTime.sec 
-          : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
-
-        // Check if an active deck is set for BreakGate
-        let breakGateDeck = null;
-        try {
-          const stored = localStorage.getItem('ifocus_active_breakgate_deck');
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed && parsed.cards && parsed.cards.length > 0) {
-              breakGateDeck = parsed;
-            }
-          }
-        } catch (e) {}
-
-        if (breakGateDeck) {
-          setActiveBreakGateDeck(breakGateDeck);
-          setShowBreakGate(true);
-          setTimeLeft(breakTime);
-          return;
-        }
-
-        setTimeLeft(breakTime);
-      } else {
-        setIsFocus(true);
-        const focusTime = timerPreset === 'Custom'
-          ? customWorkTime.min * 60 + customWorkTime.sec
-          : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
-        setTimeLeft(focusTime);
-        setSessionCount(c => c + 1);
-      }
-    }
-    return () => clearInterval(interval);
-  }, [isActive, timeLeft, isFocus, timerPreset, customWorkTime, customBreakTime]);
-
-  // Active Presence Detection & Chime Sound
-  const playPresenceChime = () => {
+    // 1. Load initial timer state from localStorage
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.8);
-    } catch(e) {}
-  };
+      const saved = localStorage.getItem('ifocus_timer_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.timeLeft !== undefined) {
+          if (parsed.isRunning && parsed.targetEndTime) {
+            const currentLeft = Math.max(0, Math.round((parsed.targetEndTime - Date.now()) / 1000));
+            setTimeLeft(currentLeft);
+            setIsActive(true);
+          } else {
+            setTimeLeft(parsed.timeLeft);
+            setIsActive(Boolean(parsed.isRunning));
+          }
+        }
+        if (parsed.isFocus !== undefined) setIsFocus(parsed.isFocus);
+        if (parsed.timerPreset) setTimerPreset(parsed.timerPreset);
+        if (parsed.sessionCount) setSessionCount(parsed.sessionCount);
+      }
+    } catch (e) {}
 
-  useEffect(() => {
-    if (!isActive || !isFocus) return;
-
-    const handleUserActivity = () => {
-      lastActivityTimeRef.current = Date.now();
+    // 2. Listen for timer ticks and state sync events from GlobalTimer
+    const handleTick = (e) => {
+      if (e?.detail) {
+        setTimeLeft(e.detail.timeLeft);
+        setIsActive(e.detail.isRunning);
+        setIsFocus(e.detail.isFocus);
+      }
     };
 
-    window.addEventListener('mousemove', handleUserActivity);
-    window.addEventListener('keydown', handleUserActivity);
-    window.addEventListener('click', handleUserActivity);
-    window.addEventListener('scroll', handleUserActivity);
-
-    // Check every 3 seconds if user has been AFK for 5 minutes (300,000 ms)
-    const afkChecker = setInterval(() => {
-      const idleTimeMs = Date.now() - lastActivityTimeRef.current;
-      if (idleTimeMs >= 5 * 60 * 1000) {
-        setIsActive(false); // Pause timer
-        setShowActivePresenceModal(true);
-        playPresenceChime();
-        lastActivityTimeRef.current = Date.now();
+    const handleSync = (e) => {
+      if (e?.detail) {
+        if (e.detail.timeLeft !== undefined) setTimeLeft(e.detail.timeLeft);
+        if (e.detail.isRunning !== undefined) setIsActive(e.detail.isRunning);
+        if (e.detail.isFocus !== undefined) setIsFocus(e.detail.isFocus);
+        if (e.detail.timerPreset) setTimerPreset(e.detail.timerPreset);
+        if (e.detail.sessionCount) setSessionCount(e.detail.sessionCount);
       }
-    }, 3000);
+    };
+
+    const handleBreakGate = (e) => {
+      if (e?.detail) {
+        setActiveBreakGateDeck(e.detail);
+        setShowBreakGate(true);
+      }
+    };
+
+    window.addEventListener('ifocus_timer_tick', handleTick);
+    window.addEventListener('ifocus_timer_sync', handleSync);
+    window.addEventListener('ifocus_breakgate_trigger', handleBreakGate);
 
     return () => {
-      window.removeEventListener('mousemove', handleUserActivity);
-      window.removeEventListener('keydown', handleUserActivity);
-      window.removeEventListener('click', handleUserActivity);
-      window.removeEventListener('scroll', handleUserActivity);
-      clearInterval(afkChecker);
+      window.removeEventListener('ifocus_timer_tick', handleTick);
+      window.removeEventListener('ifocus_timer_sync', handleSync);
+      window.removeEventListener('ifocus_breakgate_trigger', handleBreakGate);
     };
-  }, [isActive, isFocus]);
+  }, []);
 
   const handleBreakGateComplete = () => {
     setShowBreakGate(false);
-    setIsActive(true); // Automatically run break countdown
+    const breakTime = timerPreset === 'Custom' 
+      ? customBreakTime.min * 60 + customBreakTime.sec 
+      : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+    
+    setIsActive(true);
+    setIsFocus(false);
+    setTimeLeft(breakTime);
+
+    const nextState = {
+      isRunning: true,
+      isFocus: false,
+      timeLeft: breakTime,
+      totalTime: breakTime,
+      targetEndTime: Date.now() + (breakTime * 1000),
+      timerPreset,
+      sessionCount,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+      breakGatePending: false
+    };
+    try {
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+    } catch(e) {}
   };
 
   const handleBreakGateSkip = () => {
-    setShowBreakGate(false);
-    setIsActive(true); // Automatically run break countdown
+    handleBreakGateComplete();
   };
 
-  const toggleTimer = () => setIsActive(!isActive);
+  const toggleTimer = () => {
+    const nextIsActive = !isActive;
+    setIsActive(nextIsActive);
+    const total = getTotalTime();
+    const nextState = {
+      isRunning: nextIsActive,
+      isFocus,
+      timeLeft,
+      totalTime: total,
+      targetEndTime: nextIsActive ? Date.now() + (timeLeft * 1000) : null,
+      timerPreset,
+      sessionCount,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+      breakGatePending: false
+    };
+    try {
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+    } catch (e) {}
+  };
 
   const resetTimer = () => {
     setIsActive(false);
+    let newTime = 25 * 60;
     if (timerPreset === 'Custom') {
-      setTimeLeft(isFocus ? customWorkTime.min * 60 + customWorkTime.sec : customBreakTime.min * 60 + customBreakTime.sec);
+      newTime = isFocus ? (customWorkTime.min * 60 + customWorkTime.sec) : (customBreakTime.min * 60 + customBreakTime.sec);
     } else {
       const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
-      setTimeLeft(isFocus ? focusTime * 60 : 5 * 60);
+      newTime = isFocus ? focusTime * 60 : 5 * 60;
     }
+    setTimeLeft(newTime);
+    const nextState = {
+      isRunning: false,
+      isFocus,
+      timeLeft: newTime,
+      totalTime: newTime,
+      targetEndTime: null,
+      timerPreset,
+      sessionCount,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+      breakGatePending: false
+    };
+    try {
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+    } catch (e) {}
   };
 
   const setPreset = (preset) => {
@@ -639,8 +613,25 @@ export default function CommandCenterPage() {
       setTimerPreset(preset);
       setIsActive(false);
       setIsFocus(true);
-      const focusTime = parseInt(preset.split('/')[0]);
-      setTimeLeft(focusTime * 60);
+      const focusTime = parseInt(preset.split('/')[0]) || 25;
+      const newTime = focusTime * 60;
+      setTimeLeft(newTime);
+      const nextState = {
+        isRunning: false,
+        isFocus: true,
+        timeLeft: newTime,
+        totalTime: newTime,
+        targetEndTime: null,
+        timerPreset: preset,
+        sessionCount,
+        presencePaused: false,
+        lastPresenceElapsed: 0,
+        breakGatePending: false
+      };
+      try {
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+      } catch (e) {}
     }
   };
 
@@ -649,8 +640,25 @@ export default function CommandCenterPage() {
     setTimerPreset('Custom');
     setIsActive(false);
     setIsFocus(true);
-    setTimeLeft(customWorkTime.min * 60 + customWorkTime.sec);
+    const newTime = (customWorkTime.min * 60 + customWorkTime.sec) || 25 * 60;
+    setTimeLeft(newTime);
     setSessionCount(1);
+    const nextState = {
+      isRunning: false,
+      isFocus: true,
+      timeLeft: newTime,
+      totalTime: newTime,
+      targetEndTime: null,
+      timerPreset: 'Custom',
+      sessionCount: 1,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+      breakGatePending: false
+    };
+    try {
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+    } catch (e) {}
   };
 
   const formatTime = (seconds) => {
@@ -659,7 +667,7 @@ export default function CommandCenterPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Task Add Apple-Style Sound Effect
+    // Task Add Apple-Style Sound Effect
   const playTaskAddSound = () => {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1515,6 +1523,22 @@ export default function CommandCenterPage() {
                 ? customWorkTime.min * 60 + customWorkTime.sec
                 : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
               setTimeLeft(focusTime);
+              const nextState = {
+                isRunning: false,
+                isFocus: true,
+                timeLeft: focusTime,
+                totalTime: focusTime,
+                targetEndTime: null,
+                timerPreset,
+                sessionCount,
+                presencePaused: false,
+                lastPresenceElapsed: 0,
+                breakGatePending: false
+              };
+              try {
+                localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+                window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+              } catch(e) {}
             }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -1529,6 +1553,22 @@ export default function CommandCenterPage() {
                 ? customBreakTime.min * 60 + customBreakTime.sec
                 : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
               setTimeLeft(breakTime);
+              const nextState = {
+                isRunning: false,
+                isFocus: false,
+                timeLeft: breakTime,
+                totalTime: breakTime,
+                targetEndTime: null,
+                timerPreset,
+                sessionCount,
+                presencePaused: false,
+                lastPresenceElapsed: 0,
+                breakGatePending: false
+              };
+              try {
+                localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
+                window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+              } catch(e) {}
             }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
@@ -2088,126 +2128,6 @@ export default function CommandCenterPage() {
           </div>
         </div>
       )}
-      {/* Active Presence Check Modal (AFK 5 Minutes) */}
-      {showActivePresenceModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 23, 42, 0.68)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1.25rem'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '20px',
-            boxShadow: '0 28px 56px -12px rgba(0, 0, 0, 0.3)',
-            border: '1px solid rgba(0, 0, 0, 0.08)',
-            width: '100%',
-            maxWidth: '460px',
-            padding: '2.2rem 2rem',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            gap: '1.25rem',
-            animation: 'flashcardFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-          }}>
-            {/* Radar / Clock Icon */}
-            <div style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              background: 'rgba(217, 119, 6, 0.12)',
-              color: '#d97706',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-
-            <div>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                background: 'rgba(217, 119, 6, 0.1)',
-                color: '#d97706',
-                padding: '0.25rem 0.75rem',
-                borderRadius: '999px',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                marginBottom: '0.65rem'
-              }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706' }} />
-                Active Presence Check
-              </div>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.45rem 0' }}>
-                Are you still there?
-              </h3>
-              <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
-                The timer won't run if you aren't there! We paused your Pomodoro session after 5 minutes of inactivity so your focus stats stay accurate.
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '0.75rem', width: '100%', marginTop: '0.25rem' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActivePresenceModal(false);
-                  lastActivityTimeRef.current = Date.now();
-                  setIsActive(true);
-                }}
-                style={{
-                  flex: 1,
-                  background: 'var(--primary-accent)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '0.8rem',
-                  fontSize: '0.95rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(78, 130, 83, 0.3)'
-                }}
-              >
-                Continue Session
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowActivePresenceModal(false);
-                }}
-                className="btn-secondary"
-                style={{
-                  flex: 1,
-                  padding: '0.8rem',
-                  fontSize: '0.92rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  borderColor: 'var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  textAlign: 'center'
-                }}
-              >
-                Stay Paused
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <BreakGateModal 
         isOpen={showBreakGate} 
         deck={activeBreakGateDeck} 

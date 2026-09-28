@@ -65,6 +65,8 @@ export default function SettingsPage() {
   const [autoStartBreaks, setAutoStartBreaks] = useState(true);
   const [autoStartFocus, setAutoStartFocus] = useState(false);
   const [timerChimeSound, setTimerChimeSound] = useState(true);
+  const [activePresenceEnabled, setActivePresenceEnabled] = useState(true);
+  const [activePresenceInterval, setActivePresenceInterval] = useState(5);
 
   // 2. Notifications & Sound Preferences State
   const [defaultAmbientTrack, setDefaultAmbientTrack] = useState('Chill Lofi');
@@ -181,6 +183,8 @@ export default function SettingsPage() {
         if (parsed.autoStartBreaks !== undefined) setAutoStartBreaks(parsed.autoStartBreaks);
         if (parsed.autoStartFocus !== undefined) setAutoStartFocus(parsed.autoStartFocus);
         if (parsed.timerChimeSound !== undefined) setTimerChimeSound(parsed.timerChimeSound);
+        if (parsed.activePresenceEnabled !== undefined) setActivePresenceEnabled(parsed.activePresenceEnabled);
+        if (parsed.activePresenceInterval) setActivePresenceInterval(parsed.activePresenceInterval);
       }
 
       const savedSound = localStorage.getItem('ifocus_sound_preferences');
@@ -252,7 +256,9 @@ export default function SettingsPage() {
       longBreakDuration,
       autoStartBreaks,
       autoStartFocus,
-      timerChimeSound
+      timerChimeSound,
+      activePresenceEnabled,
+      activePresenceInterval
     };
     try {
       localStorage.setItem('ifocus_timer_preferences', JSON.stringify(prefs));
@@ -653,6 +659,60 @@ export default function SettingsPage() {
                   <span className="toggle-slider"></span>
                 </label>
               </div>
+
+              {/* Active Presence Check Setting */}
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Active Presence Check</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Periodically pauses the timer to verify you are still focused at your desk.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={activePresenceEnabled} 
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setActivePresenceEnabled(val);
+                      try {
+                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                        const parsed = JSON.parse(raw);
+                        parsed.activePresenceEnabled = val;
+                        parsed.activePresenceInterval = activePresenceInterval;
+                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                      } catch(err) {}
+                    }} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              {activePresenceEnabled && (
+                <div style={{ padding: '0.2rem 0' }}>
+                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Active Presence Check Interval</label>
+                  <div className="option-chips-container" style={{ gap: '0.5rem', marginTop: '0.3rem' }}>
+                    {[3, 5, 10, 15].map((mins) => (
+                      <button 
+                        key={mins} 
+                        type="button" 
+                        className={`option-chip ${activePresenceInterval === mins ? 'selected' : ''}`}
+                        onClick={() => {
+                          setActivePresenceInterval(mins);
+                          try {
+                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                            const parsed = JSON.parse(raw);
+                            parsed.activePresenceEnabled = activePresenceEnabled;
+                            parsed.activePresenceInterval = mins;
+                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                          } catch(err) {}
+                        }}
+                        style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
+                      >
+                        Every {mins} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
                 <button 
