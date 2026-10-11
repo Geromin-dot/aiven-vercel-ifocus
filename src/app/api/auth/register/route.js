@@ -13,6 +13,14 @@ export async function POST(req) {
       );
     }
 
+    // Reserved administrative usernames
+    if (username.toLowerCase().includes("admin")) {
+      return NextResponse.json(
+        { message: "This username is reserved for system administrators" },
+        { status: 400 }
+      );
+    }
+
     // Check if user or username already exists
     const existingEmail = await prisma.user.findUnique({
       where: { email },
@@ -39,17 +47,18 @@ export async function POST(req) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with default STUDENT role
     const newUser = await prisma.user.create({
       data: {
         name: name || username,
         username,
         email,
         password: hashedPassword,
+        role: "STUDENT",
       },
     });
 
-    console.log(`[AUTH EVENT] New user registered: ${username} (${email})`);
+    console.log(`[AUTH EVENT] New user registered: ${username} (${email}) as STUDENT`);
 
     // Remove password from response for security
     const { password: _, ...userWithoutPassword } = newUser;

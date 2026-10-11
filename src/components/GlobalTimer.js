@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 
 // Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - zero external MP3 dependencies)
@@ -69,6 +70,8 @@ const playCompletionAlarm = () => {
 export default function GlobalTimer() {
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.username === "adminUAnursing";
 
   // Master Timer State
   const [timerState, setTimerState] = useState({
@@ -143,6 +146,7 @@ export default function GlobalTimer() {
 
   // Global Inactivity (AFK) Listeners
   useEffect(() => {
+    if (isAdmin || pathname.startsWith("/admin")) return;
     const handleUserActivity = () => {
       lastActivityRef.current = Date.now();
     };
@@ -164,6 +168,7 @@ export default function GlobalTimer() {
 
   // Initialize and listen to sync and test events
   useEffect(() => {
+    if (isAdmin || pathname.startsWith("/admin")) return;
     const handleSync = (e) => {
       if (e?.detail) {
         setTimerState(e.detail);
@@ -220,6 +225,7 @@ export default function GlobalTimer() {
 
   // Main Global Timer Loop (Runs continuously across all routes in background)
   useEffect(() => {
+    if (isAdmin || pathname.startsWith("/admin")) return;
     const interval = setInterval(() => {
       const current = readStorageState() || stateRef.current;
       if (!current.isRunning || !current.targetEndTime) {
@@ -521,6 +527,10 @@ export default function GlobalTimer() {
   const isDashboard = pathname === "/dashboard";
   const showFloatingMiniTimer =
     !isDashboard && (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
+
+  if (pathname === "/" || pathname.startsWith("/admin") || isAdmin) {
+    return null;
+  }
 
   return (
     <>

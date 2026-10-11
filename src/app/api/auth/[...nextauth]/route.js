@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { prisma } from "../../../../lib/prisma"; // Adjust relative path based on location
+import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const authOptions = {
@@ -15,7 +15,7 @@ export const authOptions = {
     CredentialsProvider({
       name: "Email and Password",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Email or Username", type: "text" },
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
@@ -27,6 +27,7 @@ export const authOptions = {
           where: {
             OR: [
               { email: credentials.email },
+              { username: credentials.email },
               { name: credentials.email }
             ]
           }
@@ -45,7 +46,7 @@ export const authOptions = {
           throw new Error("Invalid credentials");
         }
 
-        console.log(`[AUTH EVENT] User logged in successfully: ${user.username || user.name} (${user.email})`);
+        console.log(`[AUTH EVENT] User logged in successfully: ${user.username || user.name} (${user.email}) - Role: ${user.role || 'STUDENT'}`);
 
         return user;
       }
@@ -62,12 +63,14 @@ export const authOptions = {
         token.username = user.username;
         token.picture = user.image;
         token.email = user.email;
+        token.role = user.role || "STUDENT";
       }
       if (trigger === "update" && session?.user) {
         if (session.user.name !== undefined) token.name = session.user.name;
         if (session.user.username !== undefined) token.username = session.user.username;
         if (session.user.image !== undefined) token.picture = session.user.image;
         if (session.user.email !== undefined) token.email = session.user.email;
+        if (session.user.role !== undefined) token.role = session.user.role;
       }
       return token;
     },
@@ -78,6 +81,7 @@ export const authOptions = {
         if (token.username) session.user.username = token.username;
         if (token.picture) session.user.image = token.picture;
         if (token.email) session.user.email = token.email;
+        session.user.role = token.role || "STUDENT";
       }
       return session;
     },

@@ -21,9 +21,13 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/dashboard");
+      if (session?.user?.role === "ADMIN" || session?.user?.username === "adminUAnursing") {
+        router.replace("/admin");
+      } else {
+        router.replace("/dashboard");
+      }
     }
-  }, [status, router]);
+  }, [status, session, router]);
 
   if (status === "loading") {
     return (
@@ -41,7 +45,11 @@ export default function LandingPage() {
     try {
       const res = await signIn("credentials", { redirect: false, email, password });
       if (res?.error) throw new Error(res.error === "CredentialsSignin" ? "Invalid email or password" : res.error);
-      router.push("/dashboard");
+      if (email.toLowerCase().includes("adminuanursing")) {
+        router.replace("/admin");
+      } else {
+        router.replace("/dashboard");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -101,7 +109,7 @@ export default function LandingPage() {
               <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="2" />
               <circle cx="12" cy="12" r="4" fill="white" />
               <line x1="12" y1="2" x2="12" y2="6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-              <line x1="12" y1="18" x2="12" y2="22" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               <line x1="2" y1="12" x2="6" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round" />
               <line x1="18" y1="12" x2="22" y2="12" stroke="white" strokeWidth="2" strokeLinecap="round" />
             </svg>
@@ -138,7 +146,7 @@ export default function LandingPage() {
           100% { transform: translate(0, 0) rotate(180deg) scale(0.8); border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%; }
         }
         .animated-bg-container {
-          background-color: #050806; /* Even deeper void color */
+          background-color: #050806;
           position: relative;
           overflow: hidden;
         }
@@ -164,7 +172,7 @@ export default function LandingPage() {
         <div style={{ 
           width: '100%', 
           maxWidth: '420px', 
-          background: 'rgba(20, 24, 20, 0.65)', /* Dark frosted glass */
+          background: 'rgba(20, 24, 20, 0.65)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
           padding: '2.5rem 2rem', 
