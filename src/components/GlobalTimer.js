@@ -561,8 +561,14 @@ export default function GlobalTimer() {
           try {
             const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
             if (rawDeck) {
-              setActiveBreakGateDeck(JSON.parse(rawDeck));
-              setShowBreakGateModal(true);
+              const parsed = JSON.parse(rawDeck);
+              if (session?.user?.id && parsed?.userId && parsed.userId !== session.user.id) {
+                localStorage.removeItem("ifocus_active_breakgate_deck");
+                setActiveBreakGateDeck(null);
+              } else {
+                setActiveBreakGateDeck(parsed);
+                setShowBreakGateModal(true);
+              }
             }
           } catch(err) {}
         }
@@ -713,7 +719,20 @@ export default function GlobalTimer() {
       commitStorageState(nextFocusState, true);
     };
 
+    const handleBreakGateDeckChanged = (e) => {
+      if (e?.detail?.active && e?.detail?.deck) {
+        if (session?.user?.id && e.detail.deck.userId && e.detail.deck.userId !== session.user.id) {
+          setActiveBreakGateDeck(null);
+        } else {
+          setActiveBreakGateDeck(e.detail.deck);
+        }
+      } else {
+        setActiveBreakGateDeck(null);
+      }
+    };
+
     window.addEventListener("ifocus_timer_sync", handleSync);
+    window.addEventListener("ifocus_breakgate_deck_changed", handleBreakGateDeckChanged);
     window.addEventListener("ifocus_skip_break", handleSkipBreakEvent);
     window.addEventListener("ifocus_test_presence", handleTestPresence);
     window.addEventListener("ifocus_test_reflection_prompt", handleTestReflection);
@@ -724,6 +743,7 @@ export default function GlobalTimer() {
 
     return () => {
       window.removeEventListener("ifocus_timer_sync", handleSync);
+      window.removeEventListener("ifocus_breakgate_deck_changed", handleBreakGateDeckChanged);
       window.removeEventListener("ifocus_skip_break", handleSkipBreakEvent);
       window.removeEventListener("ifocus_test_presence", handleTestPresence);
       window.removeEventListener("ifocus_test_reflection_prompt", handleTestReflection);
@@ -812,7 +832,9 @@ export default function GlobalTimer() {
           const stored = localStorage.getItem("ifocus_active_breakgate_deck");
           if (stored) {
             const parsed = JSON.parse(stored);
-            if (parsed && parsed.cards && parsed.cards.length > 0) {
+            if (session?.user?.id && parsed?.userId && parsed.userId !== session.user.id) {
+              localStorage.removeItem("ifocus_active_breakgate_deck");
+            } else if (parsed && parsed.cards && parsed.cards.length > 0) {
               breakGateDeck = parsed;
             }
           }

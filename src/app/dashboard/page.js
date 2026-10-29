@@ -667,6 +667,12 @@ export default function CommandCenterPage() {
       const bgDeckRaw = localStorage.getItem('ifocus_active_breakgate_deck');
       if (bgDeckRaw) {
         const parsed = JSON.parse(bgDeckRaw);
+        // Security check: if deck has userId and doesn't match current logged in user, purge it!
+        if (session?.user?.id && parsed?.userId && parsed.userId !== session.user.id) {
+          localStorage.removeItem('ifocus_active_breakgate_deck');
+          setActiveBreakGateDeck(null);
+          return;
+        }
         if (parsed && (parsed.id || parsed.title)) {
           setActiveBreakGateDeck(parsed);
           return;
@@ -677,6 +683,32 @@ export default function CommandCenterPage() {
       setActiveBreakGateDeck(null);
     }
   };
+
+  // Validate active BreakGate deck against logged-in user's database decks
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch('/api/decks')
+        .then(res => res.ok ? res.json() : [])
+        .then(userDecks => {
+          if (Array.isArray(userDecks)) {
+            const raw = localStorage.getItem('ifocus_active_breakgate_deck');
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw);
+                const belongsToUser = userDecks.some(d => d.id === parsed.id);
+                if (!belongsToUser) {
+                  // Deck was created by another student or deleted! Purge from this account!
+                  localStorage.removeItem('ifocus_active_breakgate_deck');
+                  setActiveBreakGateDeck(null);
+                  window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+                }
+              } catch(e) {}
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session?.user?.id]);
 
   // Handle prefilled reflection from Post-Session modal
   useEffect(() => {

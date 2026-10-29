@@ -129,6 +129,23 @@ function LoginContent() {
         }
         throw new Error(res.error === "CredentialsSignin" ? "Invalid email or password" : res.error);
       }
+      try {
+        const keys = [
+          'ifocus_active_breakgate_deck',
+          'ifocus_current_user_id',
+          'ifocus_session_history',
+          'ifocus_focus_stats',
+          'ifocus_latest_telemetry',
+          'ifocus_ai_adjusted_active',
+          'ifocus_ai_adjusted_details',
+          'ifocus_applied_toast',
+          'ifocus_timer_state',
+          'ifocus_custom_timer',
+          'ifocus_prefill_reflection',
+        ];
+        keys.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {}
+
       if (trimmedIdentifier.toLowerCase().includes("adminuanursing")) {
         router.replace("/admin");
       } else {

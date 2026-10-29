@@ -298,7 +298,23 @@ export default function FlashcardsPage() {
       const res = await fetch('/api/decks');
       if (res.ok) {
         const data = await res.json();
-        setDecks(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setDecks(list);
+
+        // Security check: verify that active BreakGate deck belongs to THIS student's own decks
+        try {
+          const stored = localStorage.getItem('ifocus_active_breakgate_deck');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            const belongsToUser = list.some(d => d.id === parsed.id);
+            if (!belongsToUser) {
+              // Stale deck from another account! Purge!
+              localStorage.removeItem('ifocus_active_breakgate_deck');
+              setActiveBreakGateId(null);
+              window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+            }
+          }
+        } catch(e) {}
       }
     } catch (err) {
       console.error("Failed to load decks:", err);

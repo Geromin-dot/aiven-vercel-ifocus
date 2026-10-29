@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 
 // Crystal-clear Web Audio Synthesis for BreakGate Unlock Chime
 const playBreakGateUnlockChime = () => {
@@ -54,6 +55,7 @@ const playBreakGateUnlockChime = () => {
  * Zero emojis - 100% clean modern aesthetic.
  */
 export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComplete, onSkip }) {
+  const { data: session } = useSession();
   const [deck, setDeck] = useState(null);
   const [challengeCards, setChallengeCards] = useState([]);
   const [optionsPerCard, setOptionsPerCard] = useState([]);
@@ -111,6 +113,15 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       if (!targetDeck) {
         const stored = localStorage.getItem('ifocus_active_breakgate_deck');
         if (stored) targetDeck = JSON.parse(stored);
+      }
+
+      // Security check: if deck belongs to another student, purge it!
+      if (targetDeck && targetDeck.userId && session?.user?.id && targetDeck.userId !== session.user.id) {
+        targetDeck = null;
+        try {
+          localStorage.removeItem('ifocus_active_breakgate_deck');
+          window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+        } catch(e) {}
       }
 
       let allCards = (targetDeck && targetDeck.cards && targetDeck.cards.length > 0)

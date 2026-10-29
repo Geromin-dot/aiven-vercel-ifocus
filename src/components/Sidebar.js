@@ -32,11 +32,62 @@ export default function Sidebar() {
   const userStatus = session?.user?.status;
   const userStatusReason = session?.user?.statusReason;
 
+  const handleSignOutAndClear = (e) => {
+    if (e && !handleNavClick(e, 'SIGNOUT')) return;
+    try {
+      const keys = [
+        'ifocus_active_breakgate_deck',
+        'ifocus_current_user_id',
+        'ifocus_session_history',
+        'ifocus_focus_stats',
+        'ifocus_latest_telemetry',
+        'ifocus_ai_adjusted_active',
+        'ifocus_ai_adjusted_details',
+        'ifocus_applied_toast',
+        'ifocus_timer_state',
+        'ifocus_custom_timer',
+        'ifocus_prefill_reflection',
+      ];
+      keys.forEach((k) => localStorage.removeItem(k));
+      window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+    } catch (err) {}
+    signOut({ callbackUrl: '/login' });
+  };
+
+  // Detect Account Switching on same browser and purge previous student's cache
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user?.id) {
+      try {
+        const storedUserId = localStorage.getItem('ifocus_current_user_id');
+        if (storedUserId && storedUserId !== session.user.id) {
+          const keys = [
+            'ifocus_active_breakgate_deck',
+            'ifocus_session_history',
+            'ifocus_focus_stats',
+            'ifocus_latest_telemetry',
+            'ifocus_ai_adjusted_active',
+            'ifocus_ai_adjusted_details',
+            'ifocus_applied_toast',
+            'ifocus_timer_state',
+            'ifocus_custom_timer',
+            'ifocus_prefill_reflection',
+          ];
+          keys.forEach((k) => localStorage.removeItem(k));
+          window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+        }
+        localStorage.setItem('ifocus_current_user_id', session.user.id);
+      } catch (err) {}
+    }
+  }, [status, session?.user?.id]);
+
   // Strict Role Redirection & Dean Account On-Hold Enforcement
   useEffect(() => {
     if (status === 'authenticated') {
       if (!isAdmin && (userStatus === 'ON_HOLD' || userStatus === 'BANNED')) {
         const reason = userStatusReason || 'Academic Integrity Review - In-person clearance with College Dean required';
+        try {
+          localStorage.removeItem('ifocus_active_breakgate_deck');
+        } catch (e) {}
         signOut({ redirect: false }).then(() => {
           router.replace(`/login?error=ACCOUNT_ON_HOLD&reason=${encodeURIComponent(reason)}`);
         });
@@ -66,7 +117,7 @@ export default function Sidebar() {
             </span>
           </div>
           <button
-            onClick={(e) => { if (!handleNavClick(e, 'SIGNOUT')) return; signOut({ callbackUrl: '/login' }); }}
+            onClick={handleSignOutAndClear}
             style={{
               background: 'none',
               border: 'none',
@@ -124,7 +175,7 @@ export default function Sidebar() {
                 </div>
               </div>
               <button 
-                onClick={() => signOut({ callbackUrl: '/login' })}
+                onClick={handleSignOutAndClear}
                 className="sidebar-signout-btn"
                 title="Sign Out of Admin Console"
                 aria-label="Sign Out"
@@ -149,7 +200,7 @@ export default function Sidebar() {
             <span>Overview</span>
           </Link>
           <button 
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={handleSignOutAndClear}
             className="mobile-tab-item"
             style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer' }}
           >
@@ -188,7 +239,7 @@ export default function Sidebar() {
           {session && (
             <button 
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={handleSignOutAndClear}
               className="mobile-header-signout-btn"
               title="Sign Out"
               aria-label="Sign Out"
@@ -371,7 +422,7 @@ export default function Sidebar() {
                 </div>
               </div>
               <button
-                onClick={(e) => { if (!handleNavClick(e, 'SIGNOUT')) return; signOut({ callbackUrl: '/login' }); }}
+                onClick={handleSignOutAndClear}
                 className="sidebar-signout-btn"
                 title="Sign Out of iFocus"
                 aria-label="Sign Out"
