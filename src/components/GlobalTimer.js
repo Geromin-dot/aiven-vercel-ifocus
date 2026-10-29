@@ -4,6 +4,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
+import FeatureGuideModal from "./FeatureGuideModal";
+
+// Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
+const getUserAudioVolumeFactor = () => {
+  try {
+    const soundPrefs = JSON.parse(localStorage.getItem('ifocus_sound_preferences') || '{}');
+    if (soundPrefs.ambientVolume !== undefined) {
+      return Math.max(0, Math.min(100, Number(soundPrefs.ambientVolume))) / 100;
+    }
+  } catch (e) {}
+  return 0.7; // default 70%
+};
 
 // Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - zero external MP3 dependencies)
 const playPresenceChime = () => {
@@ -15,11 +27,13 @@ const playPresenceChime = () => {
     const now = ctx.currentTime;
 
     // Harmonic double chime (D5 -> A5)
+    const volFactor = getUserAudioVolumeFactor();
+    if (volFactor <= 0) return;
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = "sine";
     osc1.frequency.setValueAtTime(587.33, now);
-    gain1.gain.setValueAtTime(0.22, now);
+    gain1.gain.setValueAtTime(0.22 * volFactor, now);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
@@ -50,12 +64,14 @@ const playCompletionAlarm = () => {
     if (ctx.state === "suspended") ctx.resume();
     const now = ctx.currentTime;
 
+    const volFactor = getUserAudioVolumeFactor();
+    if (volFactor <= 0) return;
     [0, 0.18, 0.36].forEach((delay, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
       osc.frequency.setValueAtTime(783.99 + idx * 80, now + delay);
-      gain.gain.setValueAtTime(0.2, now + delay);
+      gain.gain.setValueAtTime(0.2 * volFactor, now + delay);
       gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.3);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -64,6 +80,68 @@ const playCompletionAlarm = () => {
     });
   } catch (e) {
     console.warn("Completion alarm audio prevented:", e);
+  }
+};
+
+
+// Web Audio API Synthesis for High-End Navigation Slide Chime
+const playNavigationSlideSound = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+
+    if (!window.__ifocusAudioCtx || window.__ifocusAudioCtx.state === "closed") {
+      window.__ifocusAudioCtx = new AudioCtx();
+    }
+    const ctx = window.__ifocusAudioCtx;
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    const now = ctx.currentTime;
+
+    // 1. Subtle high-speed whoosh / air sweep
+    const sweepOsc = ctx.createOscillator();
+    const sweepGain = ctx.createGain();
+    sweepOsc.type = "sine";
+    sweepOsc.frequency.setValueAtTime(380, now);
+    sweepOsc.frequency.exponentialRampToValueAtTime(980, now + 0.12);
+    sweepGain.gain.setValueAtTime(0.0001, now);
+    sweepGain.gain.linearRampToValueAtTime(0.04, now + 0.03);
+    sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    sweepOsc.connect(sweepGain);
+    sweepGain.connect(ctx.destination);
+    sweepOsc.start(now);
+    sweepOsc.stop(now + 0.18);
+
+    // 2. Crystal clear high bell chime (D6 / A6 harmonic)
+    const bellOsc = ctx.createOscillator();
+    const bellGain = ctx.createGain();
+    bellOsc.type = "sine";
+    bellOsc.frequency.setValueAtTime(1174.66, now + 0.05); // D6
+    bellOsc.frequency.exponentialRampToValueAtTime(1760, now + 0.22); // A6
+    bellGain.gain.setValueAtTime(0.0001, now + 0.05);
+    bellGain.gain.linearRampToValueAtTime(0.065, now + 0.08);
+    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+    bellOsc.connect(bellGain);
+    bellGain.connect(ctx.destination);
+    bellOsc.start(now + 0.05);
+    bellOsc.stop(now + 0.38);
+
+    // 3. Warm pleasant undertone (D5)
+    const warmOsc = ctx.createOscillator();
+    const warmGain = ctx.createGain();
+    warmOsc.type = "triangle";
+    warmOsc.frequency.setValueAtTime(587.33, now + 0.05); // D5
+    warmGain.gain.setValueAtTime(0.0001, now + 0.05);
+    warmGain.gain.linearRampToValueAtTime(0.035, now + 0.08);
+    warmGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.30);
+    warmOsc.connect(warmGain);
+    warmGain.connect(ctx.destination);
+    warmOsc.start(now + 0.05);
+    warmOsc.stop(now + 0.32);
+  } catch (e) {
+    console.warn("Navigation slide sound error:", e);
   }
 };
 
@@ -88,8 +166,278 @@ export default function GlobalTimer() {
   });
 
   const [showPresenceModal, setShowPresenceModal] = useState(false);
+  const [showReflectionModal, setShowReflectionModal] = useState(false);
+  const [showCycleCompleteModal, setShowCycleCompleteModal] = useState(false);
+  const [completedCycleDetails, setCompletedCycleDetails] = useState({
+    sessionsCompleted: 1,
+    wasCustom: false,
+    timerPreset: '25/5'
+  });
+  const [isTestReflectionModal, setIsTestReflectionModal] = useState(false);
+  const [isTestPresenceModal, setIsTestPresenceModal] = useState(false);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [guideTopic, setGuideTopic] = useState("pomodoro");
+
+  // Global Music & Soundscapes State (Synced with Dashboard)
+  const [musicState, setMusicState] = useState({ isPlaying: false, currentTrack: 'Chill Lofi', volume: 70 });
+  const globalAudioRef = useRef(null);
+
+  // Navigation Slide-In Animation & Audio State
+  const [isNavSliding, setIsNavSliding] = useState(false);
+  const prevPathRef = useRef(pathname);
+  const isInitialMount = useRef(true);
+
+  // Track Source Map - Full Curated Soundscapes Library
+  const getTrackSrc = (name) => {
+    switch (name) {
+      case 'Chill Lofi':
+        return '/music/Lofi Chill.mp3';
+      case 'Study Music':
+        return '/music/Study Music.mp3';
+      case 'Rain Ambient':
+        return '/music/rain.mp3';
+      case 'Ocean Waves':
+        return '/music/ocean.wav';
+      case 'Binaural Alpha (432Hz)':
+        return '/music/binaural_alpha.wav';
+      case 'Warm Campfire':
+        return '/music/campfire.wav';
+      case 'Pink Noise':
+        return '/music/pink_noise.wav';
+      case 'Cosmic Deep Space':
+        return '/music/cosmic_drone.wav';
+      default:
+        return '/music/Lofi Chill.mp3';
+    }
+  };
+
+  // Sync Ambient Music across all pages
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ifocus_music_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.isPlaying === 'boolean') {
+          setMusicState(parsed);
+        }
+      }
+    } catch (e) {}
+
+    const handleMusicSync = (e) => {
+      if (e?.detail) {
+        const detail = e.detail;
+        setMusicState((prev) => ({ ...prev, ...detail }));
+        if (globalAudioRef.current) {
+          if (detail.volume !== undefined) {
+            globalAudioRef.current.volume = Math.max(0, Math.min(1, detail.volume / 100));
+          }
+          if (typeof detail.isPlaying === 'boolean') {
+            if (detail.isPlaying && detail.currentTrack !== 'None') {
+              const targetSrc = getTrackSrc(detail.currentTrack || musicState.currentTrack || 'Chill Lofi');
+              if (!globalAudioRef.current.src.endsWith(targetSrc)) {
+                globalAudioRef.current.src = targetSrc;
+                globalAudioRef.current.load();
+              }
+              globalAudioRef.current.play().catch((err) => console.warn("Global audio play prevented:", err));
+            } else {
+              globalAudioRef.current.pause();
+            }
+          }
+        }
+      }
+    };
+    window.addEventListener('ifocus_music_sync', handleMusicSync);
+
+    const handleGuideOpen = (e) => {
+      setGuideTopic(e?.detail?.topic || 'pomodoro');
+      setGuideModalOpen(true);
+    };
+    window.addEventListener('ifocus_open_guide', handleGuideOpen);
+
+    return () => {
+      window.removeEventListener('ifocus_music_sync', handleMusicSync);
+      window.removeEventListener('ifocus_open_guide', handleGuideOpen);
+    };
+  }, []);
+
+  // Global Audio Playback Controller
+  useEffect(() => {
+    if (globalAudioRef.current) {
+      const vol = Math.max(0, Math.min(1, (musicState.volume !== undefined ? musicState.volume : 70) / 100));
+      globalAudioRef.current.volume = vol;
+      if (musicState.isPlaying && musicState.currentTrack !== 'None' && vol > 0) {
+        const targetSrc = getTrackSrc(musicState.currentTrack || 'Chill Lofi');
+        if (!globalAudioRef.current.src.endsWith(targetSrc)) {
+          globalAudioRef.current.src = targetSrc;
+          globalAudioRef.current.load();
+        }
+        globalAudioRef.current.play().catch((e) => console.warn("Global audio play prevented:", e));
+      } else {
+        globalAudioRef.current.pause();
+      }
+    }
+  }, [musicState.isPlaying, musicState.currentTrack, musicState.volume]);
+
+  // Navigation Route Change Trigger: Slide In from Right + Elegant Chime
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      prevPathRef.current = pathname;
+      return;
+    }
+
+    if (prevPathRef.current !== pathname) {
+      prevPathRef.current = pathname;
+
+      const isTimerActive = timerState.isRunning || timerState.presencePaused || timerState.breakGatePending;
+      if (isTimerActive && pathname !== '/' && !pathname.startsWith('/admin')) {
+        setIsNavSliding(true);
+        playNavigationSlideSound();
+        const t = setTimeout(() => {
+          setIsNavSliding(false);
+        }, 550);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [pathname, timerState.isRunning, timerState.presencePaused, timerState.breakGatePending]);
+
+  // Draggable Floating Mini-Timer State & Drag Gestures
+  const [miniTimerPos, setMiniTimerPos] = useState({ x: null, y: null });
+  const [isDraggingMiniTimer, setIsDraggingMiniTimer] = useState(false);
+  const miniTimerRef = useRef(null);
+  const dragInfoRef = useRef({ isDragging: false, startX: 0, startY: 0, initialLeft: 0, initialTop: 0, moved: false });
+
+  // Load saved mini-timer position from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ifocus_mini_timer_pos");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+          const maxX = Math.max(10, (typeof window !== "undefined" ? window.innerWidth : 1200) - 240);
+          const maxY = Math.max(10, (typeof window !== "undefined" ? window.innerHeight : 800) - 70);
+          setMiniTimerPos({
+            x: Math.min(Math.max(12, parsed.x), maxX),
+            y: Math.min(Math.max(12, parsed.y), maxY),
+          });
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleMiniTimerMouseDown = (e) => {
+    if (e.button !== 0) return;
+    const el = miniTimerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    dragInfoRef.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialLeft: rect.left,
+      initialTop: rect.top,
+      moved: false,
+    };
+    setIsDraggingMiniTimer(true);
+
+    const onMouseMove = (moveEvent) => {
+      if (!dragInfoRef.current.isDragging) return;
+      const dx = moveEvent.clientX - dragInfoRef.current.startX;
+      const dy = moveEvent.clientY - dragInfoRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dragInfoRef.current.moved = true;
+      }
+      const elWidth = el.offsetWidth || 230;
+      const elHeight = el.offsetHeight || 56;
+      const newX = Math.min(Math.max(12, dragInfoRef.current.initialLeft + dx), window.innerWidth - elWidth - 12);
+      const newY = Math.min(Math.max(12, dragInfoRef.current.initialTop + dy), window.innerHeight - elHeight - 12);
+
+      setMiniTimerPos({ x: newX, y: newY });
+    };
+
+    const onMouseUp = () => {
+      dragInfoRef.current.isDragging = false;
+      setIsDraggingMiniTimer(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+
+      if (miniTimerRef.current) {
+        const r = miniTimerRef.current.getBoundingClientRect();
+        try {
+          localStorage.setItem("ifocus_mini_timer_pos", JSON.stringify({ x: r.left, y: r.top }));
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleMiniTimerTouchStart = (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const el = miniTimerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    dragInfoRef.current = {
+      isDragging: true,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialLeft: rect.left,
+      initialTop: rect.top,
+      moved: false,
+    };
+    setIsDraggingMiniTimer(true);
+
+    const onTouchMove = (moveEvent) => {
+      if (!dragInfoRef.current.isDragging || !moveEvent.touches || moveEvent.touches.length !== 1) return;
+      const t = moveEvent.touches[0];
+      const dx = t.clientX - dragInfoRef.current.startX;
+      const dy = t.clientY - dragInfoRef.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dragInfoRef.current.moved = true;
+      }
+      const elWidth = el.offsetWidth || 230;
+      const elHeight = el.offsetHeight || 56;
+      const newX = Math.min(Math.max(12, dragInfoRef.current.initialLeft + dx), window.innerWidth - elWidth - 12);
+      const newY = Math.min(Math.max(12, dragInfoRef.current.initialTop + dy), window.innerHeight - elHeight - 12);
+
+      setMiniTimerPos({ x: newX, y: newY });
+    };
+
+    const onTouchEnd = () => {
+      dragInfoRef.current.isDragging = false;
+      setIsDraggingMiniTimer(false);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+
+      if (miniTimerRef.current) {
+        const r = miniTimerRef.current.getBoundingClientRect();
+        try {
+          localStorage.setItem("ifocus_mini_timer_pos", JSON.stringify({ x: r.left, y: r.top }));
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+  };
+
+  const handleMiniTimerClick = () => {
+    if (dragInfoRef.current.moved) {
+      dragInfoRef.current.moved = false;
+      return;
+    }
+    if (timerState.breakGatePending) {
+      setShowBreakGateModal(true);
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   const stateRef = useRef(timerState);
   stateRef.current = timerState;
@@ -123,6 +471,33 @@ export default function GlobalTimer() {
     }
   }, []);
 
+  // Cycle Completion & Rhythm Reset Handlers
+  const handleReturnToDefaultPreset = useCallback(() => {
+    setShowCycleCompleteModal(false);
+    const defaultState = {
+      ...stateRef.current,
+      isRunning: false,
+      isFocus: true,
+      timeLeft: 25 * 60,
+      totalTime: 25 * 60,
+      targetEndTime: null,
+      timerPreset: '25/5',
+      sessionCount: 1,
+      presencePaused: false,
+      lastPresenceElapsed: 0,
+      breakGatePending: false,
+    };
+    try {
+      localStorage.removeItem('ifocus_ai_adjusted_active');
+      localStorage.removeItem('ifocus_ai_adjusted_details');
+    } catch (e) {}
+    commitStorageState(defaultState, true);
+  }, [commitStorageState]);
+
+  const handleKeepCurrentRhythm = useCallback(() => {
+    setShowCycleCompleteModal(false);
+  }, []);
+
   // Trigger Active Presence Pause
   const triggerPresencePause = useCallback(() => {
     const current = readStorageState() || stateRef.current;
@@ -136,6 +511,7 @@ export default function GlobalTimer() {
       targetEndTime: null,
       timeLeft: remainingSeconds,
       presencePaused: true,
+      lastPresenceRemaining: remainingSeconds,
       lastPresenceElapsed: current.totalTime ? Math.max(0, current.totalTime - remainingSeconds) : 0,
     };
 
@@ -172,6 +548,9 @@ export default function GlobalTimer() {
     const handleSync = (e) => {
       if (e?.detail) {
         setTimerState(e.detail);
+        if (e.detail.isRunning) {
+          lastActivityRef.current = Date.now();
+        }
         if (e.detail.presencePaused) {
           setShowPresenceModal(true);
         } else if (!e.detail.presencePaused) {
@@ -197,12 +576,33 @@ export default function GlobalTimer() {
     };
 
     const handleTestPresence = () => {
-      triggerPresencePause();
+      setIsTestPresenceModal(true);
+      setShowPresenceModal(true);
+      playPresenceChime();
     };
 
     // Initial load from storage
     const initial = readStorageState();
     if (initial) {
+      let maxS = 4;
+      if (initial.timerPreset === "Custom") {
+        if (initial.customSessions) maxS = Number(initial.customSessions) || 1;
+        else {
+          try {
+            const customStored = localStorage.getItem("ifocus_custom_timer");
+            if (customStored) {
+              const parsed = JSON.parse(customStored);
+              if (parsed.customSessions) maxS = Number(parsed.customSessions) || 1;
+            }
+          } catch (e) {}
+        }
+      }
+      if (initial.sessionCount && initial.sessionCount > maxS) {
+        initial.sessionCount = 1;
+        if (!initial.isRunning) {
+          commitStorageState(initial, false);
+        }
+      }
       if (initial.isRunning && initial.targetEndTime) {
         const remaining = Math.max(0, Math.round((initial.targetEndTime - Date.now()) / 1000));
         initial.timeLeft = remaining;
@@ -211,15 +611,123 @@ export default function GlobalTimer() {
       if (initial.presencePaused) setShowPresenceModal(true);
     }
 
+    const handleTestReflection = () => {
+      setIsTestReflectionModal(true);
+      setShowReflectionModal(true);
+    };
+
+    const handleTestCycleComplete = () => {
+      setCompletedCycleDetails({
+        sessionsCompleted: 1,
+        wasCustom: true,
+        timerPreset: 'Custom'
+      });
+      setShowCycleCompleteModal(true);
+      playCompletionAlarm();
+    };
+
+    const handleSkipBreakEvent = () => {
+      const current = readStorageState() || stateRef.current;
+      let maxSessions = 4;
+      if (current.timerPreset === "Custom") {
+        if (current.customSessions) maxSessions = Number(current.customSessions) || 1;
+        else {
+          try {
+            const customStored = localStorage.getItem("ifocus_custom_timer");
+            if (customStored) {
+              const parsed = JSON.parse(customStored);
+              if (parsed.customSessions) maxSessions = Number(parsed.customSessions) || 1;
+            }
+          } catch(e) {}
+        }
+      }
+      const currentCount = current.sessionCount || 1;
+      const nextCount = currentCount + 1;
+
+      let focusDuration = 25 * 60;
+      if (current.timerPreset === "50/10") focusDuration = 50 * 60;
+      else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
+      else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
+      else if (current.timerPreset === "Custom") {
+        if (current.customWorkDuration) focusDuration = current.customWorkDuration;
+        else {
+          try {
+            const customStored = localStorage.getItem("ifocus_custom_timer");
+            if (customStored) {
+              const parsed = JSON.parse(customStored);
+              if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
+            }
+          } catch(e) {}
+        }
+      }
+
+      let breakDuration = 5 * 60;
+      if (current.timerPreset === "50/10") breakDuration = 10 * 60;
+      else if (current.timerPreset === "15/3") breakDuration = 3 * 60;
+      else if (current.timerPreset === "90/20") breakDuration = 20 * 60;
+      else if (current.timerPreset === "Custom" && current.customBreakDuration) breakDuration = current.customBreakDuration;
+
+      if (nextCount > maxSessions) {
+        playCompletionAlarm();
+        const completedCycleState = {
+          ...current,
+          isFocus: true,
+          isRunning: false,
+          totalTime: focusDuration,
+          timeLeft: focusDuration,
+          targetEndTime: null,
+          lastPresenceElapsed: 0,
+          presencePaused: false,
+          breakGatePending: false,
+          sessionCount: 1,
+          customSessions: maxSessions,
+          customWorkDuration: focusDuration,
+          customBreakDuration: breakDuration,
+        };
+        commitStorageState(completedCycleState, true);
+        setCompletedCycleDetails({
+          sessionsCompleted: maxSessions,
+          timerPreset: current.timerPreset,
+          wasCustom: current.timerPreset === "Custom"
+        });
+        setShowCycleCompleteModal(true);
+        window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: maxSessions } }));
+        return;
+      }
+
+      const nextFocusState = {
+        ...current,
+        isFocus: true,
+        isRunning: true,
+        totalTime: focusDuration,
+        timeLeft: focusDuration,
+        targetEndTime: Date.now() + focusDuration * 1000,
+        lastPresenceElapsed: 0,
+        presencePaused: false,
+        breakGatePending: false,
+        sessionCount: nextCount,
+        customSessions: maxSessions,
+        customWorkDuration: focusDuration,
+        customBreakDuration: breakDuration,
+      };
+      commitStorageState(nextFocusState, true);
+    };
+
     window.addEventListener("ifocus_timer_sync", handleSync);
+    window.addEventListener("ifocus_skip_break", handleSkipBreakEvent);
     window.addEventListener("ifocus_test_presence", handleTestPresence);
+    window.addEventListener("ifocus_test_reflection_prompt", handleTestReflection);
+    window.addEventListener("ifocus_test_cycle_complete", handleTestCycleComplete);
     window.addEventListener("storage", (e) => {
       if (e.key === "ifocus_timer_state") handleSync();
     });
 
     return () => {
       window.removeEventListener("ifocus_timer_sync", handleSync);
+      window.removeEventListener("ifocus_skip_break", handleSkipBreakEvent);
       window.removeEventListener("ifocus_test_presence", handleTestPresence);
+      window.removeEventListener("ifocus_test_reflection_prompt", handleTestReflection);
+      window.removeEventListener("ifocus_test_cycle_complete", handleTestCycleComplete);
     };
   }, [readStorageState, triggerPresencePause]);
 
@@ -256,16 +764,26 @@ export default function GlobalTimer() {
 
         const intervalSeconds = Math.max(30, activePresenceInterval * 60);
 
-        // A. AFK Inactivity Check (user hasn't moved mouse or pressed key for interval)
+        // Track focus seconds elapsed since the last confirmed presence check
+        let baseRemaining = current.lastPresenceRemaining !== undefined && current.lastPresenceRemaining !== null
+          ? Number(current.lastPresenceRemaining)
+          : (current.timeLeft !== undefined ? Number(current.timeLeft) : Number(totalTime));
+
+        if (baseRemaining < remainingSeconds) {
+          baseRemaining = remainingSeconds;
+          current.lastPresenceRemaining = remainingSeconds;
+        }
+
+        const focusSecondsSinceLastCheck = Math.max(0, baseRemaining - remainingSeconds);
+
+        // A. AFK Inactivity Check: user has not touched mouse or keyboard for the interval
         const idleTimeMs = now - lastActivityRef.current;
-        const isAfk = idleTimeMs >= intervalSeconds * 1000;
+        const isAfk = idleTimeMs >= intervalSeconds * 1000 && focusSecondsSinceLastCheck >= 30;
 
-        // B. Periodic Elapsed Focus Time Check
-        const currentIntervalBucket = Math.floor(elapsedSeconds / intervalSeconds);
-        const lastIntervalBucket = Math.floor((current.lastPresenceElapsed || 0) / intervalSeconds);
-        const isIntervalReached = currentIntervalBucket > 0 && currentIntervalBucket > lastIntervalBucket;
+        // B. Periodic Elapsed Focus Time Check: user completed a full interval of active focus
+        const isIntervalReached = focusSecondsSinceLastCheck >= intervalSeconds;
 
-        if (activePresenceEnabled && (isAfk || isIntervalReached)) {
+        if (activePresenceEnabled && (isIntervalReached || isAfk)) {
           // Immediately pause timer! It CANNOT continue until user clicks confirm!
           const pausedState = {
             ...current,
@@ -273,7 +791,8 @@ export default function GlobalTimer() {
             targetEndTime: null,
             timeLeft: remainingSeconds,
             presencePaused: true,
-            lastPresenceElapsed: Math.max(elapsedSeconds, currentIntervalBucket * intervalSeconds),
+            lastPresenceRemaining: remainingSeconds,
+            lastPresenceElapsed: Math.max(0, totalTime - remainingSeconds),
           };
           commitStorageState(pausedState, true);
           setShowPresenceModal(true);
@@ -287,6 +806,76 @@ export default function GlobalTimer() {
       if (remainingSeconds <= 0) {
         playCompletionAlarm();
 
+        // Check if an active deck is set for BreakGate
+        let breakGateDeck = null;
+        try {
+          const stored = localStorage.getItem("ifocus_active_breakgate_deck");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.cards && parsed.cards.length > 0) {
+              breakGateDeck = parsed;
+            }
+          }
+        } catch (e) {}
+
+        // Calculate focus duration with Custom timer support
+        let focusDuration = 25 * 60;
+        if (current.timerPreset === "50/10") focusDuration = 50 * 60;
+        else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
+        else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
+        else if (current.timerPreset === "Custom") {
+          if (current.customWorkDuration) focusDuration = current.customWorkDuration;
+          else {
+            try {
+              const customStored = localStorage.getItem("ifocus_custom_timer");
+              if (customStored) {
+                const parsed = JSON.parse(customStored);
+                if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
+              }
+            } catch(e) {}
+          }
+        }
+
+        // Calculate break duration with Custom timer support
+        let breakDuration = 5 * 60;
+        if (current.timerPreset === "50/10") {
+          breakDuration = 10 * 60;
+        } else if (current.timerPreset === "15/3") {
+          breakDuration = 3 * 60;
+        } else if (current.timerPreset === "90/20") {
+          breakDuration = 20 * 60;
+        } else if (current.timerPreset === "Custom") {
+          if (current.customBreakDuration) {
+            breakDuration = current.customBreakDuration;
+          } else {
+            try {
+              const customStored = localStorage.getItem("ifocus_custom_timer");
+              if (customStored) {
+                const parsed = JSON.parse(customStored);
+                if (parsed.customBreakDuration) breakDuration = parsed.customBreakDuration;
+              }
+            } catch(e) {}
+          }
+        }
+
+        // Check if user completed their planned cycle target
+        let maxSessions = 4;
+        if (current.timerPreset === "Custom") {
+          if (current.customSessions) {
+            maxSessions = Number(current.customSessions) || 1;
+          } else {
+            try {
+              const customStored = localStorage.getItem("ifocus_custom_timer");
+              if (customStored) {
+                const parsed = JSON.parse(customStored);
+                if (parsed.customSessions) maxSessions = Number(parsed.customSessions) || 1;
+              }
+            } catch (e) {}
+          }
+        }
+        const currentCount = current.sessionCount || 1;
+        const isCycleFinished = currentCount >= maxSessions;
+
         if (current.isFocus) {
           // Record completed focus session in history & stats
           const focusMins = Math.max(1, Math.round(totalTime / 60));
@@ -296,6 +885,7 @@ export default function GlobalTimer() {
               date: new Date().toISOString(),
               duration: focusMins,
               type: "pomodoro",
+              synced: true,
             });
             if (history.length > 200) history.splice(0, history.length - 200);
             localStorage.setItem("ifocus_session_history", JSON.stringify(history));
@@ -325,31 +915,49 @@ export default function GlobalTimer() {
                 streak: Math.max(1, streakCount),
               })
             );
+
+            // Cloud Sync to PostgreSQL Database for Admin & Institutional Overview
+            fetch('/api/study-sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                duration: focusMins * 60,
+                score: 100,
+                deckId: breakGateDeck?.id || null
+              })
+            }).catch(() => {});
           } catch (e) {
             console.warn("Could not save session stats:", e);
           }
 
-          // Calculate break duration
-          const breakDuration =
-            current.timerPreset === "50/10"
-              ? 10 * 60
-              : current.timerPreset === "15/3"
-              ? 3 * 60
-              : current.timerPreset === "90/20"
-              ? 20 * 60
-              : 5 * 60;
-
-          // Check if an active deck is set for BreakGate
-          let breakGateDeck = null;
-          try {
-            const stored = localStorage.getItem("ifocus_active_breakgate_deck");
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              if (parsed && parsed.cards && parsed.cards.length > 0) {
-                breakGateDeck = parsed;
-              }
-            }
-          } catch (e) {}
+          // If BreakGate is NOT active and this was the final planned session, complete cycle immediately!
+          if (!breakGateDeck && isCycleFinished) {
+            playCompletionAlarm();
+            const completedCycleState = {
+              ...current,
+              isFocus: true,
+              isRunning: false,
+              totalTime: focusDuration,
+              timeLeft: focusDuration,
+              targetEndTime: null,
+              lastPresenceElapsed: 0,
+              presencePaused: false,
+              breakGatePending: false,
+              sessionCount: 1,
+              customSessions: maxSessions,
+              customWorkDuration: focusDuration,
+              customBreakDuration: breakDuration,
+            };
+            commitStorageState(completedCycleState, true);
+            setCompletedCycleDetails({
+              sessionsCompleted: currentCount,
+              timerPreset: current.timerPreset,
+              wasCustom: current.timerPreset === "Custom"
+            });
+            setShowCycleCompleteModal(true);
+            window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: currentCount } }));
+            return;
+          }
 
           if (breakGateDeck) {
             // Intercept break with retrieval challenge modal!
@@ -363,6 +971,10 @@ export default function GlobalTimer() {
               lastPresenceElapsed: 0,
               presencePaused: false,
               breakGatePending: true,
+              sessionCount: currentCount,
+              customSessions: maxSessions,
+              customWorkDuration: focusDuration,
+              customBreakDuration: breakDuration,
             };
             commitStorageState(breakGateState, true);
             setActiveBreakGateDeck(breakGateDeck);
@@ -371,42 +983,108 @@ export default function GlobalTimer() {
             return;
           }
 
-          // No BreakGate deck active -> Auto-transition to Break mode
+          // Check if Post-Session Reflection Prompts enabled
+          let reflectionPromptEnabled = true;
+          try {
+            const rawSound = localStorage.getItem("ifocus_sound_preferences");
+            if (rawSound) {
+              const parsed = JSON.parse(rawSound);
+              if (parsed.dailyReminder !== undefined) {
+                reflectionPromptEnabled = parsed.dailyReminder;
+              }
+            }
+          } catch (e) {}
+
+          if (reflectionPromptEnabled) {
+            setIsTestReflectionModal(false);
+            setShowReflectionModal(true);
+          }
+
+          // Check Auto-Start Break preference
+          let autoStartBreaksPref = true;
+          try {
+            const rawTimerPrefs = localStorage.getItem("ifocus_timer_preferences");
+            if (rawTimerPrefs) {
+              const tPrefs = JSON.parse(rawTimerPrefs);
+              if (tPrefs.autoStartBreaks !== undefined) autoStartBreaksPref = tPrefs.autoStartBreaks;
+            }
+          } catch (e) {}
+
+          // Transition to Break mode
           const nextBreakState = {
             ...current,
             isFocus: false,
-            isRunning: true,
+            isRunning: autoStartBreaksPref,
             totalTime: breakDuration,
             timeLeft: breakDuration,
-            targetEndTime: Date.now() + breakDuration * 1000,
+            targetEndTime: autoStartBreaksPref ? Date.now() + breakDuration * 1000 : null,
             lastPresenceElapsed: 0,
             presencePaused: false,
             breakGatePending: false,
+            sessionCount: currentCount,
+            customSessions: maxSessions,
+            customWorkDuration: focusDuration,
+            customBreakDuration: breakDuration,
           };
           commitStorageState(nextBreakState, true);
           return;
         } else {
-          // Break finished -> Switch to next focus session
-          const focusDuration =
-            current.timerPreset === "50/10"
-              ? 50 * 60
-              : current.timerPreset === "15/3"
-              ? 15 * 60
-              : current.timerPreset === "90/20"
-              ? 90 * 60
-              : 25 * 60;
+          // Break finished -> Switch to next focus session with Custom timer support
+          const nextCount = currentCount + 1;
+          const isBreakCycleFinished = nextCount > maxSessions;
+
+          if (isBreakCycleFinished) {
+            playCompletionAlarm();
+            // Entire cycle completed! Reset back to Session 1 and pause timer (no continuous run)
+            const completedCycleState = {
+              ...current,
+              isFocus: true,
+              isRunning: false,
+              totalTime: focusDuration,
+              timeLeft: focusDuration,
+              targetEndTime: null,
+              lastPresenceElapsed: 0,
+              presencePaused: false,
+              breakGatePending: false,
+              sessionCount: 1,
+              customSessions: maxSessions,
+              customWorkDuration: focusDuration,
+              customBreakDuration: breakDuration,
+            };
+            commitStorageState(completedCycleState, true);
+            setCompletedCycleDetails({
+              sessionsCompleted: maxSessions,
+              timerPreset: current.timerPreset,
+              wasCustom: current.timerPreset === "Custom"
+            });
+            setShowCycleCompleteModal(true);
+            window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: maxSessions } }));
+            return;
+          }
+
+          let autoStartFocusPref = false;
+          try {
+            const rawTimerPrefs = localStorage.getItem("ifocus_timer_preferences");
+            if (rawTimerPrefs) {
+              const tPrefs = JSON.parse(rawTimerPrefs);
+              if (tPrefs.autoStartFocus !== undefined) autoStartFocusPref = tPrefs.autoStartFocus;
+            }
+          } catch (e) {}
 
           const nextFocusState = {
             ...current,
             isFocus: true,
-            isRunning: false,
+            isRunning: autoStartFocusPref,
             totalTime: focusDuration,
             timeLeft: focusDuration,
-            targetEndTime: null,
+            targetEndTime: autoStartFocusPref ? Date.now() + focusDuration * 1000 : null,
             lastPresenceElapsed: 0,
             presencePaused: false,
             breakGatePending: false,
-            sessionCount: (current.sessionCount || 1) + 1,
+            sessionCount: nextCount,
+            customSessions: maxSessions,
+            customWorkDuration: focusDuration,
+            customBreakDuration: breakDuration,
           };
           commitStorageState(nextFocusState, true);
           return;
@@ -443,6 +1121,10 @@ export default function GlobalTimer() {
   // Handle Active Presence Confirmation
   const handleConfirmPresence = () => {
     setShowPresenceModal(false);
+    if (isTestPresenceModal) {
+      setIsTestPresenceModal(false);
+      return; // Do NOT touch or resume timer if this was just a preview test!
+    }
     lastActivityRef.current = Date.now();
     const current = readStorageState() || timerState;
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
@@ -453,12 +1135,18 @@ export default function GlobalTimer() {
       presencePaused: false,
       timeLeft: remaining,
       targetEndTime: Date.now() + remaining * 1000,
+      lastPresenceRemaining: remaining,
+      lastPresenceElapsed: current.totalTime ? Math.max(0, current.totalTime - remaining) : 0,
     };
     commitStorageState(resumedState, true);
   };
 
   const handleKeepPaused = () => {
     setShowPresenceModal(false);
+    if (isTestPresenceModal) {
+      setIsTestPresenceModal(false);
+      return; // Do NOT pause the real timer if this was just a preview test!
+    }
     const current = readStorageState() || timerState;
     const pausedState = {
       ...current,
@@ -473,18 +1161,139 @@ export default function GlobalTimer() {
   const handleBreakGateComplete = () => {
     setShowBreakGateModal(false);
     const current = readStorageState() || timerState;
-    const breakDuration = current.totalTime || 5 * 60;
+
+    // Check if user completed their planned cycle target
+    let maxSessions = 4;
+    if (current.timerPreset === "Custom") {
+      if (current.customSessions) {
+        maxSessions = Number(current.customSessions) || 1;
+      } else {
+        try {
+          const customStored = localStorage.getItem("ifocus_custom_timer");
+          if (customStored) {
+            const parsed = JSON.parse(customStored);
+            if (parsed.customSessions) maxSessions = Number(parsed.customSessions) || 1;
+          }
+        } catch (e) {}
+      }
+    }
+    const currentCount = current.sessionCount || 1;
+    if (currentCount >= maxSessions) {
+      playCompletionAlarm();
+      let focusDuration = 25 * 60;
+      if (current.timerPreset === "50/10") focusDuration = 50 * 60;
+      else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
+      else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
+      else if (current.timerPreset === "Custom") {
+        if (current.customWorkDuration) focusDuration = current.customWorkDuration;
+        else {
+          try {
+            const customStored = localStorage.getItem("ifocus_custom_timer");
+            if (customStored) {
+              const parsed = JSON.parse(customStored);
+              if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
+            }
+          } catch(e) {}
+        }
+      }
+
+      const completedCycleState = {
+        ...current,
+        isFocus: true,
+        isRunning: false,
+        totalTime: focusDuration,
+        timeLeft: focusDuration,
+        targetEndTime: null,
+        lastPresenceElapsed: 0,
+        presencePaused: false,
+        breakGatePending: false,
+        sessionCount: 1,
+        customSessions: maxSessions,
+        customWorkDuration: focusDuration,
+        customBreakDuration: breakDuration,
+      };
+      commitStorageState(completedCycleState, true);
+      setCompletedCycleDetails({
+        sessionsCompleted: currentCount,
+        timerPreset: current.timerPreset,
+        wasCustom: current.timerPreset === "Custom"
+      });
+      setShowCycleCompleteModal(true);
+      window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: currentCount } }));
+      return;
+    }
+    let breakDuration = current.totalTime;
+    let focusDuration = 25 * 60;
+    if (current.timerPreset === "50/10") focusDuration = 50 * 60;
+    else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
+    else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
+    else if (current.timerPreset === "Custom") {
+      if (current.customWorkDuration) focusDuration = current.customWorkDuration;
+      else {
+        try {
+          const customStored = localStorage.getItem("ifocus_custom_timer");
+          if (customStored) {
+            const parsed = JSON.parse(customStored);
+            if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (current.timerPreset === "Custom") {
+      if (current.customBreakDuration) {
+        breakDuration = current.customBreakDuration;
+      } else {
+        try {
+          const customStored = localStorage.getItem("ifocus_custom_timer");
+          if (customStored) {
+            const parsed = JSON.parse(customStored);
+            if (parsed.customBreakDuration) breakDuration = parsed.customBreakDuration;
+          }
+        } catch(e) {}
+      }
+    }
+    if (!breakDuration) breakDuration = 5 * 60;
+
+    let reflectionPromptEnabled = true;
+    try {
+      const rawSound = localStorage.getItem("ifocus_sound_preferences");
+      if (rawSound) {
+        const parsed = JSON.parse(rawSound);
+        if (parsed.dailyReminder !== undefined) {
+          reflectionPromptEnabled = parsed.dailyReminder;
+        }
+      }
+    } catch (e) {}
+
+    if (reflectionPromptEnabled) {
+      setIsTestReflectionModal(false);
+      setShowReflectionModal(true);
+    }
+
+    let autoStartBreaksPref = true;
+    try {
+      const rawTimerPrefs = localStorage.getItem("ifocus_timer_preferences");
+      if (rawTimerPrefs) {
+        const tPrefs = JSON.parse(rawTimerPrefs);
+        if (tPrefs.autoStartBreaks !== undefined) autoStartBreaksPref = tPrefs.autoStartBreaks;
+      }
+    } catch (e) {}
 
     const breakState = {
       ...current,
       isFocus: false,
-      isRunning: true,
+      isRunning: autoStartBreaksPref,
       timeLeft: breakDuration,
       totalTime: breakDuration,
-      targetEndTime: Date.now() + breakDuration * 1000,
+      targetEndTime: autoStartBreaksPref ? Date.now() + breakDuration * 1000 : null,
       breakGatePending: false,
       presencePaused: false,
       lastPresenceElapsed: 0,
+      sessionCount: currentCount,
+      customSessions: maxSessions,
+      customWorkDuration: focusDuration,
+      customBreakDuration: breakDuration,
     };
     commitStorageState(breakState, true);
   };
@@ -525,8 +1334,55 @@ export default function GlobalTimer() {
   };
 
   const isDashboard = pathname === "/dashboard";
+  const [dashboardScrolled, setDashboardScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!isDashboard) {
+      setDashboardScrolled(false);
+      return;
+    }
+    const handleScroll = () => {
+      // Reveal floating pill on dashboard when scrolled past hero section (> 280px)
+      setDashboardScrolled(window.scrollY > 280);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isDashboard]);
+
   const showFloatingMiniTimer =
-    !isDashboard && (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
+    (!isDashboard || dashboardScrolled) &&
+    (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
+
+  const isWarning = timerState.breakGatePending || timerState.presencePaused;
+  const statusColor = isWarning
+    ? "#d97706"
+    : timerState.isFocus
+    ? "#16a34a"
+    : "#0284c7";
+  const statusGlow = isWarning
+    ? "rgba(217, 119, 6, 0.45)"
+    : timerState.isFocus
+    ? "rgba(22, 163, 74, 0.42)"
+    : "rgba(2, 132, 199, 0.42)";
+
+  const statusLabel = timerState.breakGatePending
+    ? "BreakGate Ready"
+    : timerState.presencePaused
+    ? "Presence Paused"
+    : timerState.isFocus
+    ? "Focus Session"
+    : "Break Time";
+
+  const pillAnimation = isDraggingMiniTimer
+    ? "none"
+    : timerState.isRunning
+    ? timerState.isFocus
+      ? "ifocusPillPulseRunning 2.4s ease-in-out infinite"
+      : "ifocusPillPulseBreak 2.4s ease-in-out infinite"
+    : isWarning
+    ? "ifocusPillPulseWarning 2s ease-in-out infinite"
+    : "none";
 
   if (pathname === "/" || pathname.startsWith("/admin") || isAdmin) {
     return null;
@@ -534,112 +1390,337 @@ export default function GlobalTimer() {
 
   return (
     <>
-      {/* Floating Mini-Timer Pill (Visible on /flashcards, /analytics, /coach, /settings) */}
+      {/* Floating Mini-Timer Pill (Movable, Frosted White & Glowing Live Forest Green Design) */}
+      <style>{`
+        
+        @keyframes ifocusSlideInFromRight {
+          0% {
+            transform: translate3d(160px, 0, 0);
+            opacity: 0;
+          }
+          55% {
+            opacity: 1;
+          }
+          80% {
+            transform: translate3d(-10px, 0, 0);
+          }
+          100% {
+            transform: translate3d(0, 0, 0);
+            opacity: 1;
+          }
+        }
+
+        @keyframes ifocusPillPulseRunning {
+          0% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45), 0 10px 28px -4px rgba(22, 101, 52, 0.24);
+            border-color: rgba(34, 197, 94, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.18), 0 14px 34px -4px rgba(22, 101, 52, 0.38), 0 0 20px rgba(34, 197, 94, 0.3);
+            border-color: rgba(34, 197, 94, 0.9);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45), 0 10px 28px -4px rgba(22, 101, 52, 0.24);
+            border-color: rgba(34, 197, 94, 0.45);
+          }
+        }
+
+        @keyframes ifocusPillPulseBreak {
+          0% {
+            box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.45), 0 10px 28px -4px rgba(2, 132, 199, 0.24);
+            border-color: rgba(2, 132, 199, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 0 6px rgba(2, 132, 199, 0.18), 0 14px 34px -4px rgba(2, 132, 199, 0.38), 0 0 20px rgba(2, 132, 199, 0.3);
+            border-color: rgba(2, 132, 199, 0.9);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.45), 0 10px 28px -4px rgba(2, 132, 199, 0.24);
+            border-color: rgba(2, 132, 199, 0.45);
+          }
+        }
+
+        @keyframes ifocusPillPulseWarning {
+          0% {
+            box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.45), 0 10px 28px -4px rgba(217, 119, 6, 0.24);
+            border-color: rgba(217, 119, 6, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 0 6px rgba(217, 119, 6, 0.2), 0 14px 34px -4px rgba(217, 119, 6, 0.4), 0 0 18px rgba(217, 119, 6, 0.32);
+            border-color: rgba(217, 119, 6, 0.9);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.45), 0 10px 28px -4px rgba(217, 119, 6, 0.24);
+            border-color: rgba(217, 119, 6, 0.45);
+          }
+        }
+
+        @keyframes ifocusRadarWave {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.95;
+          }
+          100% {
+            transform: scale(2.8);
+            opacity: 0;
+          }
+        }
+
+        @keyframes ifocusColonBlink {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.15;
+          }
+        }
+
+        @keyframes ifocusWaveBar1 {
+          0%, 100% { height: 4px; }
+          50% { height: 13px; }
+        }
+
+        @keyframes ifocusWaveBar2 {
+          0%, 100% { height: 12px; }
+          50% { height: 4px; }
+        }
+
+        @keyframes ifocusWaveBar3 {
+          0%, 100% { height: 7px; }
+          50% { height: 14px; }
+        }
+      `}</style>
+
+      {/* Persistent Ambient Soundscape Audio Engine - Always mounted across all routes */}
+      <audio
+        ref={globalAudioRef}
+        loop
+        preload="auto"
+        src={getTrackSrc(musicState.currentTrack || 'Chill Lofi')}
+      />
+
       {showFloatingMiniTimer && (
         <div
+          ref={miniTimerRef}
           id="globalMiniTimerPill"
-          onClick={() => {
-            if (timerState.breakGatePending) {
-              setShowBreakGateModal(true);
-            } else {
-              router.push("/dashboard");
-            }
-          }}
+          onMouseDown={handleMiniTimerMouseDown}
+          onTouchStart={handleMiniTimerTouchStart}
+          onClick={handleMiniTimerClick}
           style={{
             position: "fixed",
-            bottom: "24px",
-            right: "28px",
+            left: miniTimerPos.x !== null ? `${miniTimerPos.x}px` : "auto",
+            top: miniTimerPos.y !== null ? `${miniTimerPos.y}px` : "auto",
+            bottom: miniTimerPos.y === null ? "24px" : "auto",
+            right: miniTimerPos.x === null ? "28px" : "auto",
             zIndex: 9998,
             display: "flex",
             alignItems: "center",
-            gap: "0.85rem",
-            padding: "0.65rem 1.15rem",
-            background: "rgba(15, 23, 42, 0.94)",
-            color: "#ffffff",
+            gap: "0.75rem",
+            padding: "0.55rem 0.95rem 0.65rem 0.75rem",
+            background: "rgba(255, 255, 255, 0.96)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: `1.5px solid ${timerState.isRunning ? statusColor : "rgba(46, 125, 50, 0.22)"}`,
             borderRadius: "9999px",
-            boxShadow: "0 12px 30px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)",
-            backdropFilter: "blur(14px)",
-            cursor: "pointer",
-            transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            boxShadow: isDraggingMiniTimer
+              ? "0 22px 42px -6px rgba(27, 67, 50, 0.32), 0 0 0 2px rgba(46, 125, 50, 0.4)"
+              : timerState.isRunning
+              ? `0 10px 30px -4px ${statusGlow}, 0 4px 12px rgba(0, 0, 0, 0.05)`
+              : "0 12px 32px -6px rgba(27, 67, 50, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05)",
+            cursor: isDraggingMiniTimer ? "grabbing" : "grab",
             userSelect: "none",
+            touchAction: "none",
+            animation: isDraggingMiniTimer ? "none" : isNavSliding ? "ifocusSlideInFromRight 0.55s cubic-bezier(0.16, 1, 0.3, 1) both" : pillAnimation,
+                        transition: isDraggingMiniTimer
+              ? "none"
+              : "box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-3px) scale(1.02)";
-            e.currentTarget.style.boxShadow =
-              "0 18px 36px -8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.25)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0) scale(1)";
-            e.currentTarget.style.boxShadow =
-              "0 12px 30px -8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)";
-          }}
-          title="Click to view Command Center or take BreakGate test"
+          title="Drag to reposition • Click to view Focus Timer"
         >
-          {/* Status Indicator Dot */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {/* Subtle Drag Grip Handle */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(46, 125, 50, 0.45)",
+              padding: "2px 0 2px 2px",
+              cursor: isDraggingMiniTimer ? "grabbing" : "grab",
+            }}
+            title="Drag handle"
+          >
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+              <circle cx="2" cy="2" r="1.5" />
+              <circle cx="8" cy="2" r="1.5" />
+              <circle cx="2" cy="8" r="1.5" />
+              <circle cx="8" cy="8" r="1.5" />
+              <circle cx="2" cy="14" r="1.5" />
+              <circle cx="8" cy="14" r="1.5" />
+            </svg>
+          </div>
+
+          {/* Status Indicator Dot with Dual Radar Pulse */}
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "16px",
+              height: "16px",
+            }}
+          >
             <span
               style={{
                 width: "10px",
                 height: "10px",
                 borderRadius: "50%",
-                background: timerState.breakGatePending
-                  ? "#f59e0b"
-                  : timerState.presencePaused
-                  ? "#f59e0b"
-                  : timerState.isFocus
-                  ? "#10b981"
-                  : "#38bdf8",
+                background: statusColor,
+                boxShadow: timerState.isRunning ? `0 0 8px ${statusColor}` : "none",
+                zIndex: 2,
+                transition: "background 0.25s ease, box-shadow 0.25s ease",
               }}
             />
             {timerState.isRunning && (
-              <span
-                style={{
-                  position: "absolute",
-                  width: "18px",
-                  height: "18px",
-                  borderRadius: "50%",
-                  background: timerState.isFocus ? "rgba(16, 185, 129, 0.35)" : "rgba(56, 189, 248, 0.35)",
-                  animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite",
-                }}
-              />
+              <>
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: "-2px",
+                    borderRadius: "50%",
+                    border: `2px solid ${statusColor}`,
+                    animation: "ifocusRadarWave 2s cubic-bezier(0, 0, 0.2, 1) infinite",
+                    zIndex: 1,
+                    pointerEvents: "none",
+                  }}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: "-2px",
+                    borderRadius: "50%",
+                    border: `2px solid ${statusColor}`,
+                    animation: "ifocusRadarWave 2s cubic-bezier(0, 0, 0.2, 1) infinite 1s",
+                    zIndex: 1,
+                    pointerEvents: "none",
+                  }}
+                />
+    </>
             )}
           </div>
 
           {/* Time & Session Label */}
           <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  fontSize: "0.62rem",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: statusColor,
+                  lineHeight: 1.1,
+                  transition: "color 0.25s ease",
+                }}
+              >
+                {statusLabel}
+              </span>
+
+              {/* Dynamic Live Equalizer Wave: ONLY when music is playing! */}
+              {musicState.isPlaying ? (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "2px",
+                    height: "12px",
+                    padding: "0 2px",
+                  }}
+                  title={`Music playing: ${musicState.currentTrack}`}
+                >
+                  <span
+                    style={{
+                      width: "2px",
+                      height: "6px",
+                      background: statusColor,
+                      borderRadius: "2px",
+                      animation: "ifocusWaveBar1 1.1s ease-in-out infinite",
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: "2px",
+                      height: "12px",
+                      background: statusColor,
+                      borderRadius: "2px",
+                      animation: "ifocusWaveBar2 0.85s ease-in-out infinite",
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: "2px",
+                      height: "8px",
+                      background: statusColor,
+                      borderRadius: "2px",
+                      animation: "ifocusWaveBar3 1.25s ease-in-out infinite",
+                    }}
+                  />
+                </div>
+              ) : timerState.presencePaused ? (
+                <span
+                  style={{
+                    fontSize: "0.55rem",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    padding: "1px 5px",
+                    borderRadius: "9999px",
+                    background: "rgba(217, 119, 6, 0.15)",
+                    color: "#d97706",
+                  }}
+                >
+                  PAUSED
+                </span>
+              ) : null}
+            </div>
+
+            {/* Time digits with live pulsing colon */}
             <span
               style={{
-                fontSize: "0.68rem",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.75px",
-                color: timerState.breakGatePending
-                  ? "#fbbf24"
-                  : timerState.presencePaused
-                  ? "#fbbf24"
-                  : timerState.isFocus
-                  ? "#34d399"
-                  : "#7dd3fc",
+                fontSize: "1.2rem",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                color: "#163824",
+                fontVariantNumeric: "tabular-nums",
+                fontFamily: "'Outfit', 'Inter', -apple-system, monospace",
+                lineHeight: 1.15,
+                display: "inline-flex",
+                alignItems: "baseline",
               }}
             >
-              {timerState.breakGatePending
-                ? "BreakGate Ready"
-                : timerState.presencePaused
-                ? "Presence Paused"
-                : timerState.isFocus
-                ? "Focus Session"
-                : "Break Time"}
-            </span>
-            <span
-              style={{
-                fontSize: "1.18rem",
-                fontWeight: 700,
-                letterSpacing: "0.5px",
-                fontFamily: "monospace",
-                lineHeight: 1.1,
-              }}
-            >
-              {formatTime(timerState.timeLeft || 0)}
+              {(() => {
+                const formatted = formatTime(timerState.timeLeft || 0);
+                const [mins, secs] = formatted.split(":");
+                return (
+                  <>
+                    <span>{mins}</span>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        margin: "0 1px",
+                        animation: timerState.isRunning
+                          ? "ifocusColonBlink 1s ease-in-out infinite"
+                          : "none",
+                        color: timerState.isRunning ? statusColor : "#163824",
+                        fontWeight: 900,
+                      }}
+                    >
+                      :
+                    </span>
+                    <span>{secs}</span>
+                  </>
+                );
+              })()}
             </span>
           </div>
 
@@ -648,6 +1729,8 @@ export default function GlobalTimer() {
             <button
               type="button"
               onClick={toggleMiniTimerPlay}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -655,24 +1738,34 @@ export default function GlobalTimer() {
                 width: "28px",
                 height: "28px",
                 borderRadius: "50%",
-                border: "none",
-                background: "rgba(255, 255, 255, 0.12)",
-                color: "#ffffff",
+                border: `1px solid ${timerState.isRunning ? "rgba(22, 163, 74, 0.25)" : "rgba(217, 119, 6, 0.25)"}`,
+                background: timerState.isRunning ? "rgba(22, 163, 74, 0.08)" : "rgba(217, 119, 6, 0.08)",
+                color: timerState.isRunning ? "#1e6f3d" : "#d97706",
                 cursor: "pointer",
-                transition: "background 0.2s",
-                marginLeft: "4px",
+                transition: "all 0.15s ease",
+                marginLeft: "2px",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.24)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.12)")}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = timerState.isRunning
+                  ? "rgba(22, 163, 74, 0.18)"
+                  : "rgba(217, 119, 6, 0.18)";
+                e.currentTarget.style.transform = "scale(1.06)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = timerState.isRunning
+                  ? "rgba(22, 163, 74, 0.08)"
+                  : "rgba(217, 119, 6, 0.08)";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
               title={timerState.isRunning ? "Pause Session" : "Resume Session"}
             >
               {timerState.isRunning ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1.5" />
+                  <rect x="14" y="4" width="4" height="16" rx="1.5" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: "1.5px" }}>
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
               )}
@@ -680,20 +1773,30 @@ export default function GlobalTimer() {
           )}
 
           {/* Jump Arrow */}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="rgba(255, 255, 255, 0.6)"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(46, 125, 50, 0.65)",
+              padding: "2px",
+            }}
           >
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </div>
         </div>
       )}
 
@@ -767,16 +1870,16 @@ export default function GlobalTimer() {
                 gap: "6px",
                 padding: "0.3rem 0.8rem",
                 borderRadius: "9999px",
-                background: "rgba(245, 158, 11, 0.12)",
-                color: "#b45309",
+                background: isTestPresenceModal ? "rgba(59, 130, 246, 0.12)" : "rgba(245, 158, 11, 0.12)",
+                color: isTestPresenceModal ? "#1d4ed8" : "#b45309",
                 fontSize: "0.78rem",
                 fontWeight: 700,
                 letterSpacing: "0.6px",
                 textTransform: "uppercase",
               }}
             >
-              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#d97706" }} />
-              Active Presence Check
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: isTestPresenceModal ? "#2563eb" : "#d97706" }} />
+              {isTestPresenceModal ? "Test Preview Modal" : "Active Presence Check"}
             </div>
 
             {/* Title & Body */}
@@ -790,7 +1893,7 @@ export default function GlobalTimer() {
                   letterSpacing: "-0.3px",
                 }}
               >
-                Are you still there?
+                {isTestPresenceModal ? "Test Presence Popup" : "Are you still there?"}
               </h3>
               <p
                 style={{
@@ -800,8 +1903,9 @@ export default function GlobalTimer() {
                   lineHeight: 1.55,
                 }}
               >
-                The timer won't run if you aren't there! We paused your Pomodoro session to keep your focus stats accurate.
-                Click Continue to resume your session.
+                {isTestPresenceModal
+                  ? "This is a test preview of how the Active Presence check appears. Testing will NOT pause or affect your active timer."
+                  : "The timer won't run if you aren't there! We paused your Pomodoro session to keep your focus stats accurate. Click Continue to resume your session."}
               </p>
             </div>
 
@@ -870,6 +1974,395 @@ export default function GlobalTimer() {
         </div>
       )}
 
+      {/* Global Post-Session Reflection Prompt Modal (100% Emoji-Free) */}
+      {showReflectionModal && (
+        <div
+          id="globalReflectionPromptModal"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(10px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            animation: "fadeIn 0.25s ease-out forwards",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card-bg, #ffffff)",
+              border: "1px solid var(--border-color, rgba(226, 232, 240, 0.8))",
+              borderRadius: "20px",
+              padding: "2rem 2.2rem",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "1.2rem",
+            }}
+          >
+            {/* Visual Icon */}
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#059669",
+              }}
+            >
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </div>
+
+            {/* Badge */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "0.3rem 0.8rem",
+                borderRadius: "9999px",
+                background: isTestReflectionModal ? "rgba(59, 130, 246, 0.12)" : "rgba(16, 185, 129, 0.12)",
+                color: isTestReflectionModal ? "#1d4ed8" : "#065f46",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                letterSpacing: "0.6px",
+                textTransform: "uppercase",
+              }}
+            >
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: isTestReflectionModal ? "#2563eb" : "#059669" }} />
+              {isTestReflectionModal ? "Test Preview Modal" : "Session Completed"}
+            </div>
+
+            {/* Title & Body */}
+            <div>
+              <h3
+                style={{
+                  fontSize: "1.35rem",
+                  fontWeight: 700,
+                  color: "var(--text-primary, #0f172a)",
+                  margin: "0 0 0.5rem 0",
+                  letterSpacing: "-0.3px",
+                }}
+              >
+                {isTestReflectionModal ? "Post-Session Reflection Preview" : "How was your focus session?"}
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.92rem",
+                  color: "var(--text-secondary, #64748b)",
+                  margin: 0,
+                  lineHeight: 1.55,
+                }}
+              >
+                {isTestReflectionModal
+                  ? "This is a preview of the prompt that appears after each focus cycle. Logging 15 seconds helps the AI Coach personalize your study plan."
+                  : "Great work! Logging a quick reflection helps the AI Coach adjust your focus intervals, detect cognitive fatigue, and tune your flashcard reviews."}
+              </p>
+            </div>
+
+            {/* Quick Mood Starters */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", justifyContent: "center", width: "100%" }}>
+              {[
+                { label: "Focused & Steady", text: "I felt focused and maintained a steady rhythm throughout this session." },
+                { label: "A Bit Fatigued", text: "I started feeling tired towards the end and need a lighter task next." },
+                { label: "Distracted / Stressed", text: "I felt distracted and found it hard to stay on track." }
+              ].map((starter) => (
+                <button
+                  key={starter.label}
+                  type="button"
+                  onClick={() => {
+                    setShowReflectionModal(false);
+                    try {
+                      localStorage.setItem('ifocus_prefill_reflection', starter.text);
+                      let moodState = "Flow";
+                      let fatigueLevel = "Low";
+                      let errorRate = 0;
+                      let backspaces = 0;
+                      if (starter.label.includes("Stressed") || starter.label.includes("Distracted")) {
+                        moodState = "Stressed";
+                        fatigueLevel = "High";
+                        errorRate = 45;
+                        backspaces = 12;
+                      } else if (starter.label.includes("Fatigued")) {
+                        moodState = "Fatigued";
+                        fatigueLevel = "Elevated";
+                        errorRate = 25;
+                        backspaces = 5;
+                      }
+                      const telem = {
+                        state: moodState,
+                        fatigueLevel: fatigueLevel,
+                        sentiment: starter.label,
+                        reason: starter.text,
+                        errorRate: errorRate,
+                        backspaces: backspaces,
+                        source: 'post_session_mood_starter',
+                        timestamp: new Date().toISOString()
+                      };
+                      localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telem));
+                      window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telem }));
+                    } catch (e) {}
+                    if (pathname === '/dashboard') {
+                      window.dispatchEvent(new CustomEvent('ifocus_apply_prefill_reflection', { detail: starter.text }));
+                      const card = document.getElementById('quick-reflection-card');
+                      if (card) card.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      router.push('/dashboard#reflection');
+                    }
+                  }}
+                  style={{
+                    background: "var(--bg-secondary, #f8fafc)",
+                    border: "1px solid var(--border-color, rgba(226, 232, 240, 0.8))",
+                    borderRadius: "9999px",
+                    padding: "0.35rem 0.8rem",
+                    fontSize: "0.78rem",
+                    color: "var(--text-primary, #334155)",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#059669";
+                    e.currentTarget.style.color = "#059669";
+                    e.currentTarget.style.background = "rgba(16, 185, 129, 0.08)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border-color, rgba(226, 232, 240, 0.8))";
+                    e.currentTarget.style.color = "var(--text-primary, #334155)";
+                    e.currentTarget.style.background = "var(--bg-secondary, #f8fafc)";
+                  }}
+                >
+                  {starter.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", width: "100%", marginTop: "0.3rem" }}>
+              <button
+                type="button"
+                id="dismissReflectionPromptBtn"
+                onClick={() => setShowReflectionModal(false)}
+                style={{
+                  width: "100%",
+                  padding: "0.85rem 1.4rem",
+                  background: "var(--bg-secondary, #f1f5f9)",
+                  color: "var(--text-primary, #334155)",
+                  border: "1px solid var(--border-color, rgba(226, 232, 240, 0.8))",
+                  borderRadius: "12px",
+                  fontSize: "0.92rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border-color, #e2e8f0)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-secondary, #f1f5f9)")}
+              >
+                Skip for Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Session Cycle Completed Notification Modal */}
+      {showCycleCompleteModal && (
+        <div
+          id="globalCycleCompletedModal"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(10px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            animation: "fadeIn 0.25s ease-out forwards",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card-bg, #ffffff)",
+              border: "1px solid var(--border-color, rgba(226, 232, 240, 0.8))",
+              borderRadius: "20px",
+              padding: "2.2rem 2.4rem",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "1.2rem",
+            }}
+          >
+            {/* Visual Icon (Award / Checkmark) */}
+            <div
+              style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                background: "rgba(34, 197, 94, 0.12)",
+                border: "1px solid rgba(34, 197, 94, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#16a34a",
+              }}
+            >
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+
+            {/* Badge */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "0.3rem 0.85rem",
+                borderRadius: "9999px",
+                background: "rgba(34, 197, 94, 0.12)",
+                color: "#15803d",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+              }}
+            >
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }} />
+              Session Goal Completed
+            </div>
+
+            {/* Title & Body */}
+            <div>
+              <h3
+                style={{
+                  fontSize: "1.4rem",
+                  fontWeight: 800,
+                  color: "var(--text-primary, #0f172a)",
+                  margin: "0 0 0.5rem 0",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                All Planned Sessions Finished!
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.92rem",
+                  color: "var(--text-secondary, #64748b)",
+                  margin: 0,
+                  lineHeight: 1.6,
+                }}
+              >
+                You completed {completedCycleDetails.sessionsCompleted} scheduled {completedCycleDetails.sessionsCompleted === 1 ? 'focus session' : 'focus sessions'}. 
+                {completedCycleDetails.wasCustom
+                  ? " Would you like to return to the standard 25m Focus / 5m Rest rhythm, or keep your custom settings?"
+                  : " Great job staying focused! Your timer has paused and reset to Session 1."}
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", width: "100%", marginTop: "0.4rem" }}>
+              {completedCycleDetails.wasCustom ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleReturnToDefaultPreset}
+                    style={{
+                      width: "100%",
+                      padding: "0.85rem 1.4rem",
+                      background: "#163824",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "12px",
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(22, 56, 36, 0.28)",
+                      transition: "opacity 0.2s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.92")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                  >
+                    Return to 25/5 Default Rhythm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleKeepCurrentRhythm}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1.2rem",
+                      background: "transparent",
+                      color: "var(--text-secondary, #64748b)",
+                      border: "1px solid var(--border-color, rgba(226, 232, 240, 0.8))",
+                      borderRadius: "12px",
+                      fontSize: "0.88rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background 0.2s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-secondary, #f1f5f9)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    Keep Custom Rhythm
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleKeepCurrentRhythm}
+                  style={{
+                    width: "100%",
+                    padding: "0.85rem 1.4rem",
+                    background: "#163824",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 14px rgba(22, 56, 36, 0.28)",
+                    transition: "opacity 0.2s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.92")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  Got It, Ready for Next Cycle
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Global BreakGate Retrieval Modal (Accessible across any page when focus session concludes) */}
       <BreakGateModal
         isOpen={showBreakGateModal}
@@ -877,6 +2370,13 @@ export default function GlobalTimer() {
         onClose={() => setShowBreakGateModal(false)}
         onComplete={handleBreakGateComplete}
         onSkip={handleBreakGateSkip}
+      />
+
+      {/* Global Interactive Visual Feature Guide Modal */}
+      <FeatureGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+        initialTopic={guideTopic}
       />
     </>
   );

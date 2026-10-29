@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import HelpButton from '@/components/HelpButton';
 
 const playAlertSound = () => {
   try {
@@ -68,16 +69,123 @@ export default function CommandCenterPage() {
   // BreakGate Modal State
   const [showBreakGate, setShowBreakGate] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
+  const [showNoBreakGateModal, setShowNoBreakGateModal] = useState(false);
 
   // Active presence is managed globally by GlobalTimer across all pages
 
   // Custom Timer State
   const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
-  const [customWorkTime, setCustomWorkTime] = useState({ min: 0, sec: 0 });
-  const [customBreakTime, setCustomBreakTime] = useState({ min: 0, sec: 0 });
-  const [customSessions, setCustomSessions] = useState(0);
+  const [customWorkTime, setCustomWorkTime] = useState({ min: '', sec: '' });
+  const [customBreakTime, setCustomBreakTime] = useState({ min: '', sec: '' });
+  const [customSessions, setCustomSessions] = useState(1);
+  const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState('');
+  const [showQuitModal, setShowQuitModal] = useState(false);
+  const [saveSessionToast, setSaveSessionToast] = useState({ show: false, message: '' });
+
+  // AI-Adapted Timer State & Override Confirmation Prompt
+  const [isAiAdjustedTimer, setIsAiAdjustedTimer] = useState(false);
+  const [aiAdjustedDetails, setAiAdjustedDetails] = useState(null);
+  const [pendingTimerChange, setPendingTimerChange] = useState(null);
+
+  const getEntryAiReply = (entry) => {
+    if (entry?.aiReply) return entry.aiReply;
+    const s = String(entry?.state || 'Engaged');
+    const isStressed = s.toLowerCase().includes('stress');
+    const isDistracted = s.toLowerCase().includes('distract');
+    const isMotivated = s.toLowerCase().includes('motivat') || s.toLowerCase().includes('energetic');
+
+    if (isStressed) {
+      return {
+        title: "Gentle Focus (Stressed)",
+        state: "Stressed",
+        rhythm: "15m Focus / 5m Rest",
+        sessions: 2,
+        message: "Coach recommended a calming 15-minute gentle focus interval across 2 short cycles with lighter tasks first to ease mental tension."
+      };
+    }
+    if (isDistracted) {
+      return {
+        title: "Strict Pomodoro (Distracted)",
+        state: "Distracted",
+        rhythm: "20m Focus / 5m Rest",
+        sessions: 3,
+        message: "Coach recommended 20-minute structured single-task intervals across 3 paced sessions to eliminate task-switching."
+      };
+    }
+    if (isMotivated) {
+      return {
+        title: "Flow State (Motivated)",
+        state: "Motivated",
+        rhythm: "50m Focus / 10m Rest",
+        sessions: 4,
+        message: "Coach recommended tackling high-impact priority tasks across 4 deep work cycles to capitalize on peak alertness."
+      };
+    }
+    return {
+      title: "Balanced Cadence (Engaged)",
+      state: "Engaged",
+      rhythm: "25m Focus / 5m Rest",
+      sessions: 4,
+      message: "Coach recommended steady 25-minute Pomodoro intervals across 4 cycles with active BreakGate pacing."
+    };
+  };
+
+  const applyEntryAiRhythm = (reply) => {
+    setIsActive(false);
+    setIsFocus(true);
+    setTimerPreset('Custom');
+
+    let wMin = 25, bMin = 5;
+    if (reply?.rhythm?.includes('15m')) { wMin = 15; bMin = 5; }
+    else if (reply?.rhythm?.includes('20m')) { wMin = 20; bMin = 5; }
+    else if (reply?.rhythm?.includes('50m')) { wMin = 50; bMin = 10; }
+    else if (reply?.rhythm?.includes('60m')) { wMin = 60; bMin = 10; }
+
+    const targetSess = Math.min(5, Math.max(1, reply?.sessions || (reply?.state === 'Stressed' ? 2 : 4)));
+    setCustomWorkTime({ min: wMin, sec: 0 });
+    setCustomBreakTime({ min: bMin, sec: 0 });
+    setCustomSessions(targetSess);
+    setSessionCount(1);
+    setTimeLeft(wMin * 60);
+
+    const details = {
+      state: reply?.state || 'Adaptive',
+      rhythm: reply?.rhythm || `${wMin}m Focus / ${bMin}m Rest`,
+      sessions: targetSess,
+      title: reply?.title || 'AI Optimized Focus'
+    };
+    setIsAiAdjustedTimer(true);
+    setAiAdjustedDetails(details);
+
+    try {
+      localStorage.setItem('ifocus_ai_adjusted_active', 'true');
+      localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(details));
+      localStorage.setItem('ifocus_custom_timer', JSON.stringify({
+        customWorkTime: { min: wMin, sec: 0 },
+        customBreakTime: { min: bMin, sec: 0 },
+        customSessions: targetSess,
+        customWorkDuration: wMin * 60,
+        customBreakDuration: bMin * 60
+      }));
+      const syncPayload = {
+        isRunning: false,
+        isFocus: true,
+        timeLeft: wMin * 60,
+        totalTime: wMin * 60,
+        timerPreset: 'Custom',
+        customWorkDuration: wMin * 60,
+        customBreakDuration: bMin * 60,
+        customSessions: targetSess,
+        sessionCount: 1,
+        presencePaused: false,
+        lastPresenceElapsed: 0,
+        breakGatePending: false
+      };
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
+      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+    } catch (e) {}
+  };
 
   // Dynamic Focus Quotes
   const FOCUS_QUOTES = [
@@ -150,6 +258,16 @@ export default function CommandCenterPage() {
 
   const playNotificationChime = () => {
     try {
+      let chimeEnabled = true;
+      let volFactor = 0.7;
+      try {
+        const soundPrefs = JSON.parse(localStorage.getItem('ifocus_sound_preferences') || '{}');
+        if (soundPrefs.telemetryChime !== undefined) chimeEnabled = soundPrefs.telemetryChime;
+        if (soundPrefs.ambientVolume !== undefined) volFactor = Math.max(0, Math.min(100, Number(soundPrefs.ambientVolume))) / 100;
+      } catch (e) {}
+
+      if (!chimeEnabled || volFactor <= 0) return;
+
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
@@ -164,7 +282,7 @@ export default function CommandCenterPage() {
       const gain1 = ctx.createGain();
       osc1.type = 'sine';
       osc1.frequency.setValueAtTime(659.25, now);
-      gain1.gain.setValueAtTime(0.18, now);
+      gain1.gain.setValueAtTime(0.18 * volFactor, now);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
@@ -177,7 +295,7 @@ export default function CommandCenterPage() {
       osc2.type = 'sine';
       osc2.frequency.setValueAtTime(987.77, now + 0.1);
       gain2.gain.setValueAtTime(0, now);
-      gain2.gain.setValueAtTime(0.22, now + 0.1);
+      gain2.gain.setValueAtTime(0.22 * volFactor, now + 0.1);
       gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
@@ -254,6 +372,25 @@ export default function CommandCenterPage() {
       state: detectedState,
       speedLabel: label
     });
+
+    // Update real-time cognitive telemetry if corrections or friction detected
+    if (bsCount >= 4 || bsRatio > 0.25 || detectedState === 'friction' || detectedState === 'hesitant') {
+      try {
+        const payload = {
+          state: detectedState === 'friction' ? 'Stressed' : detectedState === 'hesitant' ? 'Fatigued' : 'Flow',
+          fatigueLevel: detectedState === 'friction' ? 'High' : detectedState === 'hesitant' ? 'Elevated' : 'Moderate',
+          reason: label,
+          backspaces: bsCount,
+          errorRate: Math.round(bsRatio * 100),
+          dwell: Math.round(avgDwell),
+          flight: Math.round(avgFlight),
+          source: 'keystroke_cadence',
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(payload));
+        window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: payload }));
+      } catch (e) {}
+    }
 
     // Check Actual Cognitive Friction Anomalies (Ignoring fast typing!)
     if (bsRatio > 0.45 && bsCount >= 6 && !anomalyTriggeredRef.current) {
@@ -398,7 +535,16 @@ export default function CommandCenterPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
   const audioRef = useRef(null);
-  const tracks = ['Chill Lofi', 'Study Music', 'Rain Ambient'];
+  const tracks = [
+    { id: 'Chill Lofi', name: 'Chill Lofi', desc: 'Calming Lo-Fi beats & ambient chill study vibes', tag: 'Lo-Fi', icon: 'coffee' },
+    { id: 'Study Music', name: 'Study Music', desc: 'Classical acoustic focus melodies for deep work', tag: 'Acoustic', icon: 'book' },
+    { id: 'Rain Ambient', name: 'Rain Ambient', desc: 'Gentle rainfall & soothing natural drops', tag: 'Nature', icon: 'rain' },
+    { id: 'Ocean Waves', name: 'Ocean Waves', desc: 'Rhythmic rolling ocean surf & calming sea tide', tag: 'Water', icon: 'wave' },
+    { id: 'Binaural Alpha (432Hz)', name: 'Binaural Alpha (432Hz)', desc: '10Hz alpha brainwave pulses for deep memory retention', tag: 'Binaural', icon: 'brain' },
+    { id: 'Warm Campfire', name: 'Warm Campfire', desc: 'Cozy fireplace embers & relaxing warm crackle', tag: 'Ambiance', icon: 'fire' },
+    { id: 'Pink Noise', name: 'Pink Noise', desc: 'Balanced 1/f noise for distraction masking', tag: 'Noise', icon: 'wind' },
+    { id: 'Cosmic Deep Space', name: 'Cosmic Deep Space', desc: 'Ethereal ambient celestial drone & meditation pad', tag: 'Drone', icon: 'moon' },
+  ];
 
   // Load To-Dos from API and History from LocalStorage
   useEffect(() => {
@@ -452,17 +598,104 @@ export default function CommandCenterPage() {
     return '/music/Lofi Chill.mp3';
   };
 
-  // Audio Playback Sync
+  // Ambient Soundscape Sync with Global Engine
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume / 100;
-      if (isPlaying) {
-        audioRef.current.play().catch(e => console.warn("Audio autoplay blocked:", e));
+    try {
+      const saved = localStorage.getItem('ifocus_music_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.currentTrack) setCurrentTrack(parsed.currentTrack);
+        if (typeof parsed.isPlaying === 'boolean') setIsPlaying(parsed.isPlaying);
+        if (typeof parsed.volume === 'number') setVolume(parsed.volume);
       } else {
-        audioRef.current.pause();
+        const savedSound = localStorage.getItem('ifocus_sound_preferences');
+        if (savedSound) {
+          const parsed = JSON.parse(savedSound);
+          if (parsed.defaultAmbientTrack && parsed.defaultAmbientTrack !== 'None') {
+            setCurrentTrack(parsed.defaultAmbientTrack);
+          }
+          if (parsed.ambientVolume !== undefined) {
+            setVolume(parsed.ambientVolume);
+          }
+        }
       }
+    } catch (e) {}
+
+    const handleSync = (e) => {
+      if (e?.detail) {
+        if (e.detail.currentTrack) setCurrentTrack(e.detail.currentTrack);
+        if (typeof e.detail.isPlaying === 'boolean') setIsPlaying(e.detail.isPlaying);
+        if (typeof e.detail.volume === 'number') setVolume(e.detail.volume);
+      }
+    };
+    window.addEventListener('ifocus_music_sync', handleSync);
+    return () => window.removeEventListener('ifocus_music_sync', handleSync);
+  }, []);
+
+  const handleTogglePlayback = (explicitState) => {
+    const nextState = typeof explicitState === 'boolean' ? explicitState : !isPlaying;
+    setIsPlaying(nextState);
+    const detail = { isPlaying: nextState, currentTrack, volume };
+    try {
+      localStorage.setItem('ifocus_music_state', JSON.stringify(detail));
+    } catch (e) {}
+    window.dispatchEvent(new CustomEvent('ifocus_music_sync', { detail }));
+  };
+
+  const handleSelectTrack = (trackName) => {
+    setCurrentTrack(trackName);
+    setIsPlaying(true);
+    const detail = { isPlaying: true, currentTrack: trackName, volume };
+    try {
+      localStorage.setItem('ifocus_music_state', JSON.stringify(detail));
+    } catch (e) {}
+    window.dispatchEvent(new CustomEvent('ifocus_music_sync', { detail }));
+  };
+
+  const handleVolumeChange = (newVol) => {
+    setVolume(newVol);
+    const detail = { isPlaying, currentTrack, volume: newVol };
+    try {
+      localStorage.setItem('ifocus_music_state', JSON.stringify(detail));
+    } catch (e) {}
+    window.dispatchEvent(new CustomEvent('ifocus_music_sync', { detail }));
+  };
+
+  // Load and sync active BreakGate deck
+  const checkActiveDeck = () => {
+    try {
+      const bgDeckRaw = localStorage.getItem('ifocus_active_breakgate_deck');
+      if (bgDeckRaw) {
+        const parsed = JSON.parse(bgDeckRaw);
+        if (parsed && (parsed.id || parsed.title)) {
+          setActiveBreakGateDeck(parsed);
+          return;
+        }
+      }
+      setActiveBreakGateDeck(null);
+    } catch (e) {
+      setActiveBreakGateDeck(null);
     }
-  }, [isPlaying, currentTrack, volume]);
+  };
+
+  // Handle prefilled reflection from Post-Session modal
+  useEffect(() => {
+    try {
+      const prefill = localStorage.getItem('ifocus_prefill_reflection');
+      if (prefill) {
+        setReflectionInput(prefill);
+        localStorage.removeItem('ifocus_prefill_reflection');
+      }
+    } catch (e) {}
+
+    const handlePrefillEvent = (e) => {
+      if (e?.detail) {
+        setReflectionInput(e.detail);
+      }
+    };
+    window.addEventListener('ifocus_apply_prefill_reflection', handlePrefillEvent);
+    return () => window.removeEventListener('ifocus_apply_prefill_reflection', handlePrefillEvent);
+  }, []);
 
   // Pomodoro Logic & Global Timer Synchronization
   useEffect(() => {
@@ -483,7 +716,60 @@ export default function CommandCenterPage() {
         }
         if (parsed.isFocus !== undefined) setIsFocus(parsed.isFocus);
         if (parsed.timerPreset) setTimerPreset(parsed.timerPreset);
-        if (parsed.sessionCount) setSessionCount(parsed.sessionCount);
+        let maxS = 4;
+        if (parsed.timerPreset === 'Custom') {
+          try {
+            const c = localStorage.getItem('ifocus_custom_timer');
+            if (c) maxS = Number(JSON.parse(c).customSessions) || 1;
+            else if (parsed.customSessions) maxS = Number(parsed.customSessions) || 1;
+          } catch(e) {}
+        }
+        if (parsed.sessionCount) {
+          const clamped = parsed.sessionCount > maxS ? 1 : parsed.sessionCount;
+          setSessionCount(clamped);
+        }
+      }
+
+      checkActiveDeck();
+
+      // Load saved custom timer and BreakGate configuration
+      const savedCustom = localStorage.getItem('ifocus_custom_timer');
+      if (savedCustom) {
+        const parsed = JSON.parse(savedCustom);
+        if (parsed.customWorkTime) setCustomWorkTime(parsed.customWorkTime);
+        if (parsed.customBreakTime) setCustomBreakTime(parsed.customBreakTime);
+        if (parsed.customSessions) setCustomSessions(parsed.customSessions);
+        if (parsed.customBreakGateQuestions) setCustomBreakGateQuestions(parsed.customBreakGateQuestions);
+      } else {
+        const bgStored = localStorage.getItem('ifocus_breakgate_question_count');
+        if (bgStored) setCustomBreakGateQuestions(parseInt(bgStored) || 3);
+      }
+
+      // Check if AI adjusted timer schedule is active
+      const aiActive = localStorage.getItem('ifocus_ai_adjusted_active');
+      if (aiActive === 'true') {
+        setIsAiAdjustedTimer(true);
+        const details = localStorage.getItem('ifocus_ai_adjusted_details');
+        if (details) setAiAdjustedDetails(JSON.parse(details));
+      }
+
+      // Check if arriving from AI Coach with applied cadence toast
+      const appliedToast = localStorage.getItem('ifocus_applied_toast');
+      if (appliedToast) {
+        try {
+          const parsed = JSON.parse(appliedToast);
+          setSaveSessionToast({
+            show: true,
+            title: parsed.title || "AI Coach Rhythm Active",
+            message: parsed.message || "Adapted focus timer cadence applied."
+          });
+          localStorage.removeItem('ifocus_applied_toast');
+          setTimeout(() => {
+            setSaveSessionToast({ show: false, message: '', title: '' });
+          }, 4500);
+        } catch (e) {
+          localStorage.removeItem('ifocus_applied_toast');
+        }
       }
     } catch (e) {}
 
@@ -502,8 +788,53 @@ export default function CommandCenterPage() {
         if (e.detail.isRunning !== undefined) setIsActive(e.detail.isRunning);
         if (e.detail.isFocus !== undefined) setIsFocus(e.detail.isFocus);
         if (e.detail.timerPreset) setTimerPreset(e.detail.timerPreset);
-        if (e.detail.sessionCount) setSessionCount(e.detail.sessionCount);
+        if (e.detail.customSessions !== undefined) setCustomSessions(Number(e.detail.customSessions) || 1);
+        if (e.detail.customWorkDuration !== undefined) {
+          const wMin = Math.floor(e.detail.customWorkDuration / 60);
+          const wSec = e.detail.customWorkDuration % 60;
+          setCustomWorkTime({ min: wMin, sec: wSec });
+        }
+        if (e.detail.customBreakDuration !== undefined) {
+          const bMin = Math.floor(e.detail.customBreakDuration / 60);
+          const bSec = e.detail.customBreakDuration % 60;
+          setCustomBreakTime({ min: bMin, sec: bSec });
+        }
+        if (e.detail.sessionCount) {
+          let maxS = 4;
+          const currentPreset = e.detail.timerPreset || timerPreset;
+          if (currentPreset === 'Custom') {
+            try {
+              const c = localStorage.getItem('ifocus_custom_timer');
+              if (c) maxS = Number(JSON.parse(c).customSessions) || 1;
+              else maxS = Number(e.detail.customSessions || customSessions) || 1;
+            } catch(err) {
+              maxS = Number(e.detail.customSessions || customSessions) || 1;
+            }
+          }
+          const clamped = e.detail.sessionCount > maxS ? 1 : e.detail.sessionCount;
+          setSessionCount(clamped);
+        }
       }
+
+      // Re-read storage state for custom timer & AI adjusted banner
+      try {
+        const customRaw = localStorage.getItem('ifocus_custom_timer');
+        if (customRaw) {
+          const parsed = JSON.parse(customRaw);
+          if (parsed.customWorkTime) setCustomWorkTime(parsed.customWorkTime);
+          if (parsed.customBreakTime) setCustomBreakTime(parsed.customBreakTime);
+          if (parsed.customSessions) setCustomSessions(Number(parsed.customSessions) || 1);
+        }
+        const aiActive = localStorage.getItem('ifocus_ai_adjusted_active');
+        if (aiActive === 'true') {
+          setIsAiAdjustedTimer(true);
+          const details = localStorage.getItem('ifocus_ai_adjusted_details');
+          if (details) setAiAdjustedDetails(JSON.parse(details));
+        } else {
+          setIsAiAdjustedTimer(false);
+          setAiAdjustedDetails(null);
+        }
+      } catch (err) {}
     };
 
     const handleBreakGate = (e) => {
@@ -513,21 +844,53 @@ export default function CommandCenterPage() {
       }
     };
 
+    const handleWindowFocusSync = () => {
+      checkActiveDeck();
+      handleSync();
+    };
+
+    const handleCycleCompleted = (e) => {
+      const count = e?.detail?.sessionsCompleted || 1;
+      setSaveSessionToast({
+        show: true,
+        title: "Session Goal Completed!",
+        message: `All ${count} planned focus sessions finished. Great job staying focused!`
+      });
+      setTimeout(() => {
+        setSaveSessionToast({ show: false, message: '', title: '' });
+      }, 5500);
+    };
+
     window.addEventListener('ifocus_timer_tick', handleTick);
     window.addEventListener('ifocus_timer_sync', handleSync);
     window.addEventListener('ifocus_breakgate_trigger', handleBreakGate);
+    window.addEventListener('ifocus_cycle_completed', handleCycleCompleted);
+    window.addEventListener('focus', handleWindowFocusSync);
+    window.addEventListener('storage', handleWindowFocusSync);
+    window.addEventListener('ifocus_breakgate_deck_changed', checkActiveDeck);
 
     return () => {
       window.removeEventListener('ifocus_timer_tick', handleTick);
       window.removeEventListener('ifocus_timer_sync', handleSync);
       window.removeEventListener('ifocus_breakgate_trigger', handleBreakGate);
+      window.removeEventListener('ifocus_cycle_completed', handleCycleCompleted);
+      window.removeEventListener('focus', handleWindowFocusSync);
+      window.removeEventListener('storage', handleWindowFocusSync);
+      window.removeEventListener('ifocus_breakgate_deck_changed', checkActiveDeck);
     };
   }, []);
 
   const handleBreakGateComplete = () => {
     setShowBreakGate(false);
+    const breakMin = parseInt(customBreakTime.min) || 0;
+    const breakSec = parseInt(customBreakTime.sec) || 0;
+    const customBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
+    const workMin = parseInt(customWorkTime.min) || 0;
+    const workSec = parseInt(customWorkTime.sec) || 0;
+    const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
+
     const breakTime = timerPreset === 'Custom' 
-      ? customBreakTime.min * 60 + customBreakTime.sec 
+      ? customBreakDuration 
       : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
     
     setIsActive(true);
@@ -541,9 +904,12 @@ export default function CommandCenterPage() {
       totalTime: breakTime,
       targetEndTime: Date.now() + (breakTime * 1000),
       timerPreset,
+      customWorkDuration,
+      customBreakDuration,
       sessionCount,
       presencePaused: false,
       lastPresenceElapsed: 0,
+      lastPresenceRemaining: timeLeft,
       breakGatePending: false
     };
     try {
@@ -556,10 +922,24 @@ export default function CommandCenterPage() {
     handleBreakGateComplete();
   };
 
-  const toggleTimer = () => {
+  const handleSkipBreak = () => {
+    window.dispatchEvent(new CustomEvent('ifocus_skip_break'));
+  };
+
+  const startTimerDirectly = () => {
+    setShowNoBreakGateModal(false);
     const nextIsActive = !isActive;
     setIsActive(nextIsActive);
     const total = getTotalTime();
+
+    const workMin = parseInt(customWorkTime.min) || 0;
+    const workSec = parseInt(customWorkTime.sec) || 0;
+    const currentCustomWorkDuration = (workMin * 60 + workSec) || 25 * 60;
+    const breakMin = parseInt(customBreakTime.min) || 0;
+    const breakSec = parseInt(customBreakTime.sec) || 0;
+    const currentCustomBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
+    const currentCustomSessions = Number(customSessions) || 1;
+
     const nextState = {
       isRunning: nextIsActive,
       isFocus,
@@ -567,9 +947,13 @@ export default function CommandCenterPage() {
       totalTime: total,
       targetEndTime: nextIsActive ? Date.now() + (timeLeft * 1000) : null,
       timerPreset,
+      customWorkDuration: currentCustomWorkDuration,
+      customBreakDuration: currentCustomBreakDuration,
+      customSessions: currentCustomSessions,
       sessionCount,
       presencePaused: false,
       lastPresenceElapsed: 0,
+      lastPresenceRemaining: timeLeft,
       breakGatePending: false
     };
     try {
@@ -578,11 +962,44 @@ export default function CommandCenterPage() {
     } catch (e) {}
   };
 
-  const resetTimer = () => {
+  const toggleTimer = () => {
+    if (!isActive) {
+      // User is starting a focus session: check if a BreakGate deck is active
+      let hasDeck = Boolean(activeBreakGateDeck);
+      if (!hasDeck) {
+        try {
+          const stored = localStorage.getItem('ifocus_active_breakgate_deck');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && (parsed.id || parsed.title)) {
+              hasDeck = true;
+              setActiveBreakGateDeck(parsed);
+            }
+          }
+        } catch(e) {}
+      }
+
+      if (!hasDeck) {
+        setShowNoBreakGateModal(true);
+        return;
+      }
+    }
+    startTimerDirectly();
+  };
+
+  const forceResetTimer = () => {
     setIsActive(false);
+    const workMin = parseInt(customWorkTime.min) || 0;
+    const workSec = parseInt(customWorkTime.sec) || 0;
+    const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
+    const breakMin = parseInt(customBreakTime.min) || 0;
+    const breakSec = parseInt(customBreakTime.sec) || 0;
+    const customBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
+    const currentCustomSessions = Number(customSessions) || 1;
+
     let newTime = 25 * 60;
     if (timerPreset === 'Custom') {
-      newTime = isFocus ? (customWorkTime.min * 60 + customWorkTime.sec) : (customBreakTime.min * 60 + customBreakTime.sec);
+      newTime = isFocus ? customWorkDuration : customBreakDuration;
     } else {
       const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
       newTime = isFocus ? focusTime * 60 : 5 * 60;
@@ -595,9 +1012,13 @@ export default function CommandCenterPage() {
       totalTime: newTime,
       targetEndTime: null,
       timerPreset,
+      customWorkDuration,
+      customBreakDuration,
+      customSessions: currentCustomSessions,
       sessionCount,
       presencePaused: false,
       lastPresenceElapsed: 0,
+      lastPresenceRemaining: newTime,
       breakGatePending: false
     };
     try {
@@ -606,7 +1027,89 @@ export default function CommandCenterPage() {
     } catch (e) {}
   };
 
-  const setPreset = (preset) => {
+  const resetTimer = () => {
+    const total = getTotalTime();
+    const elapsed = Math.max(0, total - timeLeft);
+    if (isFocus && elapsed >= 15) {
+      setShowQuitModal(true);
+      return;
+    }
+    forceResetTimer();
+  };
+
+  const handleSaveAndEndSession = () => {
+    setShowQuitModal(false);
+    setIsActive(false);
+
+    const total = getTotalTime();
+    const elapsed = Math.max(0, total - timeLeft);
+    const focusMins = Math.max(1, Math.round(elapsed / 60));
+
+    try {
+      const history = JSON.parse(localStorage.getItem("ifocus_session_history") || "[]");
+      history.push({
+        date: new Date().toISOString(),
+        duration: focusMins,
+        type: "pomodoro",
+        partial: true,
+        synced: true,
+      });
+      if (history.length > 200) history.splice(0, history.length - 200);
+      localStorage.setItem("ifocus_session_history", JSON.stringify(history));
+
+      const today = new Date().toDateString();
+      const stats = JSON.parse(localStorage.getItem("ifocus_focus_stats") || "{}");
+      const currentSessions = (stats.sessions || 0) + 1;
+      const currentMinutes = (stats.minutes || 0) + focusMins;
+      const uniqueDates = new Set(history.map((s) => new Date(s.date).toISOString().slice(0, 10)));
+      let streakCount = 0;
+      let checkDate = new Date();
+      while (true) {
+        const dateStr = checkDate.toISOString().slice(0, 10);
+        if (uniqueDates.has(dateStr)) {
+          streakCount++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+      localStorage.setItem(
+        "ifocus_focus_stats",
+        JSON.stringify({
+          date: today,
+          sessions: currentSessions,
+          minutes: currentMinutes,
+          streak: Math.max(1, streakCount),
+        })
+      );
+
+      // Cloud Sync to PostgreSQL Database for Admin & Institutional Overview
+      fetch('/api/study-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          duration: focusMins * 60,
+          score: 100
+        })
+      }).catch(() => {});
+
+      window.dispatchEvent(new CustomEvent("ifocus_stats_updated"));
+    } catch (e) {
+      console.warn("Failed saving partial session:", e);
+    }
+
+    forceResetTimer();
+    playTaskAddSound();
+    setSaveSessionToast({
+      show: true,
+      message: `${focusMins} minute${focusMins > 1 ? 's' : ''} successfully recorded to Analytics & Stats.`,
+    });
+    setTimeout(() => {
+      setSaveSessionToast({ show: false, message: '' });
+    }, 4500);
+  };
+
+  const executePresetChange = (preset) => {
     if (preset === 'Custom') {
       setIsCustomTimerModalOpen(true);
     } else {
@@ -635,30 +1138,107 @@ export default function CommandCenterPage() {
     }
   };
 
-  const saveCustomSettings = () => {
+  const setPreset = (preset) => {
+    if (isAiAdjustedTimer) {
+      setPendingTimerChange({ type: 'preset', value: preset });
+      return;
+    }
+    executePresetChange(preset);
+  };
+
+  const handleOpenCustomSettings = () => {
+    if (isAiAdjustedTimer) {
+      setPendingTimerChange({ type: 'open_custom' });
+      return;
+    }
+    setIsCustomTimerModalOpen(true);
+  };
+
+  const executeSaveCustomSettings = () => {
     setIsCustomTimerModalOpen(false);
     setTimerPreset('Custom');
     setIsActive(false);
     setIsFocus(true);
-    const newTime = (customWorkTime.min * 60 + customWorkTime.sec) || 25 * 60;
-    setTimeLeft(newTime);
+    const workMin = parseInt(customWorkTime.min) || 0;
+    const workSec = parseInt(customWorkTime.sec) || 0;
+    const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
+
+    const breakMin = parseInt(customBreakTime.min) || 0;
+    const breakSec = parseInt(customBreakTime.sec) || 0;
+    const customBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
+
+    const validatedSessions = Math.min(5, Math.max(1, parseInt(customSessions, 10) || 1));
+    setCustomSessions(validatedSessions);
+
+    const customQuestionCount = parseInt(customBreakGateQuestions) || 3;
+    localStorage.setItem('ifocus_breakgate_question_count', String(customQuestionCount));
+
+    try {
+      localStorage.setItem('ifocus_custom_timer', JSON.stringify({
+        customWorkTime,
+        customBreakTime,
+        customSessions: validatedSessions,
+        customWorkDuration,
+        customBreakDuration,
+        customBreakGateQuestions: customQuestionCount
+      }));
+    } catch (e) {}
+
+    setTimeLeft(customWorkDuration);
     setSessionCount(1);
     const nextState = {
       isRunning: false,
       isFocus: true,
-      timeLeft: newTime,
-      totalTime: newTime,
+      timeLeft: customWorkDuration,
+      totalTime: customWorkDuration,
       targetEndTime: null,
       timerPreset: 'Custom',
+      customWorkDuration,
+      customBreakDuration,
+      customSessions: validatedSessions,
       sessionCount: 1,
       presencePaused: false,
       lastPresenceElapsed: 0,
+      lastPresenceRemaining: customWorkDuration,
       breakGatePending: false
     };
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
     } catch (e) {}
+  };
+
+  const saveCustomSettings = () => {
+    if (isAiAdjustedTimer) {
+      setPendingTimerChange({ type: 'save_custom' });
+      return;
+    }
+    executeSaveCustomSettings();
+  };
+
+  const confirmOverrideAi = () => {
+    setIsAiAdjustedTimer(false);
+    setAiAdjustedDetails(null);
+    try {
+      localStorage.removeItem('ifocus_ai_adjusted_active');
+      localStorage.removeItem('ifocus_ai_adjusted_details');
+    } catch (e) {}
+
+    const pending = pendingTimerChange;
+    setPendingTimerChange(null);
+
+    if (!pending) return;
+    if (pending.type === 'preset') {
+      executePresetChange(pending.value);
+    } else if (pending.type === 'open_custom') {
+      setIsCustomTimerModalOpen(true);
+    } else if (pending.type === 'save_custom') {
+      executeSaveCustomSettings();
+    }
+  };
+
+  const cancelOverrideAi = () => {
+    setPendingTimerChange(null);
   };
 
   const formatTime = (seconds) => {
@@ -910,9 +1490,18 @@ export default function CommandCenterPage() {
     if (!text) return;
     setIsSubmittingReflection(true);
     setAiFeedback(null);
+
+    let feedback = "Keep up the great work!";
+    let state = "Engaged";
+    let timerLabel = "Focus Time";
+    let rhythmStr = "25m Focus / 5m Rest";
+    let targetSessions = 4;
+    let customWork = { min: 25, sec: 0 };
+    let customBreak = { min: 5, sec: 0 };
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25-second robust timeout
       
       const activeTasks = todos.filter(t => !t.completed).map(t => ({ id: t.id, text: t.text, priority: t.priority }));
       const res = await fetch('/api/ai/coach', {
@@ -925,12 +1514,9 @@ export default function CommandCenterPage() {
       clearTimeout(timeoutId);
       const data = await res.json();
       
-      let feedback = "Keep up the great work!";
-      let state = "Engaged";
-      
       if (res.ok) {
-        feedback = data.actionPlan;
-        state = data.state;
+        feedback = data.actionPlan || "Focus plan optimized.";
+        state = data.state || "Engaged";
         
         playAlertSound();
         
@@ -959,34 +1545,80 @@ export default function CommandCenterPage() {
             }).catch(e => console.error("Failed to sync order:", e));
         }
         
-        // Adjust Timer based on state
+        // Adaptive Session & Rhythm Targeting from AI (Strictly 1 to 5)
+        targetSessions = Math.min(5, Math.max(1, parseInt(data.targetSessions, 10) || (state === "Stressed" ? 2 : state === "Distracted" ? 3 : 4)));
+
+        // Adjust Timer based on state and AI returned minutes
         setIsActive(false);
         setIsFocus(true);
-        let timerLabel = "Focus Time";
-        if (state === "Stressed") {
-            setTimerPreset('Custom');
-            setCustomWorkTime({ min: 15, sec: 0 });
-            setCustomBreakTime({ min: 3, sec: 0 });
-            setTimeLeft(15 * 60);
-            timerLabel = "Gentle Focus (Stressed)";
-        } else if (state === "Distracted") {
-            setTimerPreset('Custom');
-            setCustomWorkTime({ min: 20, sec: 0 });
-            setCustomBreakTime({ min: 5, sec: 0 });
-            setTimeLeft(20 * 60);
-            timerLabel = "Strict Pomodoro (Distracted)";
-        } else if (state === "Engaged" || state === "Motivated") {
-            setTimerPreset('Custom');
-            setCustomWorkTime({ min: 60, sec: 0 });
-            setCustomBreakTime({ min: 10, sec: 0 });
-            setTimeLeft(60 * 60);
-            timerLabel = "Flow State (Engaged)";
-        }
+        setTimerPreset('Custom');
+
+        const workMin = parseInt(data.workMinutes, 10) || (
+          state === "Stressed" ? 15 :
+          state === "Distracted" ? 20 :
+          state === "Motivated" ? 50 : 25
+        );
+        const breakMin = parseInt(data.breakMinutes, 10) || (
+          workMin >= 50 ? 10 : 5
+        );
+
+        customWork = { min: workMin, sec: 0 };
+        customBreak = { min: breakMin, sec: 0 };
+        rhythmStr = `${workMin}m Focus / ${breakMin}m Rest`;
+        timerLabel = state === "Stressed" ? "Gentle Focus (Stressed)"
+          : state === "Distracted" ? "Strict Pomodoro (Distracted)"
+          : state === "Motivated" ? "Flow State (Motivated)"
+          : `Balanced Cadence (${state})`;
+
+        setCustomWorkTime(customWork);
+        setCustomBreakTime(customBreak);
+        setCustomSessions(targetSessions);
+        setSessionCount(1);
+        setTimeLeft(customWork.min * 60);
+
+        // Persist AI adapted custom timer and sync
+        try {
+          localStorage.setItem('ifocus_custom_timer', JSON.stringify({
+            customWorkTime: customWork,
+            customBreakTime: customBreak,
+            customSessions: targetSessions,
+            customWorkDuration: customWork.min * 60,
+            customBreakDuration: customBreak.min * 60
+          }));
+          const syncPayload = {
+            isRunning: false,
+            isFocus: true,
+            timeLeft: customWork.min * 60,
+            totalTime: customWork.min * 60,
+            timerPreset: 'Custom',
+            customWorkDuration: customWork.min * 60,
+            customBreakDuration: customBreak.min * 60,
+            customSessions: targetSessions,
+            sessionCount: 1,
+            presencePaused: false,
+            lastPresenceElapsed: 0,
+            breakGatePending: false
+          };
+          localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
+          window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+        } catch (e) {}
         
-        setAiFeedback({
-            title: `AI Adjusted Timer:\n${timerLabel}`,
-            message: feedback
-        });
+        const aiReplyData = {
+          title: timerLabel,
+          message: feedback,
+          state: state,
+          rhythm: rhythmStr,
+          sessions: targetSessions,
+          reorderedCount: data.orderedIds?.length || 0
+        };
+
+        setAiFeedback(aiReplyData);
+        setIsAiAdjustedTimer(true);
+        setAiAdjustedDetails(aiReplyData);
+        try {
+          localStorage.setItem('ifocus_ai_adjusted_active', 'true');
+          localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiReplyData));
+        } catch (e) {}
 
         // Trigger AI Coach Intervention in Local Storage if not Engaged/Motivated
         if (state === "Stressed" || state === "Distracted") {
@@ -997,23 +1629,164 @@ export default function CommandCenterPage() {
             timestamp: new Date().toISOString()
           }));
         }
+
+        // Save latest telemetry payload for Analytics and Coach
+        try {
+          const isTense = state === "Stressed" || state === "Distracted";
+          const telemPayload = {
+            state: state,
+            fatigueLevel: isTense ? "High" : state === "Fatigued" ? "Elevated" : "Low",
+            reason: feedback || text,
+            sentiment: state,
+            errorRate: telemetryStats.errorRate,
+            backspaces: telemetryStats.backspaces,
+            dwell: telemetryStats.dwell,
+            flight: telemetryStats.flight,
+            source: 'reflection_submission',
+            timestamp: new Date().toISOString()
+          };
+          localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
+          window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
+        } catch (e) {}
+
+        setReflectionInput('');
+        
+        // Save to journal history with AI reply included
+        const newEntry = {
+          id: Date.now().toString(),
+          date: new Date().toISOString(),
+          text: text,
+          state: state,
+          aiReply: aiReplyData
+        };
+        saveHistory([newEntry, ...pastEntries]);
+
       } else {
         setAiFeedback({ title: "Error", message: `Failed to generate AI response. ${data.error || ''}` });
       }
+
+    } catch (err) {
+      console.warn("Reflection submit error:", err);
+      // Save local telemetry fallback if catch triggered
+      const lower = text.toLowerCase();
+      const isStress = lower.includes('stress') || lower.includes('anxi') || lower.includes('worr') || lower.includes('frustrat') || lower.includes('tired') || lower.includes('overwhelm');
+      const isDistracted = lower.includes('distract') || lower.includes('bore') || lower.includes('scroll') || lower.includes('procrastinat');
+      const isMotivated = lower.includes('motivat') || lower.includes('ready') || lower.includes('energ') || lower.includes('excite');
       
+      const fallbackState = isStress ? "Stressed" : isDistracted ? "Distracted" : isMotivated ? "Motivated" : "Engaged";
+      const fallbackSessions = isStress ? 2 : isDistracted ? 3 : 4;
+      const fallbackWork = isStress ? { min: 15, sec: 0 } : isDistracted ? { min: 20, sec: 0 } : isMotivated ? { min: 50, sec: 0 } : { min: 25, sec: 0 };
+      const fallbackBreak = isMotivated ? { min: 10, sec: 0 } : { min: 5, sec: 0 };
+      const fallbackRhythm = `${fallbackWork.min}m Focus / ${fallbackBreak.min}m Rest`;
+      const fallbackTitle = fallbackState === "Stressed" ? "Gentle Focus (Stressed)" 
+        : fallbackState === "Distracted" ? "Strict Pomodoro (Distracted)"
+        : fallbackState === "Motivated" ? "Flow State (Motivated)"
+        : "Balanced Cadence (Engaged)";
+
+      let fallbackMessage = "Solid reflection logged! Maintain a steady focus pace with periodic restorative micro-breaks.";
+      if (fallbackState === "Stressed") {
+        fallbackMessage = "I noticed friction and pressure in your reflection. I've adjusted your timer to a gentle 15-minute interval across 2 short sessions with lighter tasks first to build calm momentum.";
+      } else if (fallbackState === "Distracted") {
+        fallbackMessage = "Distractions happen—the key is lowering friction. I've set a focused 20-minute Pomodoro across 3 structured cycles to eliminate task-switching.";
+      } else if (fallbackState === "Motivated") {
+        fallbackMessage = "Great energy detected! I've scheduled 50-minute deep work intervals across 4 cycles to capitalize on your peak alertness.";
+      }
+
+      try {
+        const telemPayload = {
+          state: fallbackState,
+          fatigueLevel: isStress ? "High" : isDistracted ? "Elevated" : "Low",
+          reason: isStress ? "Frustration / stress sentiment detected in journal reflection." : "Focus reflection logged.",
+          sentiment: fallbackState,
+          errorRate: telemetryStats.errorRate,
+          backspaces: telemetryStats.backspaces,
+          source: 'reflection_submission_fallback',
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
+        window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
+      } catch (e) {}
+      
+      // In fallback, also smartly reorder tasks locally so tasks NEVER stay stuck
+      const activeTodos = todos.filter(t => !t.completed);
+      const completedTodos = todos.filter(t => t.completed);
+      let reorderedActive = [...activeTodos];
+      if (fallbackState === 'Stressed') {
+        const pMap = { Low: 1, Medium: 2, High: 3 };
+        reorderedActive.sort((a, b) => (pMap[a.priority] || 2) - (pMap[b.priority] || 2));
+      } else {
+        const pMap = { High: 1, Medium: 2, Low: 3 };
+        reorderedActive.sort((a, b) => (pMap[a.priority] || 2) - (pMap[b.priority] || 2));
+      }
+      const newOrder = [...reorderedActive, ...completedTodos];
+      setTodos(newOrder);
+      fetch('/api/todos/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: newOrder.map(t => t.id) })
+      }).catch(() => {});
+
+      const fallbackReply = {
+        title: fallbackTitle,
+        message: fallbackMessage,
+        state: fallbackState,
+        rhythm: fallbackRhythm,
+        sessions: fallbackSessions,
+        reorderedCount: activeTodos.length
+      };
+
+      // In fallback, also ACTUALLY adjust timer so it matches!
+      setTimerPreset('Custom');
+      setCustomWorkTime(fallbackWork);
+      setCustomBreakTime(fallbackBreak);
+      setCustomSessions(fallbackSessions);
+      setSessionCount(1);
+      setTimeLeft(fallbackWork.min * 60);
+
+      try {
+        localStorage.setItem('ifocus_custom_timer', JSON.stringify({
+          customWorkTime: fallbackWork,
+          customBreakTime: fallbackBreak,
+          customSessions: fallbackSessions,
+          customWorkDuration: fallbackWork.min * 60,
+          customBreakDuration: fallbackBreak.min * 60
+        }));
+        const syncPayload = {
+          isRunning: false,
+          isFocus: true,
+          timeLeft: fallbackWork.min * 60,
+          totalTime: fallbackWork.min * 60,
+          timerPreset: 'Custom',
+          customWorkDuration: fallbackWork.min * 60,
+          customBreakDuration: fallbackBreak.min * 60,
+          customSessions: fallbackSessions,
+          sessionCount: 1,
+          presencePaused: false,
+          lastPresenceElapsed: 0,
+          breakGatePending: false
+        };
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+      } catch (e) {}
+
+      setAiFeedback(fallbackReply);
+      setIsAiAdjustedTimer(true);
+      setAiAdjustedDetails(fallbackReply);
+      try {
+        localStorage.setItem('ifocus_ai_adjusted_active', 'true');
+        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(fallbackReply));
+      } catch (e) {}
+
       setReflectionInput('');
-      
-      // Save to journal history
-      const newEntry = {
+
+      const fallbackEntry = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         text: text,
-        state: state
+        state: fallbackState,
+        aiReply: fallbackReply
       };
-      saveHistory([newEntry, ...pastEntries]);
-
-    } catch (err) {
-      setAiFeedback({ title: "Error", message: "Failed to reach AI Coach." });
+      saveHistory([fallbackEntry, ...pastEntries]);
     } finally {
       setIsSubmittingReflection(false);
     }
@@ -1021,11 +1794,18 @@ export default function CommandCenterPage() {
 
   // Calculate Progress Percent for Pomodoro Progress Bar
   const getTotalTime = () => {
+    const workMin = parseInt(customWorkTime.min) || 0;
+    const workSec = parseInt(customWorkTime.sec) || 0;
+    const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
+    const breakMin = parseInt(customBreakTime.min) || 0;
+    const breakSec = parseInt(customBreakTime.sec) || 0;
+    const customBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
+
     if (isFocus) {
-      if (timerPreset === 'Custom') return (customWorkTime.min * 60 + customWorkTime.sec) || 25 * 60;
+      if (timerPreset === 'Custom') return customWorkDuration;
       return (parseInt(timerPreset.split('/')[0]) || 25) * 60;
     } else {
-      if (timerPreset === 'Custom') return (customBreakTime.min * 60 + customBreakTime.sec) || 5 * 60;
+      if (timerPreset === 'Custom') return customBreakDuration;
       return (parseInt(timerPreset.split('/')[1]) || 5) * 60;
     }
   };
@@ -1036,18 +1816,20 @@ export default function CommandCenterPage() {
   return (
     <div className="command-center-layout" onClick={() => { setActiveMenuTodoId(null); setIsPriorityDropdownOpen(false); }}>
       {/* Background Audio Element */}
-      <audio ref={audioRef} loop src={getTrackSrc(currentTrack)} />
+      {/* Global audio is managed in GlobalTimer */}
 
       {/* Column 1: Task Command Center (Apple Reminders iOS Style) */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.4rem 1.45rem' }}>
+      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.4rem 1.45rem', overflow: 'hidden' }}>
         
         {/* Header Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-          <div>
-            <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Tasks List</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              {todos.filter(t => t.completed).length}/{todos.length} Done
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Tasks List</h2>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                {todos.filter(t => t.completed).length}/{todos.length} Done
+              </span>
+            </div>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
@@ -1282,7 +2064,7 @@ export default function CommandCenterPage() {
         </div>
 
         {/* Tasks List */}
-        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '2px' }}>
+        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: '2px' }}>
           {loadingTodos ? (
             <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
@@ -1296,6 +2078,7 @@ export default function CommandCenterPage() {
                 className={`todo-item ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''}`}
                 style={{
                   position: 'relative',
+                  overflow: 'hidden',
                   borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`
                 }}
               >
@@ -1379,7 +2162,10 @@ export default function CommandCenterPage() {
                       }}
                       title="Cancel"
                     >
-                      ✕
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
                     </button>
                   </div>
                 ) : (
@@ -1465,7 +2251,7 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Column 2: Pomodoro Timer & Audio Centerpiece (Full Height) */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', height: '100%', minHeight: 0, padding: '1.5rem 1.4rem' }}>
+      <div className="glass-panel dashboard-timer-column" id="dashboardTimerSection">
         
         {/* Dynamic Ambient Audio Island Widget */}
         <div 
@@ -1488,7 +2274,9 @@ export default function CommandCenterPage() {
             </span>
           </div>
           <button 
-            onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
+            type="button"
+            id="dashboardMusicToggleBtn"
+            onClick={(e) => { e.stopPropagation(); handleTogglePlayback(); }}
             style={{ 
               background: isPlaying ? 'var(--primary-accent)' : 'rgba(0,0,0,0.06)', 
               color: isPlaying ? 'white' : 'var(--text-primary)',
@@ -1512,85 +2300,103 @@ export default function CommandCenterPage() {
           </button>
         </div>
 
-        {/* Ongoing / Break Pill Switcher */}
-        <div className="ios-segmented-control" style={{ margin: '0.25rem 0' }}>
-          <button 
+        {/* Ongoing / Break Status Indicator (Automatic Pomodoro Phase Badge - Non-interactive) */}
+        <div 
+          className="ios-segmented-control" 
+          style={{ 
+            margin: '0.25rem 0', 
+            pointerEvents: 'none', 
+            userSelect: 'none', 
+            cursor: 'default' 
+          }}
+          title={isFocus ? "Current Mode: Ongoing Focus Session" : "Current Mode: Rest Break"}
+        >
+          <div 
             className={`ios-segment-btn ${isFocus ? 'active' : ''}`}
-            onClick={() => {
-              setIsFocus(true);
-              setIsActive(false);
-              const focusTime = timerPreset === 'Custom'
-                ? customWorkTime.min * 60 + customWorkTime.sec
-                : (parseInt(timerPreset.split('/')[0]) || 25) * 60;
-              setTimeLeft(focusTime);
-              const nextState = {
-                isRunning: false,
-                isFocus: true,
-                timeLeft: focusTime,
-                totalTime: focusTime,
-                targetEndTime: null,
-                timerPreset,
-                sessionCount,
-                presencePaused: false,
-                lastPresenceElapsed: 0,
-                breakGatePending: false
-              };
-              try {
-                localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
-                window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
-              } catch(e) {}
-            }}
+            style={{ cursor: 'default' }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            Ongoing
-          </button>
-          <button 
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Ongoing</span>
+          </div>
+          <div 
             className={`ios-segment-btn ${!isFocus ? 'active' : ''}`}
-            onClick={() => {
-              setIsFocus(false);
-              setIsActive(false);
-              const breakTime = timerPreset === 'Custom'
-                ? customBreakTime.min * 60 + customBreakTime.sec
-                : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
-              setTimeLeft(breakTime);
-              const nextState = {
-                isRunning: false,
-                isFocus: false,
-                timeLeft: breakTime,
-                totalTime: breakTime,
-                targetEndTime: null,
-                timerPreset,
-                sessionCount,
-                presencePaused: false,
-                lastPresenceElapsed: 0,
-                breakGatePending: false
-              };
-              try {
-                localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
-                window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
-              } catch(e) {}
-            }}
+            style={{ cursor: 'default' }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
-            Break
-          </button>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+              <line x1="6" y1="1" x2="6" y2="4"></line>
+              <line x1="10" y1="1" x2="10" y2="4"></line>
+              <line x1="14" y1="1" x2="14" y2="4"></line>
+            </svg>
+            <span>Break</span>
+          </div>
+        </div>
+
+        {/* Active BreakGate Status Indicator Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', width: '100%', marginBottom: '0.4rem' }}>
+          {activeBreakGateDeck ? (
+            <div 
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'rgba(46, 125, 50, 0.1)',
+                border: '1px solid rgba(46, 125, 50, 0.28)',
+                borderRadius: '999px',
+                padding: '0.3rem 0.85rem',
+                fontSize: '0.78rem',
+                color: '#2e7d32',
+                fontWeight: 600,
+                boxShadow: '0 1px 4px rgba(46, 125, 50, 0.08)'
+              }}
+              title="Flashcard challenge active on break"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span>BreakGate Active: <strong>{activeBreakGateDeck.title}</strong></span>
+            </div>
+          ) : (
+            <div 
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'rgba(0, 0, 0, 0.03)',
+                border: '1px solid rgba(0, 0, 0, 0.08)',
+                borderRadius: '999px',
+                padding: '0.3rem 0.85rem',
+                fontSize: '0.78rem',
+                color: 'var(--text-secondary)',
+                fontWeight: 500
+              }}
+              title="No flashcard deck active for BreakGate"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>BreakGate: Inactive</span>
+            </div>
+          )}
+          <HelpButton topic="breakgate" title="BreakGate Challenge Tutorial" />
         </div>
 
         {/* Grand Circular Pomodoro Timer Ring - Enlarged Centerpiece Hero */}
         <div 
-          className="timer-circle" 
+          className={`timer-circle ${!isFocus ? 'break-mode' : ''}`}
           style={{ 
-            '--progress': `${progressPercent}%`,
-            width: '295px',
-            height: '295px',
-            margin: '0.2rem auto'
+            '--progress': `${progressPercent}%`
           }}
         >
           <div className="timer-inner">
-            <div className="timer-display" style={{ fontSize: '4.2rem', fontWeight: 500, letterSpacing: '-1px' }}>
+            <div className="timer-display">
               {formatTime(timeLeft)}
             </div>
-            <div className="timer-label" style={{ fontSize: '0.82rem', fontWeight: 600, letterSpacing: '0.6px', marginTop: '3px' }}>
+            <div className="timer-label">
               {isFocus ? 'Focus Time' : 'Break Time'}
             </div>
           </div>
@@ -1599,6 +2405,7 @@ export default function CommandCenterPage() {
         {/* Controls (Reset, Start/Stop Pill, Settings) */}
         <div className="ios-timer-actions" style={{ margin: '0.35rem 0' }}>
           <button 
+            id="timerResetBtn"
             className="ios-circle-action-btn"
             onClick={resetTimer}
             title="Reset Timer"
@@ -1607,6 +2414,7 @@ export default function CommandCenterPage() {
           </button>
 
           <button 
+            id="timerToggleBtn"
             className={`ios-pill-action-btn ${isActive ? 'paused' : ''}`}
             onClick={toggleTimer}
             style={{
@@ -1639,16 +2447,99 @@ export default function CommandCenterPage() {
 
           <button 
             className="ios-circle-action-btn"
-            onClick={() => setIsCustomTimerModalOpen(true)}
+            onClick={handleOpenCustomSettings}
             title="Custom Timer Settings"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </button>
         </div>
 
+        {/* Skip Break Action (Appears during Break mode to advance to next Focus session immediately) */}
+        {!isFocus && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.45rem', animation: 'fadeIn 0.2s ease-out' }}>
+            <button
+              type="button"
+              id="skipBreakBtn"
+              onClick={handleSkipBreak}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '0.45rem 1.15rem',
+                borderRadius: '9999px',
+                background: '#27522d',
+                border: 'none',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(39, 82, 45, 0.28)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#1e4023';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#27522d';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              title="Skip remaining break and begin your next focus block"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                <line x1="19" y1="5" x2="19" y2="19"></line>
+              </svg>
+              <span>Skip Break & Start Session {Math.min((sessionCount || 1) + 1, timerPreset === 'Custom' ? (customSessions || 1) : 4)}</span>
+            </button>
+          </div>
+        )}
+
+        {/* Quit & Save Progress Option (Appears whenever user has focused for at least 15 seconds) */}
+        {isFocus && (totalTime - timeLeft >= 15) && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem', animation: 'fadeIn 0.2s ease-out' }}>
+            <button
+              type="button"
+              id="finishAndSaveEarlyBtn"
+              onClick={() => setShowQuitModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '0.35rem 0.95rem',
+                borderRadius: '9999px',
+                background: 'rgba(39, 82, 45, 0.08)',
+                border: '1px solid rgba(39, 82, 45, 0.24)',
+                color: '#1b4324',
+                fontWeight: 600,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 2px 6px rgba(39, 82, 45, 0.06)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(39, 82, 45, 0.16)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(39, 82, 45, 0.08)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              title="End session now and record your study time in Analytics"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+              <span>Quit & Save Progress ({Math.max(1, Math.round((totalTime - timeLeft) / 60))}m)</span>
+            </button>
+          </div>
+        )}
+
         {/* Presets Row */}
         <div className="pomodoro-settings" style={{ margin: 0 }}>
-          {['25/5', '50/10', '15/3', '90/20', 'Custom'].map(preset => (
+          {['25/5', '50/10', '15/3', '90/20'].map(preset => (
             <button 
               key={preset}
               className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
@@ -1660,22 +2551,54 @@ export default function CommandCenterPage() {
           ))}
         </div>
 
-        {/* Session Indicator Dots */}
-        <div className="session-counter" style={{ margin: 0, fontSize: '0.8rem' }}>
-          Session {sessionCount} of {timerPreset === 'Custom' ? (customSessions || 1) : 4}
-          <div className="session-dots" style={{ marginTop: '0.4rem' }}>
-            {Array.from({ length: timerPreset === 'Custom' ? (customSessions || 1) : 4 }).map((_, i) => (
-              <div key={i} className={`session-dot ${i < sessionCount ? 'current' : ''}`}></div>
-            ))}
+        {isAiAdjustedTimer && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem' }}>
+            <span style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#27522d',
+              background: 'rgba(39, 82, 45, 0.1)',
+              border: '1px solid rgba(39, 82, 45, 0.22)',
+              borderRadius: '20px',
+              padding: '2px 10px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 14 14"/>
+              </svg>
+              AI Optimized Rhythm Active
+            </span>
           </div>
-        </div>
+        )}
+
+        {/* Session Indicator Dots */}
+        {(() => {
+          const totalSessions = timerPreset === 'Custom' ? (customSessions || 1) : 4;
+          const currentDisplaySession = Math.min(Math.max(1, sessionCount || 1), totalSessions);
+          return (
+            <div className="session-counter" style={{ margin: 0, fontSize: '0.8rem' }}>
+              {isFocus 
+                ? `Session ${currentDisplaySession} of ${totalSessions}` 
+                : `Break Time • Next: Session ${Math.min(currentDisplaySession + 1, totalSessions)} of ${totalSessions}`
+              }
+              <div className="session-dots" style={{ marginTop: '0.4rem' }}>
+                {Array.from({ length: totalSessions }).map((_, i) => (
+                  <div key={i} className={`session-dot ${i < currentDisplaySession ? 'current' : ''}`}></div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Column 3: Daily Progress + Quick Reflection & AI Coach */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', height: '100%', minHeight: 0 }}>
+      <div className="dashboard-column-3" style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', height: '100%', minHeight: 0 }}>
         
         {/* Top Card: Enlarged Daily Progress & Luxury Inspiring Quote */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1.35rem 1.45rem' }}>
+        <div className="glass-panel dashboard-daily-progress-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1.35rem 1.45rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Daily Progress</h2>
@@ -1772,30 +2695,10 @@ export default function CommandCenterPage() {
         </div>
 
         {/* Bottom Card: Quick Reflection & Adaptive AI Coach (Seamless Fit) */}
-        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+        <div id="quick-reflection-card" className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem' }}>
             <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
-            <button 
-              onClick={() => setIsHistoryModalOpen(true)}
-              style={{
-                background: '#ffffff',
-                border: '1px solid rgba(0,0,0,0.08)',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                padding: '0.3rem 0.75rem',
-                borderRadius: '9999px',
-                fontSize: '0.75rem',
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                cursor: 'pointer',
-                fontWeight: 500,
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              History {pastEntries.length > 0 && `(${pastEntries.length})`}
-            </button>
+            <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
           </div>
           <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
           
@@ -1925,44 +2828,90 @@ export default function CommandCenterPage() {
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="glass-panel modal-content" style={{ maxWidth: '460px', width: '92%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.3rem', margin: 0 }}>Ambient Soundscapes</h2>
-              <button onClick={() => setIsAudioModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h2 style={{ fontSize: '1.3rem', margin: 0 }}>Ambient Soundscapes</h2>
+                <HelpButton topic="pomodoro" title="Ambient Soundscapes Tutorial" />
+              </div>
+              <button onClick={() => setIsAudioModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
             </div>
             <p className="subtitle" style={{ fontSize: '0.82rem', marginBottom: '1.25rem' }}>Background audio streams to help you focus.</p>
 
-            {/* Track Selection Cards */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              {tracks.map(track => {
-                const isCurrent = currentTrack === track;
-                const desc = track === 'Chill Lofi' ? 'Calming Lo-Fi beats & ambient vibes' : track === 'Study Music' ? 'Alpha wave melodies for concentration' : 'Gentle rain shower & soothing drops';
+            {/* Track Selection Cards - Expanded Soundscapes Library */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.25rem', maxHeight: '360px', overflowY: 'auto', paddingRight: '4px' }}>
+              {tracks.map(t => {
+                const isCurrent = currentTrack === t.name;
                 return (
                   <div 
-                    key={track}
+                    key={t.id}
                     className={`soundscape-card ${isCurrent ? 'active' : ''}`}
-                    onClick={() => {
-                      setCurrentTrack(track);
-                      setIsPlaying(true);
+                    onClick={() => handleSelectTrack(t.name)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.85rem',
+                      padding: '0.75rem 0.95rem',
+                      borderRadius: '14px',
+                      background: isCurrent ? 'rgba(46, 125, 50, 0.08)' : 'rgba(0,0,0,0.02)',
+                      border: isCurrent ? '1.5px solid var(--primary-accent, #2e7d32)' : '1px solid rgba(0,0,0,0.06)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
                     }}
                   >
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', color: 'var(--primary-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {track === 'Chill Lofi' ? (
+                    <div style={{ 
+                      width: '38px', 
+                      height: '38px', 
+                      borderRadius: '12px', 
+                      background: isCurrent ? 'var(--primary-accent, #2e7d32)' : 'rgba(46, 125, 50, 0.12)', 
+                      color: isCurrent ? '#ffffff' : 'var(--primary-accent, #2e7d32)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {t.icon === 'coffee' && (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
-                      ) : track === 'Study Music' ? (
+                      )}
+                      {t.icon === 'book' && (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                      ) : (
+                      )}
+                      {t.icon === 'rain' && (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path><line x1="8" y1="19" x2="8" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line><line x1="16" y1="19" x2="16" y2="21"></line></svg>
                       )}
+                      {t.icon === 'wave' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c.6 0 1.2-.4 1.7-.8 1.1-.9 2.2-.9 3.3 0 1.1.9 2.2.9 3.3 0 1.1-.9 2.2-.9 3.3 0 1.1.9 2.2.9 3.3 0 .5.4 1.1.8 1.7.8"></path><path d="M2 18c.6 0 1.2-.4 1.7-.8 1.1-.9 2.2-.9 3.3 0 1.1.9 2.2.9 3.3 0 1.1-.9 2.2-.9 3.3 0 1.1.9 2.2.9 3.3 0 .5.4 1.1.8 1.7.8"></path></svg>
+                      )}
+                      {t.icon === 'brain' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                      )}
+                      {t.icon === 'fire' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
+                      )}
+                      {t.icon === 'wind' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>
+                      )}
+                      {t.icon === 'moon' && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                      )}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{track}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{desc}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{t.name}</span>
+                        <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', color: 'var(--text-secondary)', fontWeight: 600 }}>{t.tag}</span>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.desc}</div>
                     </div>
                     {isCurrent && isPlaying ? (
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-accent)', background: 'rgba(34,197,94,0.1)', padding: '0.2rem 0.6rem', borderRadius: '9999px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-accent, #2e7d32)', background: 'rgba(46,125,50,0.12)', padding: '0.25rem 0.65rem', borderRadius: '9999px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary-accent, #2e7d32)' }}></span>
                         Playing
                       </span>
                     ) : (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Select</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', padding: '0.2rem 0.5rem' }}>Select</span>
                     )}
                   </div>
                 );
@@ -1977,7 +2926,7 @@ export default function CommandCenterPage() {
                 min="0" 
                 max="100" 
                 value={volume}
-                onChange={(e) => setVolume(parseInt(e.target.value))}
+                onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
                 style={{ flex: 1, accentColor: 'var(--primary-accent)' }}
               />
               <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '35px' }}>{volume}%</span>
@@ -1985,9 +2934,11 @@ export default function CommandCenterPage() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button 
-                onClick={() => setIsPlaying(!isPlaying)}
+                type="button"
+                id="modalMusicPlayBtn"
+                onClick={() => handleTogglePlayback()}
                 className="btn-primary" 
-                style={{ margin: 0, padding: '0.5rem 1.5rem', borderRadius: '9999px', fontSize: '0.88rem' }}
+                style={{ margin: 0, padding: '0.55rem 1.5rem', borderRadius: '9999px', fontSize: '0.88rem' }}
               >
                 {isPlaying ? 'Pause Audio' : 'Play Soundscape'}
               </button>
@@ -1999,97 +2950,822 @@ export default function CommandCenterPage() {
         </div>
       )}
 
-      {/* AI Coach Modal */}
+      {/* AI Coach Adaptive Adjustment Modal (Modern Cognitive Design) */}
       {aiFeedback && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="glass-panel modal-content" style={{ maxWidth: '450px', width: '90%', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-            <h2 style={{ fontSize: '1.5rem', lineHeight: '1.3', whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>{aiFeedback.title}</h2>
-            <p style={{ color: 'var(--text-secondary)', lineHeight: '1.6', fontSize: '0.95rem' }}>{aiFeedback.message}</p>
-            <button onClick={() => setAiFeedback(null)} className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', borderRadius: '9999px' }}>Continue</button>
+        <div 
+          className="modal-overlay" 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(15, 23, 42, 0.72)', 
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 1000, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            style={{ 
+              background: '#ffffff',
+              borderRadius: '22px',
+              border: '1px solid rgba(0, 0, 0, 0.08)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              maxWidth: '540px', 
+              width: '100%', 
+              padding: '1.75rem 2rem',
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '1.15rem',
+              position: 'relative',
+              animation: 'slideDown 0.25s ease'
+            }}
+          >
+            {/* Top Close Button */}
+            <button
+              type="button"
+              onClick={() => setAiFeedback(null)}
+              style={{
+                position: 'absolute',
+                top: '1.25rem',
+                right: '1.25rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '6px',
+                transition: 'color 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#374151'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+
+            {/* Header / State Banner */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem' }}>
+                <span style={{
+                  background: aiFeedback.state === 'Stressed' ? 'rgba(220, 38, 38, 0.12)' : aiFeedback.state === 'Distracted' ? 'rgba(217, 119, 6, 0.12)' : 'rgba(46, 125, 50, 0.12)',
+                  color: aiFeedback.state === 'Stressed' ? '#dc2626' : aiFeedback.state === 'Distracted' ? '#b45309' : '#2e7d32',
+                  padding: '0.22rem 0.7rem',
+                  borderRadius: '6px',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  AI COACH ADAPTATION: {String(aiFeedback.state || 'Pacing').toUpperCase()}
+                </span>
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
+                {aiFeedback.title?.replace('AI Adjusted Timer:\n', '') || 'Pacing Routine Updated'}
+              </h2>
+            </div>
+
+            {/* 3 Diagnostic Key Chips */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+              <div style={{
+                background: '#f8faf8',
+                border: '1px solid rgba(95, 143, 94, 0.18)',
+                borderRadius: '12px',
+                padding: '0.75rem 0.85rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Focus Cadence</div>
+                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>{aiFeedback.rhythm || 'Adaptive Rhythm'}</div>
+              </div>
+
+              <div style={{
+                background: '#f8faf8',
+                border: '1px solid rgba(95, 143, 94, 0.18)',
+                borderRadius: '12px',
+                padding: '0.75rem 0.85rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Target Sessions</div>
+                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>
+                  {aiFeedback.sessions || (aiFeedback.state === 'Stressed' ? 2 : 4)} Cycles
+                </div>
+              </div>
+
+              <div style={{
+                background: '#f8faf8',
+                border: '1px solid rgba(95, 143, 94, 0.18)',
+                borderRadius: '12px',
+                padding: '0.75rem 0.85rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Task Priority</div>
+                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>
+                  {aiFeedback.state === 'Stressed' ? 'Gentle Momentum' : aiFeedback.state === 'Distracted' ? 'Concrete Steps' : 'High Impact'}
+                </div>
+              </div>
+            </div>
+
+            {/* Coach Action Plan Box */}
+            <div style={{
+              background: '#fafcfa',
+              borderLeft: '4px solid #2e7d32',
+              borderRadius: '0 14px 14px 0',
+              padding: '1rem 1.2rem',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                Strategy & Mentorship Guidance
+              </div>
+              <p style={{
+                margin: 0,
+                color: '#334155',
+                fontSize: '0.92rem',
+                lineHeight: 1.6,
+                fontWeight: 500
+              }}>
+                {aiFeedback.message}
+              </p>
+            </div>
+
+            {/* Modal Action Button */}
+            <button 
+              type="button"
+              onClick={() => setAiFeedback(null)} 
+              className="btn-primary" 
+              style={{ 
+                width: '100%', 
+                padding: '0.8rem 1.4rem',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(46, 125, 50, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <span>Continue to Focus Session</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </button>
           </div>
         </div>
       )}
 
       {/* Custom Timer Modal */}
       {isCustomTimerModalOpen && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="glass-panel modal-content" style={{ maxWidth: '500px', width: '90%' }}>
-            <h2>Custom Timer Settings</h2>
-            <p className="subtitle" style={{ marginBottom: '1rem' }}>Set custom durations and number of sessions.</p>
+        <div 
+          className="modal-overlay" 
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            background: 'rgba(15, 23, 42, 0.65)', 
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 1000, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            className="glass-panel modal-content" 
+            style={{ 
+              maxWidth: '480px', 
+              width: '100%', 
+              background: 'rgba(255, 255, 255, 0.98)', 
+              borderRadius: '24px', 
+              padding: '1.75rem',
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '0.35rem' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(39, 82, 45, 0.1)', color: 'var(--primary-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#163824', letterSpacing: '-0.02em' }}>Custom Timer Settings</h2>
+                <p className="subtitle" style={{ margin: 0, fontSize: '0.82rem', color: '#557060', marginTop: '2px' }}>Set custom durations and number of sessions.</p>
+              </div>
+            </div>
             
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Work Time</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input type="number" min="0" max="120" value={customWorkTime.min} onChange={e => setCustomWorkTime({ ...customWorkTime, min: parseInt(e.target.value) || 0 })} placeholder="Min" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
-                        <input type="number" min="0" max="59" value={customWorkTime.sec} onChange={e => setCustomWorkTime({ ...customWorkTime, sec: parseInt(e.target.value) || 0 })} placeholder="Sec" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.25rem', marginBottom: '1.5rem' }}>
+              {/* Work Time Inputs */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.4rem', color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>Work Duration</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="180" 
+                      value={customWorkTime.min === 0 || customWorkTime.min === '0' ? '' : customWorkTime.min} 
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                        setCustomWorkTime(prev => ({ ...prev, min: val }));
+                      }} 
+                      placeholder="Minutes" 
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid rgba(0, 0, 0, 0.12)', background: '#ffffff', color: '#163824', fontSize: '0.92rem', fontWeight: 600, outline: 'none' }} 
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="59" 
+                      value={customWorkTime.sec === 0 || customWorkTime.sec === '0' ? '' : customWorkTime.sec} 
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                        setCustomWorkTime(prev => ({ ...prev, sec: val }));
+                      }} 
+                      placeholder="Seconds" 
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid rgba(0, 0, 0, 0.12)', background: '#ffffff', color: '#163824', fontSize: '0.92rem', fontWeight: 600, outline: 'none' }} 
+                    />
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Break Time</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input type="number" min="0" max="60" value={customBreakTime.min} onChange={e => setCustomBreakTime({ ...customBreakTime, min: parseInt(e.target.value) || 0 })} placeholder="Min" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
-                        <input type="number" min="0" max="59" value={customBreakTime.sec} onChange={e => setCustomBreakTime({ ...customBreakTime, sec: parseInt(e.target.value) || 0 })} placeholder="Sec" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
-                    </div>
+              </div>
+
+              {/* Break Time Inputs */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.4rem', color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>Break Duration</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="60" 
+                      value={customBreakTime.min === 0 || customBreakTime.min === '0' ? '' : customBreakTime.min} 
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                        setCustomBreakTime(prev => ({ ...prev, min: val }));
+                      }} 
+                      placeholder="Minutes" 
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid rgba(0, 0, 0, 0.12)', background: '#ffffff', color: '#163824', fontSize: '0.92rem', fontWeight: 600, outline: 'none' }} 
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="59" 
+                      value={customBreakTime.sec === 0 || customBreakTime.sec === '0' ? '' : customBreakTime.sec} 
+                      onChange={e => {
+                        const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                        setCustomBreakTime(prev => ({ ...prev, sec: val }));
+                      }} 
+                      placeholder="Seconds" 
+                      style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '12px', border: '1.5px solid rgba(0, 0, 0, 0.12)', background: '#ffffff', color: '#163824', fontSize: '0.92rem', fontWeight: 600, outline: 'none' }} 
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* Total Sessions (1 to 5 Selector) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <label style={{ margin: 0, color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>Total Sessions</label>
+                    <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 700, background: 'rgba(34, 197, 94, 0.12)', padding: '1px 7px', borderRadius: '4px' }}>
+                      {Number(customSessions) || 1} Selected
+                    </span>
+                  </div>
+
+                  {/* Modern 1 to 5 Selector Bar (No useless text input) */}
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '4px', 
+                    padding: '3px',
+                    borderRadius: '12px', 
+                    background: '#f3f6f3',
+                    border: '1.5px solid rgba(0, 0, 0, 0.1)',
+                    height: '42px',
+                    boxSizing: 'border-box'
+                  }}>
+                    {[1, 2, 3, 4, 5].map(n => {
+                      const isSelected = (Number(customSessions) || 1) === n;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setCustomSessions(n)}
+                          style={{
+                            flex: 1,
+                            borderRadius: '8px',
+                            fontSize: '0.92rem',
+                            fontWeight: 700,
+                            border: 'none',
+                            background: isSelected ? 'var(--primary-accent, #27522d)' : 'transparent',
+                            color: isSelected ? '#ffffff' : '#4b5563',
+                            cursor: 'pointer',
+                            transition: 'all 0.18s ease',
+                            boxShadow: isSelected ? '0 2px 8px rgba(39, 82, 45, 0.28)' : 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: '#6b7280', display: 'block', marginTop: '4px' }}>
+                    Click 1 to 5 to set focus session cycles.
+                  </span>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.4rem' }}>
+                    <label style={{ display: 'block', margin: 0, color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>BreakGate Questions</label>
+                    <HelpButton topic="breakgate" title="BreakGate Questions Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="10" 
+                    disabled={!activeBreakGateDeck}
+                    value={!activeBreakGateDeck ? 0 : (customBreakGateQuestions === 0 || customBreakGateQuestions === '0' ? '' : customBreakGateQuestions)} 
+                    onChange={e => {
+                      if (!activeBreakGateDeck) return;
+                      const val = e.target.value === '' ? '' : Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
+                      setCustomBreakGateQuestions(val);
+                    }} 
+                    placeholder={!activeBreakGateDeck ? '0 (Locked)' : 'e.g. 3 Questions'} 
+                    style={{ 
+                      width: '100%', 
+                      padding: '0.65rem 0.85rem', 
+                      borderRadius: '12px', 
+                      border: '1.5px solid rgba(0, 0, 0, 0.12)', 
+                      background: !activeBreakGateDeck ? '#f3f4f6' : '#ffffff', 
+                      color: !activeBreakGateDeck ? '#9ca3af' : '#163824', 
+                      fontSize: '0.92rem', 
+                      fontWeight: 600, 
+                      outline: 'none',
+                      cursor: !activeBreakGateDeck ? 'not-allowed' : 'text',
+                      opacity: !activeBreakGateDeck ? 0.75 : 1
+                    }} 
+                  />
+                  {!activeBreakGateDeck && (
+                    <span style={{ fontSize: '0.72rem', color: '#6b7280', display: 'block', marginTop: '0.2rem' }}>
+                      Locked to 0. Activate a deck in Flashcards first.
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total Sessions</label>
-                <input type="number" min="0" max="10" value={customSessions} onChange={e => setCustomSessions(parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button onClick={() => setIsCustomTimerModalOpen(false)} style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '9999px', cursor: 'pointer', color: 'var(--text-primary)' }}>Cancel</button>
-                <button onClick={saveCustomSettings} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, borderRadius: '9999px' }}>Save Settings</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <button 
+                type="button"
+                onClick={() => setIsCustomTimerModalOpen(false)} 
+                style={{ background: 'transparent', border: '1px solid rgba(0,0,0,0.15)', padding: '0.6rem 1.2rem', borderRadius: '9999px', cursor: 'pointer', color: '#4b5563', fontWeight: 600, fontSize: '0.88rem', transition: 'all 0.15s ease' }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                onClick={saveCustomSettings} 
+                className="btn-primary" 
+                style={{ padding: '0.6rem 1.4rem', margin: 0, borderRadius: '9999px', fontWeight: 700, fontSize: '0.9rem', boxShadow: '0 4px 14px rgba(39, 82, 45, 0.35)' }}
+              >
+                Save Settings
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Reflection History Modal */}
-      {isHistoryModalOpen && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="glass-panel modal-content" style={{ maxWidth: '540px', width: '92%', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Reflection History</h2>
-              <button onClick={() => setIsHistoryModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-secondary)' }}>✕</button>
+      {/* No BreakGate Confirmation Modal */}
+      {showNoBreakGateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem' }}>
+          <div className="glass-panel" style={{ maxWidth: '440px', width: '100%', padding: '1.75rem', borderRadius: '20px', background: '#ffffff', display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'center', boxShadow: '0 24px 48px -12px rgba(0,0,0,0.25)' }}>
+            <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(217, 119, 6, 0.12)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
             </div>
-            <p className="subtitle" style={{ fontSize: '0.8rem', marginBottom: '1rem' }}>Past reflection journal entries and detected emotional states.</p>
-            
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', paddingRight: '4px', maxHeight: '420px' }}>
-              {pastEntries.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-                  <p>No reflection entries recorded yet.</p>
-                  <p style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Submit a quick reflection to start building your mental clarity history.</p>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.35rem 0', color: 'var(--text-primary)' }}>
+                No Active BreakGate
+              </h3>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                You do not have a flashcard deck activated for BreakGate. Would you like to proceed with your focus session without flashcard break gates?
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={startTimerDirectly}
+                style={{ width: '100%', padding: '0.75rem', margin: 0 }}
+              >
+                Proceed Without BreakGate
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setShowNoBreakGateModal(false);
+                  router.push('/flashcards');
+                }}
+                style={{ width: '100%', padding: '0.7rem' }}
+              >
+                Choose Deck in Flashcards
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNoBreakGateModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.82rem', padding: '0.35rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Finish / Quit Focus Session Early Modal */}
+      {showQuitModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out forwards',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '1.85rem',
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.28)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              animation: 'ifocusModalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '16px',
+                  background: 'rgba(46, 125, 50, 0.12)',
+                  color: '#2e7d32',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  border: '1px solid rgba(46, 125, 50, 0.25)',
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#163824', letterSpacing: '-0.02em' }}>
+                  Finish Focus Session?
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#557060', marginTop: '2px' }}>
+                  Save your partial study progress to analytics.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(46, 125, 50, 0.08)',
+                border: '1px solid rgba(46, 125, 50, 0.22)',
+                borderRadius: '14px',
+                padding: '0.9rem 1rem',
+                fontSize: '0.88rem',
+                color: '#163824',
+                lineHeight: 1.45,
+              }}
+            >
+              You have focused for <strong>{Math.floor(Math.max(0, totalTime - timeLeft) / 60)} min {Math.max(0, totalTime - timeLeft) % 60} sec</strong>. Would you like to log this study time to your dashboard and analytics?
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '0.4rem' }}>
+              <button
+                type="button"
+                id="confirmSaveProgressBtn"
+                onClick={handleSaveAndEndSession}
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '9999px',
+                  background: 'linear-gradient(135deg, #27522d, #1c3d22)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 8px 20px -4px rgba(39, 82, 45, 0.4)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Save & Log Progress ({Math.max(1, Math.round(Math.max(0, totalTime - timeLeft) / 60))} mins)
+              </button>
+
+              <button
+                type="button"
+                id="discardAndResetBtn"
+                onClick={() => {
+                  setShowQuitModal(false);
+                  forceResetTimer();
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: '#ef4444',
+                  fontWeight: 600,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s ease',
+                }}
+              >
+                Discard Progress & Reset
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowQuitModal(false)}
+                style={{
+                  padding: '0.35rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  fontWeight: 500,
+                  fontSize: '0.80rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                Resume Studying
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Schedule Override Confirmation Modal */}
+      {pendingTimerChange && (
+        <div 
+          className="modal-overlay" 
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(15, 23, 42, 0.7)', 
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div 
+            style={{ 
+              maxWidth: '460px', 
+              width: '100%', 
+              background: '#ffffff', 
+              borderRadius: '22px', 
+              padding: '1.75rem', 
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              animation: 'slideDown 0.25s ease'
+            }}
+          >
+            {/* Header Icon + Title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'rgba(46, 125, 50, 0.12)',
+                color: '#2e7d32',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#163824' }}>
+                  Override AI Recommendation?
+                </h3>
+                <span style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  AI Study Coach Pacing Active
+                </span>
+              </div>
+            </div>
+
+            {/* Explanation Box */}
+            <div style={{
+              background: '#f8faf7',
+              border: '1px solid rgba(46, 125, 50, 0.18)',
+              borderLeft: '4px solid #2e7d32',
+              borderRadius: '10px',
+              padding: '0.9rem 1rem'
+            }}>
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#334155', lineHeight: 1.55 }}>
+                This schedule was given by your <strong>AI Study Coach</strong> as the best suited for you based on your current focus telemetry and cognitive state
+                {aiAdjustedDetails?.state ? ` (${aiAdjustedDetails.state})` : ''} to prevent fatigue and sustain momentum.
+              </p>
+              {aiAdjustedDetails && (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '0.65rem' }}>
+                  <span style={{ fontSize: '0.72rem', background: 'rgba(46, 125, 50, 0.1)', color: '#27522d', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                    {aiAdjustedDetails.rhythm}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', background: 'rgba(46, 125, 50, 0.1)', color: '#27522d', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                    {aiAdjustedDetails.sessions} Sessions
+                  </span>
                 </div>
-              ) : (
-                pastEntries.map(entry => (
-                  <div key={entry.id} className="journal-entry" style={{ padding: '0.75rem 1rem', background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                        {new Date(entry.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                      </span>
-                      <span className={`state-badge state-${entry.state}`} style={{ margin: 0, padding: '0.15rem 0.55rem', fontSize: '0.7rem' }}>
-                        {entry.state}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
-                      "{entry.text}"
-                    </p>
-                  </div>
-                ))
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-              <button onClick={() => setIsHistoryModalOpen(false)} className="btn-primary" style={{ padding: '0.5rem 1.25rem', margin: 0, fontSize: '0.85rem', borderRadius: '9999px' }}>Close</button>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: '#6b7280', lineHeight: 1.45 }}>
+              Are you sure you want to manually change this schedule?
+            </p>
+
+            {/* Modal Buttons (Clean Symmetrical 42px Grid) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={cancelOverrideAi}
+                style={{
+                  height: '42px',
+                  background: 'linear-gradient(135deg, var(--primary-accent), var(--secondary-accent))',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(39, 82, 45, 0.25)',
+                  margin: 0,
+                  padding: '0 1rem'
+                }}
+              >
+                Keep AI Schedule
+              </button>
+              <button
+                type="button"
+                onClick={confirmOverrideAi}
+                style={{
+                  height: '42px',
+                  background: '#ffffff',
+                  border: '1.5px solid rgba(0, 0, 0, 0.16)',
+                  color: '#374151',
+                  borderRadius: '10px',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                  margin: 0,
+                  padding: '0 1rem'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#dc2626';
+                  e.currentTarget.style.color = '#dc2626';
+                  e.currentTarget.style.background = '#fef2f2';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.15)';
+                  e.currentTarget.style.color = '#4b5563';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                Yes, Override
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Keystroke Telemetrics Intervention Toast (iOS Spring Popup Style) */}
+      {/* Session Progress Saved Toast */}
+      {saveSessionToast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            background: '#ffffff',
+            border: '1px solid rgba(46, 125, 50, 0.35)',
+            boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0,0,0,0.04)',
+            borderRadius: '16px',
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            zIndex: 99999,
+            animation: 'fadeIn 0.25s ease-out',
+          }}
+        >
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'rgba(46, 125, 50, 0.12)',
+              color: '#2e7d32',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#163824' }}>{saveSessionToast.title || 'Progress Saved!'}</div>
+            <div style={{ fontSize: '0.78rem', color: '#557060', marginTop: '1px' }}>{saveSessionToast.message}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSaveSessionToast({ show: false, message: '' })}
+            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px', marginLeft: '6px', display: 'flex', alignItems: 'center' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
+            {/* Keystroke Telemetrics Intervention Toast (iOS Spring Popup Style) */}
       {telemetryToast.show && (
         <div className="ios-notification-toast">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
@@ -2103,7 +3779,10 @@ export default function CommandCenterPage() {
               onClick={dismissTelemetryToast}
               style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.95rem', padding: '2px', display: 'flex', alignItems: 'center' }}
             >
-              ✕
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
             </button>
           </div>
 

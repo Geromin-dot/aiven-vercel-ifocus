@@ -46,6 +46,20 @@ export async function POST(req) {
       return NextResponse.json({ error: "At least one card is required to create a deck" }, { status: 400 });
     }
 
+    // Sanitize cards to prevent any undefined, null, or missing property runtime crashes
+    const sanitizedCards = cards
+      .filter(c => c && (c.front || c.term || c.back || c.definition))
+      .map(c => ({
+        front: String(c.front || c.term || 'Untitled').trim(),
+        back: String(c.back || c.definition || c.answer || 'No description').trim(),
+        keyword: c.keyword || c.hint || null,
+        tag: c.tag || 'Concept'
+      }));
+
+    if (sanitizedCards.length === 0) {
+      return NextResponse.json({ error: "No valid cards provided to create deck" }, { status: 400 });
+    }
+
     // Create deck and its cards in a transaction
     const newDeck = await prisma.deck.create({
       data: {
@@ -53,9 +67,9 @@ export async function POST(req) {
         description: description ? description.trim() : null,
         userId: session.user.id,
         cards: {
-          create: cards.map(c => ({
-            front: c.front.trim(),
-            back: c.back.trim()
+          create: sanitizedCards.map(c => ({
+            front: c.front,
+            back: c.back
           }))
         }
       },
@@ -63,6 +77,26 @@ export async function POST(req) {
         cards: true
       }
     });
+
+    // Persist keyword and tag into Card table safely
+    for (let i = 0; i < newDeck.cards.length; i++) {
+      const createdCard = newDeck.cards[i];
+      const orig = sanitizedCards[i] || {};
+      const kw = orig.keyword;
+      const tg = orig.tag;
+      if (kw || tg) {
+        try {
+          await prisma.$executeRawUnsafe(
+            'UPDATE "Card" SET keyword = $1, tag = $2 WHERE id = $3;',
+            kw, tg, createdCard.id
+          );
+          createdCard.keyword = kw;
+          createdCard.tag = tg;
+        } catch (e) {
+          console.warn("Could not save card keyword metadata:", e);
+        }
+      }
+    }
 
     return NextResponse.json(newDeck, { status: 201 });
   } catch (error) {

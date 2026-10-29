@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import IFocusLogo from "./IFocusLogo";
 
 export default function PwaRegistrar() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [isIos, setIsIos] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // 1. Register Service Worker
+    // 1. Register Service Worker quietly in background
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
@@ -23,37 +25,51 @@ export default function PwaRegistrar() {
       });
     }
 
-    // 2. Check if already running in standalone mode (installed)
+    if (typeof window === "undefined") return;
+
+    // 2. Check if already running in standalone mode (installed app)
     const isInStandaloneMode =
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
 
     setIsStandalone(isInStandaloneMode);
+    if (isInStandaloneMode) return;
 
-    if (isInStandaloneMode) {
-      return; // Already running as PWA installed app!
-    }
+    // 3. Strictly verify if client is a MOBILE device (phone/tablet)
+    // Desktop computers & laptops must NEVER see this install banner
+    const ua = (window.navigator.userAgent || "").toLowerCase();
+    const isTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+    const isMobileUa = /android|iphone|ipad|ipod|mobile/i.test(ua);
+    const isSmallScreen = window.innerWidth <= 768;
+    const isMobileDevice = isMobileUa || (isSmallScreen && isTouch);
 
-    // Check if user previously dismissed banner
-    const dismissedAt = localStorage.getItem("ifocus_pwa_dismissed");
-    if (dismissedAt && Date.now() - parseInt(dismissedAt, 10) < 7 * 24 * 60 * 60 * 1000) {
+    setIsMobile(isMobileDevice);
+
+    // If it's a computer/desktop, completely halt banner logic
+    if (!isMobileDevice) {
       return;
     }
 
-    // 3. Detect iOS device
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    // Check if user previously dismissed banner
+    try {
+      const dismissedAt = localStorage.getItem("ifocus_pwa_dismissed");
+      if (dismissedAt && Date.now() - parseInt(dismissedAt, 10) < 7 * 24 * 60 * 60 * 1000) {
+        return;
+      }
+    } catch (e) {}
+
+    // 4. Detect iOS device
+    const isIosDevice = /iphone|ipad|ipod/.test(ua);
     setIsIos(isIosDevice);
 
     if (isIosDevice) {
-      // Delay prompt slightly for better user onboarding
       const timer = setTimeout(() => {
         setShowInstallBanner(true);
       }, 3000);
       return () => clearTimeout(timer);
     }
 
-    // 4. Capture Android/Chromium beforeinstallprompt
+    // 5. Capture Android/Chromium beforeinstallprompt
     const handleBeforeInstall = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -85,65 +101,69 @@ export default function PwaRegistrar() {
     } catch (e) {}
   };
 
-  if (!showInstallBanner || isStandalone) return null;
+  if (!showInstallBanner || isStandalone || !isMobile) return null;
 
   return (
     <div
+      className="pwa-mobile-only-banner"
       style={{
         position: "fixed",
-        bottom: "80px", // Just above mobile bottom nav or bottom of screen
+        bottom: "calc(78px + env(safe-area-inset-bottom))",
         left: "50%",
         transform: "translateX(-50%)",
         width: "calc(100% - 32px)",
         maxWidth: "420px",
-        background: "rgba(24, 35, 26, 0.96)",
+        background: "rgba(255, 255, 255, 0.96)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid rgba(95, 143, 94, 0.35)",
+        border: "1px solid rgba(0, 0, 0, 0.08)",
         borderRadius: "20px",
-        padding: "16px 18px",
-        boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        padding: "14px 16px",
+        boxShadow: "0 14px 36px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04)",
         zIndex: 99990,
-        color: "#ffffff",
+        color: "#1e293b",
         animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards"
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
         {/* App Icon */}
         <div
           style={{
-            width: "44px",
-            height: "44px",
-            borderRadius: "12px",
-            background: "linear-gradient(135deg, #72b270, #5f8f5e)",
+            width: "42px",
+            height: "42px",
+            borderRadius: "10px",
+            overflow: "hidden",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            boxShadow: "0 4px 12px rgba(95, 143, 94, 0.3)"
+            boxShadow: "0 4px 12px rgba(39, 82, 45, 0.25)"
           }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5">
-            <circle cx="12" cy="12" r="9" />
-            <circle cx="12" cy="12" r="3" fill="#ffffff" />
-          </svg>
+          <IFocusLogo size={42} variant="app" />
         </div>
 
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#ffffff" }}>
+            <h4 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700, color: "#1e293b" }}>
               Install iFocus
             </h4>
             <button
               onClick={handleDismiss}
               style={{
-                background: "none",
+                background: "rgba(0, 0, 0, 0.05)",
                 border: "none",
-                color: "rgba(255, 255, 255, 0.5)",
+                borderRadius: "50%",
+                width: "24px",
+                height: "24px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#64748b",
                 cursor: "pointer",
-                padding: "2px",
-                fontSize: "1.1rem",
+                padding: 0,
+                fontSize: "0.85rem",
                 lineHeight: 1
               }}
               title="Close"
@@ -152,10 +172,10 @@ export default function PwaRegistrar() {
             </button>
           </div>
 
-          <p style={{ margin: "4px 0 10px", fontSize: "0.8rem", color: "rgba(255, 255, 255, 0.75)", lineHeight: 1.4 }}>
+          <p style={{ margin: "4px 0 8px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.4 }}>
             {isIos ? (
               <>
-                Add to your iPhone Home Screen: Tap <span style={{ color: "#72b270", fontWeight: 600 }}>Share</span> below, then select <span style={{ color: "#72b270", fontWeight: 600 }}>&ldquo;Add to Home Screen&rdquo;</span>.
+                Add to your iPhone Home Screen: Tap <span style={{ color: "#27522d", fontWeight: 600 }}>Share</span> below, then select <span style={{ color: "#27522d", fontWeight: 600 }}>&ldquo;Add to Home Screen&rdquo;</span>.
               </>
             ) : (
               "Install as an app on your phone for quick full-screen access without opening a browser."
@@ -168,12 +188,12 @@ export default function PwaRegistrar() {
               style={{
                 width: "100%",
                 padding: "8px 16px",
-                background: "var(--primary-accent, #5f8f5e)",
+                background: "#27522d",
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "10px",
                 fontWeight: 600,
-                fontSize: "0.85rem",
+                fontSize: "0.82rem",
                 cursor: "pointer",
                 transition: "opacity 0.2s"
               }}

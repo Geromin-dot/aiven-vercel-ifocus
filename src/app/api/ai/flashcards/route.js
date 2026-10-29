@@ -73,24 +73,67 @@ Return the output STRICTLY as a valid JSON array of objects with this schema:
       });
     }
 
-    const flashcards = await callGemini({
-      parts,
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json"
+    let flashcards = null;
+    try {
+      flashcards = await callGemini({
+        parts,
+        preferredModel: 'gemini-2.5-flash',
+        timeoutMs: 30000,
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      });
+    } catch (aiErr) {
+      console.warn("AI generation encountered issue, checking heuristic backup:", aiErr.message);
+      // If user uploaded text, proceed to heuristic fallback below instead of crashing immediately
+      if (!text || !text.trim()) {
+        throw aiErr;
       }
-    });
+    }
 
-    if (!Array.isArray(flashcards) || flashcards.length === 0) {
-      return NextResponse.json({ error: "AI could not extract flashcards from this material. Please try with more detailed text." }, { status: 400 });
+    let cardList = [];
+    if (Array.isArray(flashcards)) {
+      cardList = flashcards;
+    } else if (flashcards && typeof flashcards === 'object') {
+      if (Array.isArray(flashcards.cards)) cardList = flashcards.cards;
+      else if (Array.isArray(flashcards.flashcards)) cardList = flashcards.flashcards;
+      else if (Array.isArray(flashcards.items)) cardList = flashcards.items;
+      else {
+        const vals = Object.values(flashcards).filter(v => typeof v === 'object' && v && (v.front || v.back));
+        if (vals.length > 0) cardList = vals;
+      }
+    }
+
+    if (cardList.length === 0 && text && text.trim()) {
+      // Heuristic fallback to extract definitions if AI response structure was irregular
+      const lines = text.split(/\n+/).map(l => l.trim()).filter(l => l.length > 10);
+      for (const line of lines) {
+        if (line.includes(':') || line.includes(' - ') || line.includes(' is ')) {
+          const segs = line.split(/[:\-]|(?:\s+is\s+)/);
+          if (segs.length >= 2 && segs[0].trim().length < 50 && segs[1].trim().length > 5) {
+            cardList.push({
+              tag: "Definition",
+              front: segs[0].trim(),
+              keyword: segs[0].trim().split(' ').slice(0, 3).join(' '),
+              back: segs.slice(1).join(' ').trim()
+            });
+            if (cardList.length >= 8) break;
+          }
+        }
+      }
+    }
+
+    if (cardList.length === 0) {
+      return NextResponse.json({ error: "Could not extract flashcards from this material. Please provide more detailed text or definitions." }, { status: 400 });
     }
 
     return NextResponse.json({
-      cards: flashcards.map((c, index) => ({
+      cards: cardList.map((c, index) => ({
         id: `gen-${Date.now()}-${index}`,
         tag: c.tag || (c.front && c.front.toLowerCase().includes('enumerate') ? 'Enumeration' : 'Concept'),
         front: c.front || 'Concept',
-        keyword: c.keyword || '',
+        keyword: c.keyword || (c.front ? c.front.split(' ').slice(0, 3).join(' ') : 'Key Concept'),
         back: c.back || 'Definition'
       }))
     });

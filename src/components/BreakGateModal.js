@@ -1,6 +1,52 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// Crystal-clear Web Audio Synthesis for BreakGate Unlock Chime
+const playBreakGateUnlockChime = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+
+    let volFactor = 0.7;
+    try {
+      const soundPrefs = localStorage.getItem('ifocus_sound_preferences');
+      if (soundPrefs) {
+        const parsed = JSON.parse(soundPrefs);
+        if (parsed.ambientVolume !== undefined) {
+          volFactor = Math.max(0, Math.min(1, parsed.ambientVolume / 100));
+        }
+      }
+    } catch (e) {}
+
+    if (volFactor <= 0) return;
+
+    // Triumphant 4-tone ascending arpeggio (C5 -> E5 -> G5 -> C6)
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, idx) => {
+      const startAt = now + idx * 0.11;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = idx === notes.length - 1 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, startAt);
+
+      const noteVol = (idx === notes.length - 1 ? 0.32 : 0.22) * volFactor;
+      gain.gain.setValueAtTime(noteVol, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + (idx === notes.length - 1 ? 0.8 : 0.45));
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startAt);
+      osc.stop(startAt + (idx === notes.length - 1 ? 0.8 : 0.45));
+    });
+  } catch (e) {
+    console.warn("Could not play BreakGate unlock chime:", e);
+  }
+};
 
 /**
  * BreakGateModal - Interactive Multiple Choice Retrieval Challenge
@@ -16,6 +62,16 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
   const [isOptionChecked, setIsOptionChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
+  const unlockPlayedRef = useRef(false);
+
+  useEffect(() => {
+    if (isFinished && !unlockPlayedRef.current) {
+      unlockPlayedRef.current = true;
+      playBreakGateUnlockChime();
+    } else if (!isFinished) {
+      unlockPlayedRef.current = false;
+    }
+  }, [isFinished]);
 
   // Generate 4 randomized multiple-choice options for a card
   const generateOptionsForCard = (targetCard, allCards) => {
@@ -87,10 +143,26 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
 
       setDeck(targetDeck);
 
-      // Select up to 3 cards for a quick, focused micro-test
+      // Read custom BreakGate questions count from settings or localStorage
+      let questionCount = 3;
+      try {
+        const savedCount = localStorage.getItem('ifocus_breakgate_question_count');
+        if (savedCount) {
+          questionCount = parseInt(savedCount) || 3;
+        } else {
+          const timerPrefs = localStorage.getItem('ifocus_timer_preferences');
+          if (timerPrefs) {
+            const parsed = JSON.parse(timerPrefs);
+            if (parsed.breakGateQuestionCount) questionCount = parseInt(parsed.breakGateQuestionCount) || 3;
+          }
+        }
+      } catch (e) {}
+      questionCount = Math.max(1, Math.min(questionCount, 20));
+
+      // Select cards based on user's configured question count
       const picked = [...allCards]
         .sort(() => 0.5 - Math.random())
-        .slice(0, Math.min(3, allCards.length));
+        .slice(0, Math.min(questionCount, allCards.length));
 
       setChallengeCards(picked);
 
@@ -139,7 +211,33 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       setIsOptionChecked(false);
     } else {
       setIsFinished(true);
+      try {
+        const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+        events.push({
+          status: 'completed',
+          score: score,
+          total: total,
+          date: new Date().toISOString()
+        });
+        localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
+        window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
+      } catch (e) {}
     }
+  };
+
+  const handleSkip = () => {
+    try {
+      const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+      events.push({
+        status: 'skipped',
+        score: 0,
+        total: total,
+        date: new Date().toISOString()
+      });
+      localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
+      window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
+    } catch (e) {}
+    if (onSkip) onSkip();
   };
 
   return (
@@ -153,7 +251,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1.25rem'
+      padding: '1rem'
     }}>
       <div style={{
         background: '#ffffff',
@@ -161,13 +259,13 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         borderRadius: '20px',
         boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.25)',
         width: '100%',
-        maxWidth: '620px',
-        padding: '2rem',
+        maxWidth: '740px',
+        padding: '1.25rem 1.6rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '1.25rem',
+        gap: '0.85rem',
         animation: 'flashcardFadeIn 0.25s ease',
-        maxHeight: '90vh',
+        maxHeight: '94vh',
         overflowY: 'auto'
       }}>
 
@@ -202,7 +300,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
           </div>
 
           <button 
-            onClick={onSkip}
+            onClick={handleSkip}
             style={{
               background: 'transparent',
               border: 'none',
@@ -256,7 +354,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                 Score: {score} of {total} Correct ({total > 0 ? Math.round((score / total) * 100) : 100}%)
               </div>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', margin: 0, maxWidth: '440px', lineHeight: 1.5 }}>
-                You successfully completed your BreakGate micro-test. Your 5-minute restorative Pomodoro break is now unlocked.
+                You successfully completed your BreakGate micro-test. Your restorative Pomodoro break is now unlocked.
               </p>
             </div>
 
@@ -305,29 +403,29 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
             <div style={{
               background: '#fafbfa',
               border: '1.5px solid rgba(0,0,0,0.08)',
-              borderRadius: '16px',
-              padding: '1.5rem 1.75rem',
+              borderRadius: '14px',
+              padding: '0.85rem 1.25rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.75rem'
+              gap: '0.45rem'
             }}>
               <span style={{
                 alignSelf: 'flex-start',
                 background: 'rgba(95, 143, 94, 0.12)',
                 color: 'var(--primary-accent)',
-                padding: '0.2rem 0.65rem',
-                borderRadius: '8px',
-                fontSize: '0.72rem',
+                padding: '0.15rem 0.6rem',
+                borderRadius: '6px',
+                fontSize: '0.7rem',
                 fontWeight: 700
               }}>
                 {currentCard?.tag || 'Question'}
               </span>
 
               <h3 style={{
-                fontSize: '1.18rem',
+                fontSize: '1.08rem',
                 fontWeight: 700,
                 color: 'var(--text-primary)',
-                lineHeight: 1.45,
+                lineHeight: 1.4,
                 margin: 0
               }}>
                 {currentCard?.front}
@@ -337,16 +435,16 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
+                  gap: '0.35rem',
                   background: 'rgba(95, 143, 94, 0.1)',
                   border: '1px solid rgba(95, 143, 94, 0.25)',
                   borderRadius: '999px',
-                  padding: '0.25rem 0.8rem',
-                  fontSize: '0.78rem',
+                  padding: '0.2rem 0.75rem',
+                  fontSize: '0.75rem',
                   fontWeight: 700,
                   color: '#2e7d32',
                   alignSelf: 'flex-start',
-                  marginTop: '0.25rem',
+                  marginTop: '0.15rem',
                   animation: 'flashcardFadeIn 0.2s ease'
                 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -360,7 +458,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
             </div>
 
             {/* 4 Multiple Choice Options */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.65rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.55rem' }}>
               {currentOptions.map((opt, i) => {
                 const isCorrect = opt === currentCard?.back;
                 const isSelected = selectedOption === opt;
@@ -368,20 +466,32 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                 let btnBg = '#ffffff';
                 let btnBorder = '1.5px solid rgba(0,0,0,0.1)';
                 let btnColor = 'var(--text-primary)';
+                let btnShadow = '0 2px 5px rgba(0,0,0,0.02)';
+                let btnTransform = 'scale(1)';
+                let btnOpacity = 1;
 
                 if (isOptionChecked) {
                   if (isCorrect) {
-                    btnBg = 'rgba(46, 125, 50, 0.12)';
-                    btnBorder = '2px solid #2e7d32';
-                    btnColor = '#1b5e20';
+                    btnBg = 'rgba(16, 185, 129, 0.16)';
+                    btnBorder = '2px solid #10b981';
+                    btnColor = '#065f46';
+                    btnShadow = '0 4px 14px rgba(16, 185, 129, 0.22)';
+                    btnTransform = 'scale(1.015)';
+                    btnOpacity = 1;
                   } else if (isSelected) {
-                    btnBg = 'rgba(224, 62, 62, 0.1)';
-                    btnBorder = '2px solid #dc2626';
-                    btnColor = '#dc2626';
+                    btnBg = 'rgba(239, 68, 68, 0.14)';
+                    btnBorder = '2px solid #ef4444';
+                    btnColor = '#991b1b';
+                    btnShadow = '0 4px 14px rgba(239, 68, 68, 0.18)';
+                    btnTransform = 'scale(0.99)';
+                    btnOpacity = 1;
                   } else {
                     btnBg = 'rgba(0,0,0,0.02)';
                     btnBorder = '1px solid rgba(0,0,0,0.06)';
                     btnColor = 'var(--text-secondary)';
+                    btnShadow = 'none';
+                    btnTransform = 'scale(0.985)';
+                    btnOpacity = 0.45;
                   }
                 }
 
@@ -394,46 +504,48 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                       background: btnBg,
                       border: btnBorder,
                       borderRadius: '12px',
-                      padding: '0.85rem 1.15rem',
-                      fontSize: '0.92rem',
+                      padding: '0.65rem 1rem',
+                      fontSize: '0.88rem',
                       color: btnColor,
-                      fontWeight: 500,
+                      fontWeight: isOptionChecked && (isCorrect || isSelected) ? 600 : 500,
                       textAlign: 'left',
                       cursor: isOptionChecked ? 'default' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.75rem',
-                      transition: 'all 0.2s ease',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.02)'
+                      transition: 'background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease, box-shadow 0.4s ease',
+                      boxShadow: btnShadow,
+                      transform: btnTransform,
+                      opacity: btnOpacity
                     }}
                   >
                     <span style={{
-                      width: '26px',
-                      height: '26px',
+                      width: '24px',
+                      height: '24px',
                       borderRadius: '50%',
                       background: isOptionChecked && isCorrect ? '#2e7d32' : 'rgba(0,0,0,0.06)',
                       color: isOptionChecked && isCorrect ? '#ffffff' : 'var(--text-primary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '0.78rem',
+                      fontSize: '0.75rem',
                       fontWeight: 700,
                       flexShrink: 0
                     }}>
                       {String.fromCharCode(65 + i)}
                     </span>
-                    <span style={{ flex: 1, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{opt}</span>
+                    <span style={{ flex: 1, whiteSpace: 'pre-wrap', lineHeight: 1.38 }}>{opt}</span>
                     {isOptionChecked && isCorrect && (
-                      <span style={{ color: '#2e7d32', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <span style={{ color: '#2e7d32', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <polyline points="20 6 9 17 4 12"/>
                         </svg>
                         Correct
                       </span>
                     )}
                     {isOptionChecked && isSelected && !isCorrect && (
-                      <span style={{ color: '#dc2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <span style={{ color: '#dc2626', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.82rem' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="18" y1="6" x2="6" y2="18"/>
                           <line x1="6" y1="6" x2="18" y2="18"/>
                         </svg>
@@ -446,7 +558,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
             </div>
 
             {/* Footer Action */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minHeight: '42px', marginTop: '0.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minHeight: '38px', marginTop: '0.15rem' }}>
               {isOptionChecked && (
                 <button
                   onClick={handleNextQuestion}
@@ -455,8 +567,8 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: '10px',
-                    padding: '0.75rem 1.6rem',
-                    fontSize: '0.92rem',
+                    padding: '0.6rem 1.4rem',
+                    fontSize: '0.88rem',
                     fontWeight: 600,
                     cursor: 'pointer',
                     boxShadow: '0 4px 12px rgba(46, 125, 50, 0.25)',

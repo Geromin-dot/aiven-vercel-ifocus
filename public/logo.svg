@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Focus Brackets Gradient (Signature Forest Emerald) -->
+    <linearGradient id="ifocus_bracket_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f8754" />
+      <stop offset="100%" stop-color="#27522d" />
+    </linearGradient>
+
+    <!-- 'i' Dot Gradient (Mint to Deep Emerald) -->
+    <linearGradient id="ifocus_dot_grad" x1="15%" y1="15%" x2="85%" y2="85%">
+      <stop offset="0%" stop-color="#a7f3d0" />
+      <stop offset="45%" stop-color="#52b788" />
+      <stop offset="100%" stop-color="#27522d" />
+    </linearGradient>
+
+    <!-- 'i' Stem Light Mint Gradient -->
+    <linearGradient id="ifocus_stem_light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d1fae5" />
+      <stop offset="40%" stop-color="#86efac" />
+      <stop offset="100%" stop-color="#4ade80" />
+    </linearGradient>
+
+    <!-- 'i' Stem Dark Emerald Gradient -->
+    <linearGradient id="ifocus_stem_dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#27522d" />
+      <stop offset="100%" stop-color="#143419" />
+    </linearGradient>
+  </defs>
+
+  <!-- 4 Focus Brackets -->
+  <g fill="none" stroke="url(#ifocus_bracket_grad)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top-Left -->
+    <path d="M 22 42 L 22 28 A 8 8 0 0 1 30 20 L 44 20" />
+    <!-- Top-Right -->
+    <path d="M 76 20 L 90 20 A 8 8 0 0 1 98 28 L 98 42" />
+    <!-- Bottom-Left -->
+    <path d="M 22 78 L 22 92 A 8 8 0 0 0 30 100 L 44 100" />
+    <!-- Bottom-Right -->
+    <path d="M 76 100 L 90 100 A 8 8 0 0 0 98 92 L 98 78" />
+  </g>
+
+  <!-- Circular Dot of the 'i' -->
+  <circle cx="60" cy="34" r="11.5" fill="url(#ifocus_dot_grad)" />
+
+  <!-- Dual-tone Stem of the 'i' -->
+  <g>
+    <!-- Deep base silhouette -->
+    <path d="M 48 60 C 48 50 58 44 72 47 L 72 82 C 72 88.5 66.5 94 60 94 C 53.5 94 48 88.5 48 82 Z" fill="url(#ifocus_stem_dark)" />
+    <!-- Light mint curved overlay -->
+    <path d="M 48 60 C 48 50 58 44 72 47 L 72 58 C 65 67 56 76 48 82 Z" fill="url(#ifocus_stem_light)" />
+  </g>
+</svg>

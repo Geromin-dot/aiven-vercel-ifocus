@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import HelpButton from '@/components/HelpButton';
 
 // Curated avatar styles and presets for customization (clean names, no emojis)
 const AVATAR_PRESETS = [
@@ -23,18 +25,90 @@ const getDicebearUrl = (style, seed, bg = 'c0aede') => {
   return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
 };
 
+
+// Web Audio API Synthesis: Uplifting Harmonic E-Major Chime for Successful Save (Scales with Volume / Silent if Muted)
+const playSaveSuccessChime = (volInput = 70) => {
+  try {
+    let vol = volInput;
+    if (typeof vol === 'object') {
+      try {
+        const soundPrefs = JSON.parse(localStorage.getItem('ifocus_sound_preferences') || '{}');
+        vol = soundPrefs.ambientVolume !== undefined ? Number(soundPrefs.ambientVolume) : 70;
+      } catch (e) {
+        vol = 70;
+      }
+    }
+    const volNum = Math.max(0, Math.min(100, Number(vol !== undefined ? vol : 70)));
+    if (volNum <= 0) return; // Muted (0%): Completely silent
+
+    const volFactor = volNum / 100;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const now = ctx.currentTime;
+    // Harmonic ascending triad (E5, G#5, B5)
+    const chord = [
+      { freq: 659.25, offset: 0, dur: 0.30, gain: 0.055 },
+      { freq: 830.61, offset: 0.06, dur: 0.35, gain: 0.065 },
+      { freq: 987.77, offset: 0.12, dur: 0.50, gain: 0.085 }
+    ];
+
+    chord.forEach(({ freq, offset, dur, gain: peak }) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + offset);
+      g.gain.setValueAtTime(0.0001, now + offset);
+      g.gain.linearRampToValueAtTime(peak * volFactor, now + offset + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + offset + dur);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(now + offset);
+      osc.stop(now + offset + dur + 0.02);
+    });
+  } catch (e) {
+    console.warn('Save audio blocked:', e);
+  }
+};
+
 export default function SettingsPage() {
   const { data: session, update: updateSession } = useSession();
+  const router = useRouter();
   
   // Selected Section among the 4 Cards ('focus' | 'notifications' | 'privacy' | 'feedback')
   const [activeSection, setActiveSection] = useState('focus');
 
-  // User Profile Data
+  // User Profile Data - Synchronously initialized from cache or session to eliminate flickering
+  // User Profile Data - Initialized safely to prevent SSR hydration mismatches
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [createdAt, setCreatedAt] = useState(null);
+
+  // Instant session synchronization to ensure zero delay or flash
+  useEffect(() => {
+    if (session?.user) {
+      if (session.user.image && !avatarUrl) {
+        setAvatarUrl(session.user.image);
+        try { localStorage.setItem('ifocus_user_avatar', session.user.image); } catch (e) {}
+      }
+      if (session.user.name && !name) {
+        setName(session.user.name);
+        try { localStorage.setItem('ifocus_user_name', session.user.name); } catch (e) {}
+      }
+      if (session.user.email && !email) {
+        setEmail(session.user.email);
+      }
+      if (session.user.username && !username) {
+        setUsername(session.user.username);
+      }
+    }
+  }, [session, avatarUrl, name, email, username]);
 
   // Stats State (Accurately computed from sessions and history)
   const [stats, setStats] = useState({
@@ -60,8 +134,9 @@ export default function SettingsPage() {
 
   // 1. Focus Preferences State
   const [focusDuration, setFocusDuration] = useState(25);
-  const [shortBreakDuration, setShortBreakDuration] = useState(5);
-  const [longBreakDuration, setLongBreakDuration] = useState(15);
+  const [breakGateQuestionCount, setBreakGateQuestionCount] = useState(3);
+  const [hasActiveBreakGateDeck, setHasActiveBreakGateDeck] = useState(false);
+  const [activeDeckTitle, setActiveDeckTitle] = useState('');
   const [autoStartBreaks, setAutoStartBreaks] = useState(true);
   const [autoStartFocus, setAutoStartFocus] = useState(false);
   const [timerChimeSound, setTimerChimeSound] = useState(true);
@@ -79,14 +154,39 @@ export default function SettingsPage() {
   const [feedbackText, setFeedbackText] = useState('');
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
+  // Unsaved Changes Baseline State
+  const [initialFocusPrefs, setInitialFocusPrefs] = useState({
+    focusDuration: 25,
+    breakGateQuestionCount: 3,
+    timerChimeSound: true,
+    activePresenceEnabled: true,
+    activePresenceInterval: 5,
+  });
+
+  const [initialSoundPrefs, setInitialSoundPrefs] = useState({
+    defaultAmbientTrack: 'Chill Lofi',
+    ambientVolume: 70,
+    dailyReminder: true,
+  });
+
+  const [initialProfile, setInitialProfile] = useState({
+    name: '',
+    username: '',
+  });
+
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  const toastTimeoutRef = useRef(null);
+
   // Toast / Alert Notification
   const [toast, setToast] = useState({ type: null, message: '' });
 
-  const showToast = (type, message) => {
-    setToast({ type, message });
-    setTimeout(() => {
-      setToast({ type: null, message: '' });
-    }, 4000);
+  const showToast = (type, message, title = '') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ type, message, title });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast({ type: null, message: '', title: '' });
+    }, 4500);
   };
 
   // Helper: Accurately calculate consecutive active streak from dates
@@ -133,11 +233,19 @@ export default function SettingsPage() {
             setName(data.user.name || '');
             setUsername(data.user.username || '');
             setEmail(data.user.email || '');
+            setInitialProfile({ name: data.user.name || '', username: data.user.username || '' });
             setCreatedAt(data.user.createdAt);
             
-            const initialAvatar = data.user.image || getDicebearUrl('adventurer', data.user.username || 'FocusUser', 'c0aede');
+            const initialAvatar = data.user.image 
+              || session?.user?.image 
+              || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_avatar') : '')
+              || getDicebearUrl('adventurer', data.user.username || data.user.name || 'FocusUser', 'c0aede');
             setAvatarUrl(initialAvatar);
             setTempAvatarUrl(initialAvatar);
+            try { 
+              localStorage.setItem('ifocus_user_avatar', initialAvatar);
+              if (data.user.name) localStorage.setItem('ifocus_user_name', data.user.name);
+            } catch (e) {}
           }
 
           // Calculate real session statistics from local history and database
@@ -172,35 +280,236 @@ export default function SettingsPage() {
 
     fetchUserData();
 
-    // Load Local Saved Preferences
+    // Load Local Saved Preferences and sync initial baselines
     try {
       const savedTimer = localStorage.getItem('ifocus_timer_preferences');
+      let loadedTimerPrefs = {
+        focusDuration: 25,
+        breakGateQuestionCount: 3,
+        timerChimeSound: true,
+        activePresenceEnabled: true,
+        activePresenceInterval: 5,
+      };
+
       if (savedTimer) {
         const parsed = JSON.parse(savedTimer);
-        if (parsed.focusDuration) setFocusDuration(parsed.focusDuration);
-        if (parsed.shortBreakDuration) setShortBreakDuration(parsed.shortBreakDuration);
-        if (parsed.longBreakDuration) setLongBreakDuration(parsed.longBreakDuration);
-        if (parsed.autoStartBreaks !== undefined) setAutoStartBreaks(parsed.autoStartBreaks);
-        if (parsed.autoStartFocus !== undefined) setAutoStartFocus(parsed.autoStartFocus);
-        if (parsed.timerChimeSound !== undefined) setTimerChimeSound(parsed.timerChimeSound);
-        if (parsed.activePresenceEnabled !== undefined) setActivePresenceEnabled(parsed.activePresenceEnabled);
-        if (parsed.activePresenceInterval) setActivePresenceInterval(parsed.activePresenceInterval);
+        if (parsed.focusDuration) {
+          const fd = Number(parsed.focusDuration) || 25;
+          setFocusDuration(fd);
+          loadedTimerPrefs.focusDuration = fd;
+        }
+        if (parsed.breakGateQuestionCount !== undefined) {
+          const bgCount = Number(parsed.breakGateQuestionCount) || 3;
+          setBreakGateQuestionCount(bgCount);
+          loadedTimerPrefs.breakGateQuestionCount = bgCount;
+        }
+        if (parsed.timerChimeSound !== undefined) {
+          const ch = Boolean(parsed.timerChimeSound);
+          setTimerChimeSound(ch);
+          loadedTimerPrefs.timerChimeSound = ch;
+        }
+        if (parsed.activePresenceEnabled !== undefined) {
+          const pe = Boolean(parsed.activePresenceEnabled);
+          setActivePresenceEnabled(pe);
+          loadedTimerPrefs.activePresenceEnabled = pe;
+        }
+        if (parsed.activePresenceInterval) {
+          const pi = Number(parsed.activePresenceInterval) || 5;
+          setActivePresenceInterval(pi);
+          loadedTimerPrefs.activePresenceInterval = pi;
+        }
       }
 
+      // Check if active breakgate deck exists
+      const checkActiveBreakGate = () => {
+        try {
+          const rawDeck = localStorage.getItem('ifocus_active_breakgate_deck');
+          if (rawDeck) {
+            const parsedDeck = JSON.parse(rawDeck);
+            if (parsedDeck && (parsedDeck.id || parsedDeck.title)) {
+              setHasActiveBreakGateDeck(true);
+              setActiveDeckTitle(parsedDeck.title || 'Active Deck');
+            } else {
+              setHasActiveBreakGateDeck(false);
+            }
+          } else {
+            setHasActiveBreakGateDeck(false);
+          }
+        } catch (err) {
+          setHasActiveBreakGateDeck(false);
+        }
+      };
+      checkActiveBreakGate();
+      window.addEventListener('focus', checkActiveBreakGate);
+      window.addEventListener('storage', checkActiveBreakGate);
+      window.addEventListener('ifocus_breakgate_deck_changed', checkActiveBreakGate);
+
+      // Check if separate ifocus_breakgate_question_count exists
+      const savedBgCount = localStorage.getItem('ifocus_breakgate_question_count');
+      if (savedBgCount) {
+        const bgNum = parseInt(savedBgCount) || 3;
+        setBreakGateQuestionCount(bgNum);
+        loadedTimerPrefs.breakGateQuestionCount = bgNum;
+      }
+      setInitialFocusPrefs(loadedTimerPrefs);
+
       const savedSound = localStorage.getItem('ifocus_sound_preferences');
+      let loadedSoundPrefs = {
+        defaultAmbientTrack: 'Chill Lofi',
+        ambientVolume: 70,
+        dailyReminder: true,
+      };
+
       if (savedSound) {
         const parsed = JSON.parse(savedSound);
-        if (parsed.defaultAmbientTrack) setDefaultAmbientTrack(parsed.defaultAmbientTrack);
-        if (parsed.ambientVolume !== undefined) setAmbientVolume(parsed.ambientVolume);
-        if (parsed.telemetryChime !== undefined) setTelemetryChime(parsed.telemetryChime);
-        if (parsed.dailyReminder !== undefined) setDailyReminder(parsed.dailyReminder);
+        if (parsed.defaultAmbientTrack) {
+          setDefaultAmbientTrack(String(parsed.defaultAmbientTrack));
+          loadedSoundPrefs.defaultAmbientTrack = String(parsed.defaultAmbientTrack);
+        }
+        if (parsed.ambientVolume !== undefined) {
+          const vol = Number(parsed.ambientVolume);
+          setAmbientVolume(vol);
+          loadedSoundPrefs.ambientVolume = vol;
+        }
+        if (parsed.dailyReminder !== undefined) {
+          const dr = Boolean(parsed.dailyReminder);
+          setDailyReminder(dr);
+          loadedSoundPrefs.dailyReminder = dr;
+        }
       }
+      setInitialSoundPrefs(loadedSoundPrefs);
     } catch (e) {
       console.warn("Error loading local settings:", e);
     }
   }, []);
 
   // Format Join Date
+
+  // Compute Dirty State Across All Settings Forms
+  const hasFocusChanges =
+    Number(breakGateQuestionCount) !== Number(initialFocusPrefs.breakGateQuestionCount) ||
+    Boolean(timerChimeSound) !== Boolean(initialFocusPrefs.timerChimeSound) ||
+    Boolean(activePresenceEnabled) !== Boolean(initialFocusPrefs.activePresenceEnabled) ||
+    Number(activePresenceInterval) !== Number(initialFocusPrefs.activePresenceInterval);
+
+  const hasSoundChanges =
+    String(defaultAmbientTrack) !== String(initialSoundPrefs.defaultAmbientTrack) ||
+    Number(ambientVolume) !== Number(initialSoundPrefs.ambientVolume) ||
+    Boolean(dailyReminder) !== Boolean(initialSoundPrefs.dailyReminder);
+
+  const hasProfileChanges =
+    Boolean(initialProfile.name && name.trim() !== initialProfile.name.trim()) ||
+    Boolean(initialProfile.username && username.trim() !== initialProfile.username.trim());
+
+  const hasUnsavedChanges = hasFocusChanges || hasSoundChanges || hasProfileChanges;
+
+  // Intercept Navigation Attempts & Browser Unload
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    window.__ifocusHasUnsavedChanges = hasUnsavedChanges;
+    window.__ifocusOnAttemptedNav = (targetUrl) => {
+      setPendingNavigation(targetUrl);
+      setShowUnsavedModal(true);
+    };
+
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.__ifocusHasUnsavedChanges = false;
+      window.__ifocusOnAttemptedNav = null;
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  // Save All Unsaved Changes & Continue Navigation
+  const handleSaveAndContinue = async () => {
+    await handleSavePreferences();
+    window.__ifocusHasUnsavedChanges = false;
+    setShowUnsavedModal(false);
+
+    if (pendingNavigation) {
+      const dest = pendingNavigation;
+      setPendingNavigation(null);
+      if (dest === 'SIGNOUT') {
+        signOut({ callbackUrl: '/login' });
+      } else {
+        router.push(dest);
+      }
+    }
+  };
+
+  // Discard All Changes & Continue Navigation
+  const handleDiscardAndContinue = () => {
+    if (initialFocusPrefs) {
+      setFocusDuration(initialFocusPrefs.focusDuration);
+      setBreakGateQuestionCount(initialFocusPrefs.breakGateQuestionCount);
+      setTimerChimeSound(initialFocusPrefs.timerChimeSound);
+      setActivePresenceEnabled(initialFocusPrefs.activePresenceEnabled);
+      setActivePresenceInterval(initialFocusPrefs.activePresenceInterval);
+    }
+
+    if (initialSoundPrefs) {
+      setDefaultAmbientTrack(initialSoundPrefs.defaultAmbientTrack);
+      setAmbientVolume(initialSoundPrefs.ambientVolume);
+      setDailyReminder(initialSoundPrefs.dailyReminder);
+    }
+
+    if (initialProfile.name) {
+      setName(initialProfile.name);
+      setUsername(initialProfile.username);
+    }
+
+    window.__ifocusHasUnsavedChanges = false;
+    setShowUnsavedModal(false);
+
+    if (pendingNavigation) {
+      const dest = pendingNavigation;
+      setPendingNavigation(null);
+      if (dest === 'SIGNOUT') {
+        signOut({ callbackUrl: '/login' });
+      } else {
+        router.push(dest);
+      }
+    }
+  };
+
+  // Discard all changes in-place
+  const handleDiscardAll = () => {
+    if (initialFocusPrefs) {
+      setFocusDuration(initialFocusPrefs.focusDuration);
+      setBreakGateQuestionCount(initialFocusPrefs.breakGateQuestionCount);
+      setTimerChimeSound(initialFocusPrefs.timerChimeSound);
+      setActivePresenceEnabled(initialFocusPrefs.activePresenceEnabled);
+      setActivePresenceInterval(initialFocusPrefs.activePresenceInterval);
+    }
+
+    if (initialSoundPrefs) {
+      setDefaultAmbientTrack(initialSoundPrefs.defaultAmbientTrack);
+      setAmbientVolume(initialSoundPrefs.ambientVolume);
+      setDailyReminder(initialSoundPrefs.dailyReminder);
+    }
+
+    if (initialProfile.name) {
+      setName(initialProfile.name);
+      setUsername(initialProfile.username);
+    }
+
+    showToast('success', 'Changes discarded.', 'Reverted');
+  };
+
+  // Save all modified preferences from floating banner
+  const handleSaveAllChanges = async () => {
+    await handleSaveAndContinue();
+  };
+
   const memberSinceText = createdAt 
     ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '2026';
@@ -214,6 +523,7 @@ export default function SettingsPage() {
 
     setIsSavingAvatar(true);
     setAvatarUrl(finalUrl);
+    try { localStorage.setItem('ifocus_user_avatar', finalUrl); } catch (e) {}
     setIsAvatarModalOpen(false);
 
     try {
@@ -226,7 +536,8 @@ export default function SettingsPage() {
         if (updateSession) {
           await updateSession({ user: { image: finalUrl } });
         }
-        showToast('success', 'Profile avatar updated.');
+        playSaveSuccessChime(ambientVolume);
+      showToast('success', 'Profile avatar updated.', 'Avatar Saved');
       }
     } catch (err) {
       console.error("Avatar save error:", err);
@@ -247,88 +558,95 @@ export default function SettingsPage() {
     setTempAvatarUrl(getDicebearUrl(chosenStyle, chosenSeed, chosenBg));
   };
 
-  // 3. Save Focus Preferences
-  const handleSaveFocusPreferences = (e) => {
-    e.preventDefault();
-    const prefs = {
-      focusDuration,
-      shortBreakDuration,
-      longBreakDuration,
-      autoStartBreaks,
-      autoStartFocus,
-      timerChimeSound,
-      activePresenceEnabled,
-      activePresenceInterval
-    };
-    try {
-      localStorage.setItem('ifocus_timer_preferences', JSON.stringify(prefs));
-      showToast('success', 'Focus preferences saved.');
-    } catch (err) {
-      showToast('error', 'Failed to save preferences.');
-    }
-  };
-
-  // 4. Save Notifications Preferences
-  const handleSaveNotifications = (e) => {
-    e.preventDefault();
-    const prefs = {
-      defaultAmbientTrack,
-      ambientVolume,
-      telemetryChime,
-      dailyReminder
-    };
-    try {
-      localStorage.setItem('ifocus_sound_preferences', JSON.stringify(prefs));
-      showToast('success', 'Notification preferences saved.');
-    } catch (err) {
-      showToast('error', 'Failed to save preferences.');
-    }
-  };
-
-  // 5. Save Profile & Account Details (in Privacy & Security)
-  const handleSaveProfileDetails = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      showToast('error', 'Display name cannot be empty.');
-      return;
-    }
-    if (!username.trim()) {
-      showToast('error', 'Username cannot be empty.');
-      return;
-    }
-
+  // Unified Master Save Preferences Handler (Saves All Preferences Across Tabs)
+  const handleSavePreferences = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setIsSavingProfile(true);
     try {
-      const res = await fetch('/api/user/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          username: username.trim(),
-          image: avatarUrl
-        })
-      });
+      const cleanBgCount = Number(breakGateQuestionCount || 3);
+      setBreakGateQuestionCount(cleanBgCount);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+      const cleanInterval = Number(activePresenceInterval || 5);
+      setActivePresenceInterval(cleanInterval);
 
-      if (updateSession) {
-        await updateSession({
-          user: {
-            name: name.trim(),
-            username: username.trim(),
-            image: avatarUrl
-          }
-        });
+      const cleanVolume = Number(ambientVolume);
+      setAmbientVolume(cleanVolume);
+
+      // 1. Save Focus & Timer Preferences
+      const timerPrefs = {
+        focusDuration: Number(focusDuration || 25),
+        breakGateQuestionCount: cleanBgCount,
+        timerChimeSound: Boolean(timerChimeSound),
+        activePresenceEnabled: Boolean(activePresenceEnabled),
+        activePresenceInterval: cleanInterval,
+      };
+      localStorage.setItem('ifocus_timer_preferences', JSON.stringify(timerPrefs));
+      localStorage.setItem('ifocus_breakgate_question_count', String(cleanBgCount));
+      setInitialFocusPrefs(timerPrefs);
+
+      // 2. Save Sound & Notification Preferences
+      const soundPrefs = {
+        defaultAmbientTrack: String(defaultAmbientTrack || 'Chill Lofi'),
+        ambientVolume: cleanVolume,
+        dailyReminder: Boolean(dailyReminder),
+      };
+      localStorage.setItem('ifocus_sound_preferences', JSON.stringify(soundPrefs));
+      setInitialSoundPrefs(soundPrefs);
+
+      if (defaultAmbientTrack && defaultAmbientTrack !== 'None') {
+        try {
+          const currentMusic = JSON.parse(localStorage.getItem('ifocus_music_state') || '{}');
+          const updatedMusic = { ...currentMusic, currentTrack: defaultAmbientTrack, volume: cleanVolume };
+          localStorage.setItem('ifocus_music_state', JSON.stringify(updatedMusic));
+          window.dispatchEvent(new CustomEvent('ifocus_music_sync', { detail: updatedMusic }));
+        } catch (mErr) {}
       }
 
-      showToast('success', 'Account details updated.');
+      // 3. Save Profile if modified
+      if (name.trim() && username.trim()) {
+        const cleanName = name.trim();
+        const cleanUsername = username.trim();
+        try {
+          const res = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: cleanName,
+              username: cleanUsername,
+              image: avatarUrl,
+            }),
+          });
+          if (res.ok) {
+            setInitialProfile({ name: cleanName, username: cleanUsername });
+            if (updateSession) {
+              await updateSession({
+                user: { name: cleanName, username: cleanUsername, image: avatarUrl },
+              });
+            }
+          } else {
+            setInitialProfile({ name: cleanName, username: cleanUsername });
+          }
+        } catch (pErr) {
+          setInitialProfile({ name: cleanName, username: cleanUsername });
+        }
+      }
+
+      window.__ifocusHasUnsavedChanges = false;
+      playSaveSuccessChime(cleanVolume);
+      showToast('success', 'Preferences saved successfully.', 'Settings Saved');
+      return true;
     } catch (err) {
-      showToast('error', err.message);
+      console.error('Save preferences error:', err);
+      showToast('error', 'Failed to save preferences.');
+      return false;
     } finally {
       setIsSavingProfile(false);
     }
   };
+
+  const handleSaveFocusPreferences = handleSavePreferences;
+  const handleSaveNotifications = handleSavePreferences;
+  const handleSaveProfileDetails = handleSavePreferences;
 
   // 6. Change Password (in Privacy & Security)
   const handleChangePassword = async (e) => {
@@ -359,7 +677,8 @@ export default function SettingsPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      showToast('success', 'Password updated successfully.');
+      playSaveSuccessChime(ambientVolume);
+      showToast('success', 'Password updated successfully.', 'Password Changed');
     } catch (err) {
       showToast('error', err.message);
     } finally {
@@ -392,23 +711,33 @@ export default function SettingsPage() {
     }, 600);
   };
 
-  // Play audio test chime
-  const playSampleChime = () => {
+  // Play audio test chime scaled by user-selected volume (Silent if Muted 0%)
+  const playSampleChime = (vol = ambientVolume) => {
     try {
+      const volNum = Math.max(0, Math.min(100, Number(vol !== undefined ? vol : ambientVolume)));
+      if (volNum <= 0) {
+        // Muted (0%): Completely silent, zero audio output
+        return;
+      }
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
+      const volFactor = volNum / 100;
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(523.25, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.12);
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.2 * volFactor, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + 0.52);
     } catch (e) {
       console.log("Audio preview blocked", e);
     }
@@ -417,17 +746,256 @@ export default function SettingsPage() {
   return (
     <div className="settings-viewport-layout">
       
-      {/* Dynamic Toast Feedback Notification */}
+      {/* Redesigned Luxury Frosted Glass Toast Notification */}
       {toast.type && (
-        <div className={`settings-toast-banner ${toast.type}`} style={{ position: 'fixed', top: '1.5rem', right: '2rem', zIndex: 1100 }}>
-          {toast.type === 'success' ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-          )}
-          <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>{toast.message}</span>
+        <div
+          id="ifocusSettingsToast"
+          className={`settings-toast-banner ${toast.type}`}
+          style={{
+            position: 'fixed',
+            top: '1.5rem',
+            right: '2rem',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '0.75rem 1.25rem 0.75rem 0.85rem',
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: toast.type === 'success'
+              ? '1.5px solid rgba(34, 197, 94, 0.45)'
+              : '1.5px solid rgba(239, 68, 68, 0.45)',
+            borderRadius: '9999px',
+            boxShadow: toast.type === 'success'
+              ? '0 20px 45px -10px rgba(27, 67, 50, 0.25), 0 6px 16px rgba(0, 0, 0, 0.05), 0 0 18px rgba(34, 197, 94, 0.2)'
+              : '0 20px 45px -10px rgba(153, 27, 27, 0.25), 0 6px 16px rgba(0, 0, 0, 0.05)',
+            animation: 'ifocusToastDropIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            userSelect: 'none',
+            maxWidth: '440px',
+          }}
+        >
+          {/* Animated Glowing Badge */}
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: toast.type === 'success'
+                ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                : 'linear-gradient(135deg, #ef4444, #b91c1c)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: toast.type === 'success'
+                ? '0 4px 12px rgba(22, 163, 74, 0.45)'
+                : '0 4px 12px rgba(239, 68, 68, 0.45)',
+              flexShrink: 0,
+            }}
+          >
+            {toast.type === 'success' ? (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#143321', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+              {toast.title || (toast.type === 'success' ? 'Saved Successfully' : 'Notice')}
+            </span>
+            <span style={{ fontSize: '0.74rem', color: '#4b6354', fontWeight: 500, lineHeight: 1.2 }}>
+              {toast.message}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setToast({ type: null, message: '', title: '' })}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(20, 51, 33, 0.4)',
+              cursor: 'pointer',
+              padding: '4px',
+              marginLeft: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#143321'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(20, 51, 33, 0.4)'; }}
+            title="Dismiss"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
       )}
+
+      {/* Unsaved Changes Confirmation Modal */}
+      {/* Unsaved Changes Confirmation Modal (English, "Okay" button, saves must be done on the page) */}
+      {showUnsavedModal && (
+        <div
+          id="unsavedChangesModal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out forwards',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              background: 'rgba(255, 255, 255, 0.98)',
+              borderRadius: '24px',
+              padding: '1.85rem',
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              animation: 'ifocusModalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '16px',
+                  background: 'rgba(217, 119, 6, 0.12)',
+                  color: '#d97706',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  border: '1px solid rgba(217, 119, 6, 0.25)',
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#163824', letterSpacing: '-0.02em' }}>
+                  Unsaved Changes
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#557060', marginTop: '2px' }}>
+                  Please save your preferences before leaving.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.22)',
+                borderRadius: '14px',
+                padding: '0.85rem 1rem',
+                fontSize: '0.86rem',
+                color: '#854d0e',
+                lineHeight: 1.45,
+              }}
+            >
+              You have unsaved changes. Please use the <strong>Save</strong> button on this page to apply your settings before navigating away.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '0.4rem' }}>
+              <button
+                type="button"
+                id="unsavedModalSaveBtn"
+                onClick={handleSaveAndContinue}
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '9999px',
+                  background: 'linear-gradient(135deg, #27522d, #1c3d22)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.94rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 8px 20px -4px rgba(39, 82, 45, 0.4)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Save Preferences & Continue
+              </button>
+
+              <button
+                type="button"
+                id="unsavedModalDiscardBtn"
+                onClick={handleDiscardAndContinue}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  fontWeight: 600,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.target.style.color = '#ef4444')}
+                onMouseLeave={(e) => (e.target.style.color = '#6b7280')}
+              >
+                Discard changes and leave
+              </button>
+
+              <button
+                type="button"
+                id="unsavedModalStayBtn"
+                onClick={() => {
+                  setShowUnsavedModal(false);
+                  setPendingNavigation(null);
+                }}
+                style={{
+                  padding: '0.35rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  fontWeight: 500,
+                  fontSize: '0.80rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  transition: 'color 0.15s ease',
+                }}
+              >
+                Stay on settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* ================= COLUMN 1: PROFILE OVERVIEW (Compact & Full Height) ================= */}
       <div className="settings-left-card">
@@ -437,7 +1005,12 @@ export default function SettingsPage() {
             <div className="profile-avatar-glow" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
-              src={avatarUrl || getDicebearUrl('adventurer', username || 'Alex', 'c0aede')} 
+              suppressHydrationWarning
+              src={
+                avatarUrl || 
+                session?.user?.image || 
+                getDicebearUrl('adventurer', username || name || 'Focus', 'c0aede')
+              } 
               alt="Avatar" 
               style={{ width: '92px', height: '92px', borderRadius: '50%', border: '3.5px solid white', boxShadow: '0 6px 18px rgba(0,0,0,0.1)', objectFit: 'cover', background: '#f0f4ee', position: 'relative', zIndex: 1 }} 
             />
@@ -453,10 +1026,10 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          <h3 style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700, textAlign: 'center' }}>
+          <h3 suppressHydrationWarning style={{ fontSize: '1.25rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700, textAlign: 'center' }}>
             {name || username || 'Focus Member'}
           </h3>
-          <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0', fontSize: '0.8rem' }}>
+          <p suppressHydrationWarning style={{ color: 'var(--text-secondary)', margin: '0 0 1rem 0', fontSize: '0.8rem' }}>
             Focus Member since {memberSinceText}
           </p>
           
@@ -494,15 +1067,51 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Bottom Sign Out */}
-        <div style={{ width: '100%', marginTop: '1rem' }}>
-          <button 
-            onClick={() => signOut({ callbackUrl: '/' })}
-            className="btn-secondary" 
-            style={{ width: '100%', justifyContent: 'center', fontSize: '0.82rem', padding: '0.5rem', color: 'var(--error)', borderColor: 'rgba(224, 62, 62, 0.25)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+        {/* Student Details & Credentials (Eliminates empty void) */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.85rem' }}>
+          <div style={{ padding: '0.65rem 0.85rem', background: '#f8faf7', borderRadius: '10px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>Account Role</span>
+            <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#27522d' }}>
+              {session?.user?.role === 'ADMIN' ? 'Administrator' : 'Student / Scholar'}
+            </span>
+          </div>
+          {email && (
+            <div style={{ padding: '0.65rem 0.85rem', background: '#f8faf7', borderRadius: '10px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>Registered Email</span>
+              <span style={{ fontSize: '0.84rem', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {email}
+              </span>
+            </div>
+          )}
+
+          {/* Dedicated Sign Out Button */}
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            style={{
+              marginTop: '0.65rem',
+              width: '100%',
+              padding: '10px 14px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '10px',
+              color: '#dc2626',
+              fontSize: '0.86rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.18s ease'
+            }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            Log Out
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Sign Out</span>
           </button>
         </div>
 
@@ -512,7 +1121,7 @@ export default function SettingsPage() {
       <div className="settings-right-card">
         
         {/* Header (Clean & Compact) */}
-        <div style={{ marginBottom: '0.75rem', flexShrink: 0 }}>
+        <div style={{ marginBottom: '0.85rem', flexShrink: 0 }}>
           <h2 style={{ color: 'var(--text-primary)', fontSize: '1.35rem', margin: '0 0 0.15rem 0', fontWeight: 700 }}>Profile & Settings</h2>
           <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.86rem' }}>
             Customize your focus environment and coach behaviors.
@@ -586,64 +1195,50 @@ export default function SettingsPage() {
           {/* 1. FOCUS PREFERENCES PANEL */}
           {activeSection === 'focus' && (
             <form onSubmit={handleSaveFocusPreferences} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div>
-                <label className="settings-label" style={{ fontSize: '0.85rem' }}>Default Focus Work Duration</label>
-                <div className="option-chips-container" style={{ gap: '0.5rem', marginTop: '0.3rem' }}>
-                  {[15, 25, 45, 50, 90].map((mins) => (
-                    <button 
-                      key={mins} 
-                      type="button" 
-                      className={`option-chip ${focusDuration === mins ? 'selected' : ''}`}
-                      onClick={() => setFocusDuration(mins)}
-                      style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
-                    >
-                      {mins} min
-                    </button>
-                  ))}
+
+
+              <div className="settings-input-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <label className="settings-label" style={{ fontSize: '0.84rem', margin: 0, fontWeight: 700 }}>
+                      BreakGate Questions Count
+                    </label>
+                    <HelpButton topic="breakgate" title="BreakGate Challenge Questions Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: hasActiveBreakGateDeck ? 'var(--text-secondary)' : '#d97706', fontWeight: hasActiveBreakGateDeck ? 400 : 600 }}>
+                    {hasActiveBreakGateDeck ? 'Recommended: 1 to 5 questions' : 'No Deck Active in Flashcards'}
+                  </span>
                 </div>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="10" 
+                  disabled={!hasActiveBreakGateDeck}
+                  className="settings-input" 
+                  value={!hasActiveBreakGateDeck ? 0 : (breakGateQuestionCount === 0 || breakGateQuestionCount === '0' ? '' : breakGateQuestionCount)} 
+                  onChange={(e) => {
+                    if (!hasActiveBreakGateDeck) return;
+                    const val = e.target.value === '' ? '' : Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
+                    setBreakGateQuestionCount(val);
+                  }} 
+                  placeholder={!hasActiveBreakGateDeck ? '0 (Locked)' : 'e.g. 3 Questions'}
+                  style={{ 
+                    padding: '0.6rem 0.85rem', 
+                    fontSize: '0.9rem', 
+                    borderRadius: '12px',
+                    background: !hasActiveBreakGateDeck ? 'rgba(0, 0, 0, 0.04)' : '#ffffff',
+                    cursor: !hasActiveBreakGateDeck ? 'not-allowed' : 'text',
+                    opacity: !hasActiveBreakGateDeck ? 0.75 : 1
+                  }}
+                />
+                <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                  {!hasActiveBreakGateDeck 
+                    ? 'Locked to 0. Activate a flashcard deck in Flashcards first to enable BreakGate questions.' 
+                    : `Active Deck: "${activeDeckTitle}". Number of flashcard questions presented during BreakGate.`}
+                </p>
               </div>
 
-              <div className="settings-form-grid" style={{ gap: '0.85rem' }}>
-                <div className="settings-input-group">
-                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Short Break (Minutes)</label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="30" 
-                    className="settings-input" 
-                    value={shortBreakDuration} 
-                    onChange={(e) => setShortBreakDuration(parseInt(e.target.value) || 5)} 
-                    style={{ padding: '0.55rem 0.85rem', fontSize: '0.88rem' }}
-                  />
-                </div>
-                <div className="settings-input-group">
-                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Long Break (Minutes)</label>
-                  <input 
-                    type="number" 
-                    min="5" 
-                    max="60" 
-                    className="settings-input" 
-                    value={longBreakDuration} 
-                    onChange={(e) => setLongBreakDuration(parseInt(e.target.value) || 15)} 
-                    style={{ padding: '0.55rem 0.85rem', fontSize: '0.88rem' }}
-                  />
-                </div>
-              </div>
 
-              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Auto-Start Break Sessions</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically begin the rest countdown when focus time ends.</p>
-                </div>
-                <label className="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    checked={autoStartBreaks} 
-                    onChange={(e) => setAutoStartBreaks(e.target.checked)} 
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
 
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
@@ -663,7 +1258,10 @@ export default function SettingsPage() {
               {/* Active Presence Check Setting */}
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Active Presence Check</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.15rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Active Presence Check</h4>
+                    <HelpButton topic="presence" title="Active Presence Anti-Ghosting Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
+                  </div>
                   <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Periodically pauses the timer to verify you are still focused at your desk.</p>
                 </div>
                 <label className="toggle-switch">
@@ -687,10 +1285,28 @@ export default function SettingsPage() {
               </div>
 
               {activePresenceEnabled && (
-                <div style={{ padding: '0.2rem 0' }}>
-                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Active Presence Check Interval</label>
-                  <div className="option-chips-container" style={{ gap: '0.5rem', marginTop: '0.3rem' }}>
-                    {[1, 3, 5, 10, 15].map((mins) => (
+                <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
+                      Active Presence Check Interval
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
+                      {activePresenceInterval === 1 ? '1 min (Rapid Test)' : `Every ${activePresenceInterval} mins`}
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(92px, 1fr))',
+                    gap: '8px',
+                    width: '100%'
+                  }}>
+                    {[
+                      { mins: 1, label: '1m (Test)' },
+                      { mins: 3, label: 'Every 3m' },
+                      { mins: 5, label: 'Every 5m' },
+                      { mins: 10, label: 'Every 10m' },
+                      { mins: 15, label: 'Every 15m' }
+                    ].map(({ mins, label }) => (
                       <button 
                         key={mins} 
                         type="button" 
@@ -705,46 +1321,96 @@ export default function SettingsPage() {
                             localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
                           } catch(err) {}
                         }}
-                        style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
+                        style={{
+                          width: '100%',
+                          height: '38px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          borderRadius: '10px',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                          margin: 0
+                        }}
                       >
-                        {mins === 1 ? '1 min (Test)' : `Every ${mins} min`}
+                        {label}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button 
-                    type="button" 
-                    className="btn-secondary"
-                    onClick={playSampleChime}
-                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                    Test Chime
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn-secondary"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('ifocus_test_presence'));
-                      }
-                    }}
-                    style={{ fontSize: '0.82rem', padding: '0.45rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    Test Presence Popup
-                  </button>
-                </div>
+              {/* Testing Utilities Row - Symmetrical Responsive Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                gap: '8px',
+                marginTop: '0.65rem',
+                width: '100%'
+              }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (ambientVolume === 0) {
+                      showToast('info', 'Audio is currently muted (0%). Switch to Notifications tab to increase volume.', 'Audio Muted');
+                      return;
+                    }
+                    playSampleChime(ambientVolume);
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    fontSize: '0.82rem',
+                    padding: '0 12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '10px',
+                    margin: 0
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  <span>{ambientVolume === 0 ? 'Chime Muted' : 'Test Chime'}</span>
+                </button>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('ifocus_test_presence'));
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    fontSize: '0.82rem',
+                    padding: '0 12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '10px',
+                    margin: 0
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span>Test Presence Popup</span>
+                </button>
+              </div>
+
+              {/* Dedicated Save Action Row */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--glass-border)' }}>
                 <button 
                   type="submit" 
                   className="btn-primary" 
-                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}
+                  style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem', width: 'auto', margin: 0 }}
                 >
-                  Save Focus Preferences
+                  Save Preferences
                 </button>
               </div>
             </form>
@@ -764,62 +1430,128 @@ export default function SettingsPage() {
                   <option value="Chill Lofi">Chill Lofi (Calm)</option>
                   <option value="Study Music">Study Music (Instrumental)</option>
                   <option value="Rain Ambient">Rain Ambient (Raindrops)</option>
+                  <option value="Ocean Waves">Ocean Waves (Gentle Surf)</option>
+                  <option value="Binaural Alpha (432Hz)">Binaural Alpha (432Hz Focus)</option>
+                  <option value="Warm Campfire">Warm Campfire (Fireplace Crackle)</option>
+                  <option value="Pink Noise">Pink Noise (Airflow & Focus)</option>
+                  <option value="Cosmic Deep Space">Cosmic Deep Space (Celestial Drone)</option>
                   <option value="None">Off (Silent)</option>
                 </select>
               </div>
 
               <div className="settings-input-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Default Music Volume</label>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--primary-accent)' }}>{ambientVolume}%</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <label className="settings-label" style={{ fontSize: '0.82rem' }}>Default Audio & Chime Volume</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.84rem', fontWeight: 700, color: ambientVolume === 0 ? 'var(--text-secondary)' : 'var(--primary-accent)' }}>
+                      {ambientVolume === 0 ? 'Muted (0%)' : `${ambientVolume}%`}
+                    </span>
+                    <button
+                      type="button"
+                      id="testVolumeBtn"
+                      onClick={() => {
+                        if (ambientVolume === 0) {
+                          showToast('info', 'Audio volume is currently muted (0%). Drag slider up to test sound.', 'Volume Muted');
+                          return;
+                        }
+                        playSampleChime(ambientVolume);
+                      }}
+                      className="btn-secondary"
+                      style={{ 
+                        padding: '0.25rem 0.6rem', 
+                        fontSize: '0.75rem', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        opacity: ambientVolume === 0 ? 0.7 : 1,
+                        cursor: 'pointer'
+                      }}
+                      title={ambientVolume === 0 ? 'Audio volume is muted (0%)' : 'Test Audio Chime at this volume'}
+                    >
+                      {ambientVolume === 0 ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                          <line x1="23" y1="9" x2="17" y2="15"></line>
+                          <line x1="17" y1="9" x2="23" y2="15"></line>
+                        </svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                      )}
+                      {ambientVolume === 0 ? 'Muted' : 'Test Volume'}
+                    </button>
+                  </div>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={ambientVolume} 
-                  onChange={(e) => setAmbientVolume(parseInt(e.target.value))}
-                  style={{ accentColor: 'var(--primary-accent)', width: '100%', height: '6px', cursor: 'pointer' }} 
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={ambientVolume}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setAmbientVolume(val);
+                    try {
+                      const savedMusic = JSON.parse(localStorage.getItem('ifocus_music_state') || '{}');
+                      savedMusic.volume = val;
+                      localStorage.setItem('ifocus_music_state', JSON.stringify(savedMusic));
+                      window.dispatchEvent(new CustomEvent('ifocus_music_sync', { detail: { volume: val } }));
+                    } catch (err) {}
+                  }}
+                  onMouseUp={() => { if (ambientVolume > 0) playSampleChime(ambientVolume); }}
+                  onTouchEnd={() => { if (ambientVolume > 0) playSampleChime(ambientVolume); }}
+                  style={{ accentColor: 'var(--primary-accent)', width: '100%', height: '6px', cursor: 'pointer' }}
                 />
               </div>
 
-              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Cognitive Friction Alert Chime</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Harmonic audio prompt when keystroke hesitation or fatigue is detected.</p>
-                </div>
-                <label className="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    checked={telemetryChime} 
-                    onChange={(e) => setTelemetryChime(e.target.checked)} 
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
+
 
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Daily Reflection Reminders</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Show quick reflection prompts after completing focus cycles.</p>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Post-Session Reflection Prompts</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Paalala na mag-log sa Quick Reflection pagkatapos ng bawat Pomodoro cycle para ma-adjust ng AI Coach ang focus plan mo.</p>
                 </div>
-                <label className="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    checked={dailyReminder} 
-                    onChange={(e) => setDailyReminder(e.target.checked)} 
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    id="previewReflectionPromptBtn"
+                    onClick={() => window.dispatchEvent(new CustomEvent('ifocus_test_reflection_prompt'))}
+                    className="btn-secondary"
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.78rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title="Preview prompt popup"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                    Preview Prompt
+                  </button>
+                  <label className="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      checked={dailyReminder} 
+                      onChange={(e) => setDailyReminder(e.target.checked)} 
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--glass-border)' }}>
                 <button 
                   type="submit" 
                   className="btn-primary" 
-                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}
+                  style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem', width: 'auto', margin: 0 }}
                 >
-                  Save Notification Preferences
+                  Save Preferences
                 </button>
               </div>
             </form>
@@ -833,16 +1565,23 @@ export default function SettingsPage() {
               <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="settings-form-grid" style={{ gap: '0.75rem' }}>
                   <div className="settings-input-group">
-                    <label className="settings-label" style={{ fontSize: '0.82rem' }}>Display Name</label>
+                    <label className="settings-label" style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Full Name</span>
+                      <span style={{ fontSize: '0.72rem', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '1px 7px', borderRadius: '4px', fontWeight: 600 }}>
+                        Locked (Academic Record)
+                      </span>
+                    </label>
                     <input 
                       type="text" 
                       className="settings-input" 
                       value={name} 
-                      onChange={(e) => setName(e.target.value)} 
-                      placeholder="Display Name"
-                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem' }}
-                      required
+                      disabled
+                      placeholder="Official Academic Name"
+                      style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem', background: '#f8fafc', color: '#64748b', cursor: 'not-allowed', border: '1px solid #e2e8f0' }}
                     />
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                      Official student name is locked. To update, please request in person at the College Dean's Office.
+                    </span>
                   </div>
                   <div className="settings-input-group">
                     <label className="settings-label" style={{ fontSize: '0.82rem' }}>Username</label>
@@ -850,11 +1589,14 @@ export default function SettingsPage() {
                       type="text" 
                       className="settings-input" 
                       value={username} 
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} 
+                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))} 
                       placeholder="Username"
                       style={{ padding: '0.5rem 0.85rem', fontSize: '0.88rem' }}
                       required
                     />
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                      Customizable handle used to log in and on your public cards.
+                    </span>
                   </div>
                   <div className="settings-input-group full-width">
                     <label className="settings-label" style={{ fontSize: '0.82rem' }}>Email Address</label>
@@ -873,9 +1615,9 @@ export default function SettingsPage() {
                     type="submit" 
                     className="btn-primary" 
                     disabled={isSavingProfile}
-                    style={{ padding: '0.45rem 1.15rem', fontSize: '0.85rem' }}
+                    style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem', width: 'auto', margin: 0 }}
                   >
-                    {isSavingProfile ? 'Saving...' : 'Save Account Details'}
+                    {isSavingProfile ? 'Saving...' : 'Save Preferences'}
                   </button>
                 </div>
               </form>

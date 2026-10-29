@@ -1,10 +1,45 @@
+function extractJsonPayload(text) {
+  if (!text) return null;
+  const clean = text.trim();
+  try {
+    return JSON.parse(clean);
+  } catch (_) {}
+
+  // Markdown code block match
+  const codeBlockMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch (_) {}
+  }
+
+  // Find outermost object { ... }
+  const firstBrace = clean.indexOf('{');
+  const lastBrace = clean.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(clean.substring(firstBrace, lastBrace + 1));
+    } catch (_) {}
+  }
+
+  // Find outermost array [ ... ]
+  const firstBracket = clean.indexOf('[');
+  const lastBracket = clean.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    try {
+      return JSON.parse(clean.substring(firstBracket, lastBracket + 1));
+    } catch (_) {}
+  }
+
+  return null;
+}
+
 // Resilient Gemini AI client with multi-key rotation, model fallback, and automatic retry
 
 const MODELS = [
-  'gemini-2.5-flash',       // Primary: Fast, high reliability, generous free tier limits
-  'gemma-4-26b-a4b-it',     // High-performance backup
-  'gemini-3.1-flash-lite',  // Lightweight fallback
-  'gemini-flash-latest'     // General fallback
+  'gemini-2.5-flash',       // Primary: Ultra-fast (~1.2s), superior multimodal/PDF extraction & reasoning
+  'gemini-3.5-flash-lite',  // Secondary: High-speed lite fallback
+  'gemini-3.1-flash-lite'   // Tertiary fallback
 ];
 
 // Simple in-memory cache to prevent redundant API calls for duplicate prompts/clicks
@@ -38,7 +73,7 @@ function getApiKeys() {
   return keys.length > 0 ? keys : [];
 }
 
-export async function callGemini({ parts, generationConfig = {}, preferredModel = null }) {
+export async function callGemini({ parts, generationConfig = {}, preferredModel = null, timeoutMs = 25000 }) {
   const keys = getApiKeys();
   if (keys.length === 0) {
     throw new Error('Gemini API key is not configured on server. Please check .env or .env.local.');
@@ -67,14 +102,14 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
 
     for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
       const apiKey = keys[keyIndex];
-      const maxRetries = 2;
+      const maxRetries = 1;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 25000);
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
           const response = await fetch(url, {
             method: 'POST',
@@ -89,10 +124,16 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
             let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
             if (generationConfig.responseMimeType === 'application/json') {
-              const cleaned = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-              const parsed = JSON.parse(cleaned);
-              setToCache(cacheKey, parsed);
-              return parsed;
+              const parsed = extractJsonPayload(text);
+              if (parsed !== null) {
+                setToCache(cacheKey, parsed);
+                return parsed;
+              }
+              // If JSON extraction failed on this output, proceed to fallback attempt
+              console.warn(`[Gemini Warn] JSON parsing failed for model ${model}. Raw:`, text.slice(0, 150));
+            } else {
+              setToCache(cacheKey, text);
+              return text;
             }
 
             setToCache(cacheKey, text);
@@ -103,10 +144,10 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
           const errorBody = await response.text();
           lastError = new Error(`Gemini [${model}] HTTP ${status}: ${errorBody}`);
 
-          if (status === 503 || status === 429) {
+          if (status === 503 || status === 429 || status === 500 || status === 502 || status === 504) {
             console.warn(`[Gemini Warn] ${model} returned ${status}. Attempt ${attempt + 1}/${maxRetries + 1}`);
             if (attempt < maxRetries) {
-              const delay = (attempt + 1) * 1200 + Math.random() * 400;
+              const delay = (attempt + 1) * 600;
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
@@ -124,12 +165,12 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
         } catch (err) {
           lastError = err;
           if (err.name === 'AbortError') {
-            console.warn(`[Gemini Warn] Request to ${model} timed out after 25s.`);
+            console.warn(`[Gemini Warn] Request to ${model} timed out after ${timeoutMs}ms.`);
           } else {
             console.warn(`[Gemini Error] Network issue on ${model}:`, err.message);
           }
           if (attempt < maxRetries) {
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 600));
           }
         }
       }

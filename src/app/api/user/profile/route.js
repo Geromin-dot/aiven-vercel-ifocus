@@ -102,11 +102,12 @@ export async function PUT(req) {
       }
     }
 
-    // Update user record
+    // Update user record (Students can only edit username and avatar; Full Name requires Dean in-person request)
+    const isAdmin = session.user.role === "ADMIN" || session.user.username === "adminUAnursing";
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        ...(name !== undefined && { name: name.trim() }),
+        ...(isAdmin && name !== undefined && { name: name.trim() }),
         ...(username !== undefined && { username: username.trim() }),
         ...(image !== undefined && { image: image })
       },

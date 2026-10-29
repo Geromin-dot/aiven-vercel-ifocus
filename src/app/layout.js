@@ -23,6 +23,7 @@ export const metadata = {
   },
   icons: {
     icon: [
+      { url: "/applogo.png", type: "image/png" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
@@ -50,6 +51,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="iFocus" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" href="/applogo.png" />
       </head>
       <body className={inter.className}>
         <BackgroundBlobs />

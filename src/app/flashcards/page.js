@@ -2,7 +2,94 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import HelpButton from '@/components/HelpButton';
 import emptyStateImg from '../../img/empty_flashcard_state.png';
+
+// Helper: Ensure every card has a smart, active-recall mnemonic hint
+const getCardHint = (card, isDefFirst) => {
+  if (!card) return null;
+  if (card.keyword && String(card.keyword).trim()) return String(card.keyword).trim();
+  if (card.hint && String(card.hint).trim()) return String(card.hint).trim();
+
+  const f = (card.front || '').trim();
+  const b = (card.back || '').trim();
+
+  // 1. Quoted phrase in definition (e.g. "phonebook ng internet")
+  const quoted = b.match(/["“]([^"”]{3,35})["”]/);
+  if (quoted) return quoted[1].trim();
+
+  // 2. Acronym or parentheses
+  const acronymMatch = f.match(/^([A-Z0-9]{2,6})\s*\((.+)\)$/);
+  if (acronymMatch) return acronymMatch[1];
+  const parenMatch = f.match(/\((.+)\)/);
+  if (parenMatch) return parenMatch[1].trim();
+
+  // 3. Parenthetical list in back
+  const parenBack = b.match(/\(([^)]{3,30})\)/);
+  if (parenBack) return parenBack[1].trim();
+
+  // 4. Clean summary phrase
+  let clean = b
+    .replace(/^(Ang\s+(?:proseso|paraan|tawag|konsepto)\s+ng\s+)/i, '')
+    .replace(/^(A\s+(?:security model|set of|framework|method|concept|process)\s+(?:requiring|that|to|of)\s+)/i, '');
+  const firstClause = clean.split(/[,.;:]/)[0].trim();
+  return firstClause.split(/\s+/).slice(0, 3).join(' ') || 'Memory Anchor';
+};
+
+// Tactile, crisp audio synthesis for notification toasts (Modern bubble-pop + crystal ping)
+const playToastSound = () => {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!window.__ifocusAudioCtx || window.__ifocusAudioCtx.state === 'closed') {
+      window.__ifocusAudioCtx = new AudioCtx();
+    }
+    const ctx = window.__ifocusAudioCtx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    let volFactor = 0.7;
+    try {
+      const savedVol = localStorage.getItem('ifocus_sound_volume');
+      if (savedVol !== null) {
+        const parsed = parseInt(savedVol, 10);
+        if (!isNaN(parsed)) volFactor = Math.max(0, Math.min(100, parsed)) / 100;
+      }
+    } catch (e) {}
+    if (volFactor <= 0) return;
+
+    const now = ctx.currentTime;
+
+    // 1. Organic tactile bubble pop (fast upward pitch snap + snappy decay)
+    const popOsc = ctx.createOscillator();
+    const popGain = ctx.createGain();
+    popOsc.type = 'sine';
+    popOsc.frequency.setValueAtTime(820, now);
+    popOsc.frequency.exponentialRampToValueAtTime(1420, now + 0.045);
+    popGain.gain.setValueAtTime(0.18 * volFactor, now);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    popOsc.connect(popGain);
+    popGain.connect(ctx.destination);
+    popOsc.start(now);
+    popOsc.stop(now + 0.09);
+
+    // 2. High-end gentle acoustic shimmer overtone (distinct from presence chime and alarm)
+    const shimmerOsc = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmerOsc.type = 'sine';
+    shimmerOsc.frequency.setValueAtTime(1760, now + 0.02);
+    shimmerGain.gain.setValueAtTime(0.001, now);
+    shimmerGain.gain.setValueAtTime(0.09 * volFactor, now + 0.025);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+    shimmerOsc.connect(shimmerGain);
+    shimmerGain.connect(ctx.destination);
+    shimmerOsc.start(now + 0.02);
+    shimmerOsc.stop(now + 0.17);
+  } catch (e) {
+    // Autoplay policy or unsupported audio
+  }
+};
 
 export default function FlashcardsPage() {
   const [view, setView] = useState('collections'); // 'collections' | 'create' | 'loading' | 'study'
@@ -36,6 +123,25 @@ export default function FlashcardsPage() {
   const [isSavingDeck, setIsSavingDeck] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Show/Hide Hints State (Single Toggle)
+  const [showHints, setShowHints] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ifocus_show_hints');
+      return stored !== null ? stored === 'true' : true;
+    }
+    return true;
+  });
+
+  const handleToggleHints = () => {
+    setShowHints(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ifocus_show_hints', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // BreakGate Pop-up Modal State
   const [activeBreakGateId, setActiveBreakGateId] = useState(null);
   const [breakGateModalDeck, setBreakGateModalDeck] = useState(null);
@@ -44,6 +150,26 @@ export default function FlashcardsPage() {
   // Delete Deck Confirmation Modal State
   const [deckToDelete, setDeckToDelete] = useState(null);
   const [isDeletingDeck, setIsDeletingDeck] = useState(false);
+
+  // Mastered Cards Tracking State for Collections and Study
+  const [storedMasteredKeys, setStoredMasteredKeys] = useState([]);
+
+  useEffect(() => {
+    const loadMastered = () => {
+      try {
+        const raw = localStorage.getItem('ifocus_mastered_cards');
+        if (raw) setStoredMasteredKeys(JSON.parse(raw));
+        else setStoredMasteredKeys([]);
+      } catch (e) {}
+    };
+    loadMastered();
+    window.addEventListener('ifocus_mastery_updated', loadMastered);
+    window.addEventListener('storage', loadMastered);
+    return () => {
+      window.removeEventListener('ifocus_mastery_updated', loadMastered);
+      window.removeEventListener('storage', loadMastered);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -69,11 +195,17 @@ export default function FlashcardsPage() {
       localStorage.removeItem('ifocus_active_breakgate_deck');
       setActiveBreakGateId(null);
       showToast('BreakGate deactivated for this deck.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
+      }
     } else {
       localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(deck));
       setActiveBreakGateId(currentId);
       // Open clean on-screen pop-up modal
       setBreakGateModalDeck(deck);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: true, deck } }));
+      }
     }
   };
 
@@ -126,6 +258,8 @@ export default function FlashcardsPage() {
         if (currentQ?.front && !storedMastered.includes(currentQ.front)) {
           storedMastered.push(currentQ.front);
           localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+          setStoredMasteredKeys(storedMastered);
+          window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
         }
       } catch(e) {}
     }
@@ -143,9 +277,19 @@ export default function FlashcardsPage() {
     }
   };
 
+  const toastTimeoutRef = useRef(null);
+
   const showToast = (message) => {
+    try {
+      playToastSound();
+    } catch (e) {}
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 3500);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
   };
 
   // 1. Fetch User's Decks from Database
@@ -171,7 +315,7 @@ export default function FlashcardsPage() {
   const handlePdfUpload = (file) => {
     if (!file) return;
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      alert("Please upload a valid PDF document.");
+      showToast("Please upload a valid PDF document.");
       return;
     }
 
@@ -207,12 +351,12 @@ export default function FlashcardsPage() {
     const isPdf = activeTab === 'pdf';
     
     if (isPdf && !pdfBase64) {
-      alert("Please select or drop a PDF file first.");
+      showToast("Please select or drop a PDF file first.");
       return;
     }
 
     if (!isPdf && !notesText.trim()) {
-      alert("Please paste your lecture notes or study material first.");
+      showToast("Please paste your lecture notes or study material first.");
       return;
     }
 
@@ -273,7 +417,7 @@ export default function FlashcardsPage() {
 
     } catch (err) {
       clearInterval(interval);
-      alert("Flashcard Generation Error: " + err.message);
+      showToast(err.message || "Failed to generate flashcards. Please try again.");
       setView('create');
     }
   };
@@ -303,7 +447,7 @@ export default function FlashcardsPage() {
       showToast('Deck saved to your collections.');
       fetchDecks(); // Refresh collections
     } catch (err) {
-      alert("Error saving deck: " + err.message);
+      showToast("Error saving deck: " + err.message);
     } finally {
       setIsSavingDeck(false);
     }
@@ -361,6 +505,7 @@ export default function FlashcardsPage() {
   // Study Navigation Helpers
   const currentCard = activeDeck?.cards?.[currentCardIndex] || null;
   const totalCards = activeDeck?.cards?.length || 0;
+  const cardHint = getCardHint(currentCard, definitionFirst);
 
   const handleNextCard = () => {
     if (currentCardIndex < totalCards - 1) {
@@ -406,9 +551,45 @@ export default function FlashcardsPage() {
       }
       try {
         localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+        window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
       } catch(e) {}
+      setStoredMasteredKeys(storedMastered);
       return next;
     });
+  };
+
+  const handleToggleFullyMastered = () => {
+    if (!activeDeck?.cards || activeDeck.cards.length === 0) return;
+    let storedMastered = [];
+    try {
+      storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
+    } catch (e) {}
+
+    const isFully = activeDeck.cards.length > 0 && masteredCards.size === activeDeck.cards.length;
+
+    if (isFully) {
+      // Unmark all cards in this deck
+      const deckCardFronts = new Set(activeDeck.cards.map(c => c.front));
+      storedMastered = storedMastered.filter(k => !deckCardFronts.has(k));
+      setMasteredCards(new Set());
+      showToast('Mastery reset for this deck.');
+    } else {
+      // Mark ALL cards in this deck as mastered
+      const allIndices = new Set(activeDeck.cards.map((_, idx) => idx));
+      activeDeck.cards.forEach(c => {
+        if (c.front && !storedMastered.includes(c.front)) {
+          storedMastered.push(c.front);
+        }
+      });
+      setMasteredCards(allIndices);
+      showToast(`All ${activeDeck.cards.length} cards marked as fully mastered!`);
+    }
+
+    try {
+      localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+      window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
+    } catch (e) {}
+    setStoredMasteredKeys(storedMastered);
   };
 
   // Keyboard navigation inside study mode
@@ -422,11 +603,15 @@ export default function FlashcardsPage() {
         handleNextCard();
       } else if (e.code === 'ArrowLeft') {
         handlePrevCard();
+      } else if (e.key === 'h' || e.key === 'H') {
+        handleToggleHints();
+      } else if (e.key === 'm' || e.key === 'M') {
+        toggleMastery();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [view, currentCardIndex, totalCards]);
+  }, [view, currentCardIndex, totalCards, currentCard]);
 
   return (
     <>
@@ -652,24 +837,29 @@ export default function FlashcardsPage() {
 
       {/* General Notification Toast (Clean, Zero Emojis) */}
       {toastMessage && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: '2rem', 
-          left: '50%', 
-          transform: 'translateX(-50%)', 
-          zIndex: 1200, 
-          background: 'rgba(15, 23, 42, 0.92)', 
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.15)', 
-          borderRadius: '999px', 
-          padding: '0.55rem 1.4rem', 
-          boxShadow: '0 12px 28px rgba(0,0,0,0.25)', 
-          color: '#f8fafc', 
-          fontSize: '0.86rem', 
-          fontWeight: 600,
-          animation: 'flashcardFadeIn 0.2s ease'
-        }}>
-          {toastMessage}
+        <div
+          className={`flashcard-toast-pill ${
+            typeof toastMessage === 'string' && (toastMessage.toLowerCase().includes('fail') || toastMessage.toLowerCase().includes('error'))
+              ? 'is-error'
+              : ''
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="toast-icon-badge">
+            {typeof toastMessage === 'string' && (toastMessage.toLowerCase().includes('fail') || toastMessage.toLowerCase().includes('error')) ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </div>
+          <span className="toast-text">{toastMessage}</span>
         </div>
       )}
 
@@ -678,7 +868,10 @@ export default function FlashcardsPage() {
         <div className="glass-panel" style={{ minHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', flexShrink: 0 }}>
             <div>
-              <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>My Flashcard Collections</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
+                <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: 0 }}>My Flashcard Collections</h2>
+                <HelpButton topic="flashcards" title="Flashcards & Practice Exams Tutorial" />
+              </div>
               <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>Review your generated study decks or create a new one from notes or PDF.</p>
             </div>
             <button 
@@ -738,6 +931,8 @@ export default function FlashcardsPage() {
                 {decks.map((deck) => {
                   const cardTotal = deck.cards ? deck.cards.length : 0;
                   const createdDate = new Date(deck.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const masteredInDeck = (deck.cards || []).filter(c => storedMasteredKeys.includes(c.front) || c.mastered).length;
+                  const deckMasteryPct = cardTotal > 0 ? Math.round((masteredInDeck / cardTotal) * 100) : 0;
                   
                   return (
                     <div 
@@ -752,12 +947,6 @@ export default function FlashcardsPage() {
                         </div>
                         
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {(activeBreakGateId === deck.id || activeBreakGateId === deck.title) && (
-                            <span className="breakgate-live-badge" title="Active Pomodoro Focus Guard">
-                              <span className="breakgate-live-dot" />
-                              BreakGate
-                            </span>
-                          )}
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -775,6 +964,33 @@ export default function FlashcardsPage() {
                       <div>
                         <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.05rem', color: 'var(--text-primary)', wordBreak: 'break-word', fontWeight: 600 }}>{deck.title}</h3>
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>{cardTotal} {cardTotal === 1 ? 'Card' : 'Cards'} • {createdDate}</p>
+                      </div>
+
+                      {/* Mastery Progress Indicator Bar & Percentage */}
+                      <div style={{ padding: '0.45rem 0.65rem', background: '#f8faf8', borderRadius: '8px', border: '1px solid rgba(95, 143, 94, 0.12)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem', fontSize: '0.74rem' }}>
+                          <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            Mastery: <strong style={{ color: deckMasteryPct === 100 ? '#2e7d32' : 'var(--text-primary)' }}>{masteredInDeck}/{cardTotal}</strong>
+                          </span>
+                          <span style={{ 
+                            fontWeight: 700, 
+                            color: deckMasteryPct === 100 ? '#2e7d32' : deckMasteryPct > 0 ? '#16a34a' : 'var(--text-secondary)', 
+                            fontSize: '0.76rem' 
+                          }}>
+                            {deckMasteryPct}%
+                          </span>
+                        </div>
+                        <div style={{ width: '100%', height: '5px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+                          <div style={{ 
+                            width: `${deckMasteryPct}%`, 
+                            height: '100%', 
+                            background: deckMasteryPct === 100 
+                              ? 'linear-gradient(90deg, #16a34a, #2e7d32)' 
+                              : 'linear-gradient(90deg, #10b981, #059669)', 
+                            borderRadius: '999px',
+                            transition: 'width 0.4s ease'
+                          }} />
+                        </div>
                       </div>
 
                       {/* Action Buttons: Study, Exam, and Activate */}
@@ -811,9 +1027,9 @@ export default function FlashcardsPage() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             gap: '0.4rem',
-                            background: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
-                            border: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '1.5px solid #10b981' : '1px dashed var(--glass-border)',
-                            color: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '#059669' : 'var(--text-secondary)',
+                            background: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? 'rgba(46, 125, 50, 0.12)' : 'transparent',
+                            border: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '1.5px solid #2e7d32' : '1px dashed var(--glass-border)',
+                            color: (activeBreakGateId === deck.id || activeBreakGateId === deck.title) ? '#2e7d32' : 'var(--text-secondary)',
                             transition: 'all 0.25s ease'
                           }}
                         >
@@ -848,7 +1064,10 @@ export default function FlashcardsPage() {
         <div className="glass-panel" style={{ minHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', gap: '1rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: '0 0 0.25rem 0' }}>Create Auto-Deck</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
+                <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: 0 }}>Create Auto-Deck</h2>
+                <HelpButton topic="flashcards" title="AI Auto-Deck & PDF Extraction Tutorial" />
+              </div>
               <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.92rem' }}>
                 Paste lecture notes or upload a PDF syllabus to automatically extract flashcards using AI.
               </p>
@@ -1017,13 +1236,16 @@ export default function FlashcardsPage() {
           <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
-                <h2 style={{ fontSize: '1.3rem', color: 'var(--text-primary)', margin: '0 0 0.15rem 0', fontWeight: 700 }}>{activeDeck.title}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem' }}>
+                  <h2 style={{ fontSize: '1.3rem', color: 'var(--text-primary)', margin: 0, fontWeight: 700 }}>{activeDeck.title}</h2>
+                  <HelpButton topic="flashcards" title="Interactive Study Controls Tutorial" size={13} style={{ width: '22px', height: '22px' }} />
+                </div>
                 <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                   Card {currentCardIndex + 1} of {totalCards}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   className="btn-secondary small"
                   onClick={() => handleStartExam(activeDeck)}
@@ -1033,37 +1255,192 @@ export default function FlashcardsPage() {
                   Take Exam
                 </button>
 
-                <button
-                  className="btn-secondary small"
-                  onClick={(e) => handleToggleActivateBreakGate(activeDeck, e)}
-                  style={{
-                    background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                    borderColor: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#10b981' : '#2e7d32',
-                    color: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#059669' : '#2e7d32',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.2s ease'
+                {/* 1. Definition First Custom Theme Checkbox */}
+                <label 
+                  style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.45rem', 
+                    fontSize: '0.84rem', 
+                    color: definitionFirst ? '#2e7d32' : 'var(--text-secondary)', 
+                    fontWeight: definitionFirst ? 600 : 500, 
+                    cursor: 'pointer', 
+                    userSelect: 'none' 
                   }}
                 >
-                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  )}
-                  {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 'BreakGate Active' : 'Activate BreakGate'}
-                </button>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <span 
+                    style={{
+                      width: '17px',
+                      height: '17px',
+                      borderRadius: '4.5px',
+                      border: definitionFirst ? '1.5px solid #2e7d32' : '1.5px solid rgba(0, 0, 0, 0.22)',
+                      background: definitionFirst ? '#2e7d32' : '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: definitionFirst ? '0 1px 4px rgba(46, 125, 50, 0.25)' : 'none',
+                      flexShrink: 0
+                    }}
+                  >
+                    {definitionFirst && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="2.5 6.2 5 8.7 9.5 3.8" />
+                      </svg>
+                    )}
+                  </span>
                   <input 
                     type="checkbox" 
                     checked={definitionFirst} 
                     onChange={(e) => setDefinitionFirst(e.target.checked)}
-                    style={{ accentColor: 'var(--primary-accent)' }}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
                   />
-                  Definition First
+                  <span>Definition First</span>
                 </label>
+
+                {/* 2. Show Hints Custom Theme Checkbox */}
+                <label 
+                  style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.45rem', 
+                    fontSize: '0.84rem', 
+                    color: showHints ? '#2e7d32' : 'var(--text-secondary)', 
+                    fontWeight: showHints ? 600 : 500, 
+                    cursor: 'pointer', 
+                    userSelect: 'none' 
+                  }}
+                >
+                  <span 
+                    style={{
+                      width: '17px',
+                      height: '17px',
+                      borderRadius: '4.5px',
+                      border: showHints ? '1.5px solid #2e7d32' : '1.5px solid rgba(0, 0, 0, 0.22)',
+                      background: showHints ? '#2e7d32' : '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: showHints ? '0 1px 4px rgba(46, 125, 50, 0.25)' : 'none',
+                      flexShrink: 0
+                    }}
+                  >
+                    {showHints && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="2.5 6.2 5 8.7 9.5 3.8" />
+                      </svg>
+                    )}
+                  </span>
+                  <input 
+                    type="checkbox" 
+                    checked={showHints} 
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setShowHints(next);
+                      try {
+                        localStorage.setItem('ifocus_show_hints', String(next));
+                      } catch(err) {}
+                    }}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                  />
+                  <span>Show Hints</span>
+                </label>
+
+                {/* Fully Mastered Custom Theme Checkbox */}
+                {(() => {
+                  const isFully = totalCards > 0 && masteredCards.size === totalCards;
+                  return (
+                    <label 
+                      style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '0.45rem', 
+                        fontSize: '0.84rem', 
+                        color: isFully ? '#2e7d32' : 'var(--text-secondary)', 
+                        fontWeight: isFully ? 600 : 500, 
+                        cursor: 'pointer', 
+                        userSelect: 'none' 
+                      }}
+                      title="Toggle all cards in this deck as mastered"
+                    >
+                      <span 
+                        style={{
+                          width: '17px',
+                          height: '17px',
+                          borderRadius: '4.5px',
+                          border: isFully ? '1.5px solid #2e7d32' : '1.5px solid rgba(0, 0, 0, 0.22)',
+                          background: isFully ? '#2e7d32' : '#ffffff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                          boxShadow: isFully ? '0 1px 4px rgba(46, 125, 50, 0.25)' : 'none',
+                          flexShrink: 0
+                        }}
+                      >
+                        {isFully && (
+                          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="2.5 6.2 5 8.7 9.5 3.8" />
+                          </svg>
+                        )}
+                      </span>
+                      <input 
+                        type="checkbox" 
+                        checked={isFully} 
+                        onChange={handleToggleFullyMastered}
+                        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                      />
+                      <span>Fully Mastered</span>
+                    </label>
+                  );
+                })()}
+
+                <HelpButton topic="flashcards" title="Flashcards & Study Mode Guide" style={{ marginLeft: '0.2rem' }} />
+
+                {/* 3. BreakGate Active Custom Theme Checkbox with Confirmation */}
+                <label 
+                  style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.45rem', 
+                    fontSize: '0.84rem', 
+                    color: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#2e7d32' : 'var(--text-secondary)', 
+                    fontWeight: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? 600 : 500, 
+                    cursor: 'pointer', 
+                    userSelect: 'none' 
+                  }}
+                >
+                  <span 
+                    style={{
+                      width: '17px',
+                      height: '17px',
+                      borderRadius: '4.5px',
+                      border: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '1.5px solid #2e7d32' : '1.5px solid rgba(0, 0, 0, 0.22)',
+                      background: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '#2e7d32' : '#ffffff',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: (activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) ? '0 1px 4px rgba(46, 125, 50, 0.25)' : 'none',
+                      flexShrink: 0
+                    }}
+                  >
+                    {(activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title) && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="2.5 6.2 5 8.7 9.5 3.8" />
+                      </svg>
+                    )}
+                  </span>
+                  <input 
+                    type="checkbox" 
+                    checked={activeBreakGateId === activeDeck.id || activeBreakGateId === activeDeck.title} 
+                    onChange={(e) => handleToggleActivateBreakGate(activeDeck, e)}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                  />
+                  <span>BreakGate Active</span>
+                </label>
+                <HelpButton topic="breakgate" title="BreakGate Challenge Integration" size={12} style={{ width: '20px', height: '20px' }} />
 
                 {!isSaved && (
                   <button 
@@ -1138,24 +1515,52 @@ export default function FlashcardsPage() {
                 padding: '0.35rem 0.85rem', 
                 borderRadius: '999px', 
                 fontSize: '0.78rem', 
-                fontWeight: 700,
-                letterSpacing: '0.5px',
+                fontWeight: 700, 
+                letterSpacing: '0.5px', 
                 transition: 'all 0.25s ease'
               }}
             >
-              {isFlipped ? 'Answer / Definition' : (currentCard?.tag || 'Concept')}
+              {isFlipped 
+                ? (definitionFirst ? 'Term / Answer' : 'Answer / Definition') 
+                : (definitionFirst ? 'Definition Review' : (currentCard?.tag || 'Concept'))}
             </span>
 
             {/* Front View (Smooth Fade) */}
             {!isFlipped && (
-              <div key={`front-${currentCardIndex}`} className="flashcard-content-fade" style={{ textAlign: 'center', maxWidth: '85%' }}>
+              <div key={`front-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem', textAlign: 'center', maxWidth: '88%' }}>
+                {/* Show Hint only when showHints is true */}
+                {showHints && cardHint && (
+                  <div style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.45rem', 
+                    background: 'rgba(95, 143, 94, 0.12)', 
+                    border: '1px solid rgba(95, 143, 94, 0.28)', 
+                    borderRadius: '999px', 
+                    padding: '0.35rem 1.05rem', 
+                    fontSize: '0.86rem', 
+                    fontWeight: 700, 
+                    color: '#2e7d32',
+                    boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)'
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18h6"></path>
+                      <path d="M10 22h4"></path>
+                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z"></path>
+                    </svg>
+                    <span>Hint:</span>
+                    <span style={{ textDecoration: 'underline' }}>{cardHint}</span>
+                  </div>
+                )}
+
                 <div style={{ 
-                  fontSize: 'clamp(1.6rem, 2.6vw, 2.4rem)', 
-                  fontWeight: 700, 
+                  fontSize: definitionFirst ? 'clamp(1.2rem, 1.8vw, 1.6rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
+                  fontWeight: definitionFirst ? 500 : 700, 
                   color: 'var(--text-primary)', 
-                  lineHeight: 1.35, 
+                  lineHeight: definitionFirst ? 1.6 : 1.35, 
                   letterSpacing: '-0.02em',
-                  padding: '1rem' 
+                  padding: '0.75rem',
+                  whiteSpace: definitionFirst ? 'pre-wrap' : 'normal'
                 }}>
                   {definitionFirst ? currentCard?.back : currentCard?.front}
                 </div>
@@ -1165,7 +1570,7 @@ export default function FlashcardsPage() {
             {/* Back View (Smooth Fade) */}
             {isFlipped && (
               <div key={`back-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', textAlign: 'center', maxWidth: '88%' }}>
-                {currentCard?.keyword && (
+                {showHints && cardHint && (
                   <div style={{ 
                     display: 'inline-flex', 
                     alignItems: 'center', 
@@ -1179,18 +1584,23 @@ export default function FlashcardsPage() {
                     color: '#2e7d32',
                     boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)'
                   }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 18h6"></path>
+                      <path d="M10 22h4"></path>
+                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z"></path>
+                    </svg>
                     <span>Key Concept:</span>
-                    <span style={{ textDecoration: 'underline' }}>{currentCard.keyword}</span>
+                    <span style={{ textDecoration: 'underline' }}>{cardHint}</span>
                   </div>
                 )}
 
                 <div style={{ 
-                  fontSize: 'clamp(1.2rem, 1.8vw, 1.55rem)', 
-                  fontWeight: 500, 
+                  fontSize: !definitionFirst ? 'clamp(1.2rem, 1.8vw, 1.55rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
+                  fontWeight: !definitionFirst ? 500 : 700, 
                   color: 'var(--text-primary)', 
-                  lineHeight: 1.6, 
+                  lineHeight: !definitionFirst ? 1.6 : 1.35, 
                   padding: '0.5rem', 
-                  whiteSpace: 'pre-wrap' 
+                  whiteSpace: !definitionFirst ? 'pre-wrap' : 'normal'
                 }}>
                   {definitionFirst ? currentCard?.front : currentCard?.back}
                 </div>
@@ -1200,7 +1610,9 @@ export default function FlashcardsPage() {
             {/* Bottom Flip Hint */}
             <div style={{ position: 'absolute', bottom: '1.4rem', color: 'var(--text-secondary)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-              {isFlipped ? 'Click or press Space to view question' : 'Click or press Space to reveal answer'}
+              {isFlipped 
+                ? (definitionFirst ? 'Click or press Space to view definition' : 'Click or press Space to view question') 
+                : (definitionFirst ? 'Click or press Space to reveal term' : 'Click or press Space to reveal answer')}
             </div>
           </div>
 
@@ -1262,7 +1674,6 @@ export default function FlashcardsPage() {
             </button>
 
           </div>
-
         </div>
       )}
 
@@ -1435,20 +1846,32 @@ export default function FlashcardsPage() {
                   let btnBg = '#ffffff';
                   let btnBorder = '1.5px solid rgba(0,0,0,0.1)';
                   let btnColor = 'var(--text-primary)';
+                  let btnShadow = '0 2px 6px rgba(0,0,0,0.02)';
+                  let btnTransform = 'scale(1)';
+                  let btnOpacity = 1;
 
                   if (isOptionChecked) {
                     if (isCorrect) {
-                      btnBg = 'rgba(46, 125, 50, 0.12)';
-                      btnBorder = '2px solid #2e7d32';
-                      btnColor = '#1b5e20';
+                      btnBg = 'rgba(16, 185, 129, 0.16)';
+                      btnBorder = '2px solid #10b981';
+                      btnColor = '#065f46';
+                      btnShadow = '0 4px 16px rgba(16, 185, 129, 0.22)';
+                      btnTransform = 'scale(1.015)';
+                      btnOpacity = 1;
                     } else if (isSelected) {
-                      btnBg = 'rgba(224, 62, 62, 0.1)';
-                      btnBorder = '2px solid var(--error)';
-                      btnColor = 'var(--error)';
+                      btnBg = 'rgba(239, 68, 68, 0.14)';
+                      btnBorder = '2px solid #ef4444';
+                      btnColor = '#991b1b';
+                      btnShadow = '0 4px 14px rgba(239, 68, 68, 0.2)';
+                      btnTransform = 'scale(0.99)';
+                      btnOpacity = 1;
                     } else {
                       btnBg = 'rgba(0,0,0,0.02)';
                       btnBorder = '1px solid rgba(0,0,0,0.06)';
                       btnColor = 'var(--text-secondary)';
+                      btnShadow = 'none';
+                      btnTransform = 'scale(0.985)';
+                      btnOpacity = 0.45;
                     }
                   }
 
@@ -1461,17 +1884,19 @@ export default function FlashcardsPage() {
                         background: btnBg,
                         border: btnBorder,
                         borderRadius: '14px',
-                        padding: '0.9rem 1.25rem',
+                        padding: '0.95rem 1.25rem',
                         fontSize: '0.96rem',
                         color: btnColor,
-                        fontWeight: 500,
+                        fontWeight: isOptionChecked && (isCorrect || isSelected) ? 600 : 500,
                         textAlign: 'left',
                         cursor: isOptionChecked ? 'default' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.85rem',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                        transition: 'background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease, box-shadow 0.4s ease',
+                        boxShadow: btnShadow,
+                        transform: btnTransform,
+                        opacity: btnOpacity
                       }}
                     >
                       <span style={{
