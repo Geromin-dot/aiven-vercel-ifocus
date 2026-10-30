@@ -96,7 +96,7 @@ export default function LandingPage() {
       name: "Home Dashboard",
       route: "/dashboard",
       badge: "Command Center",
-      image: "/showcase/dashboard.png?v=logo2",
+      image: "/showcase/dashboard.png?v=v3",
       title: "Focus Timer, Tasks List & AI Reflection",
       description: "The core study workspace uniting task prioritization, customizable Pomodoro intervals with focus soundscapes, and real-time reflection telemetry.",
       features: [
@@ -113,7 +113,7 @@ export default function LandingPage() {
       name: "Flashcard Studio",
       route: "/flashcards",
       badge: "Deck Collections",
-      image: "/showcase/flashcards.png?v=logo2",
+      image: "/showcase/flashcards.png?v=v3",
       title: "AI Deck Generation & Practice Exams",
       description: "Create, study, and test yourself on custom flashcard decks generated directly from your lecture notes or PDF textbooks.",
       features: [
@@ -130,7 +130,7 @@ export default function LandingPage() {
       name: "Study Analytics",
       route: "/analytics",
       badge: "Real-time Metrics",
-      image: "/showcase/analytics.png?v=logo2",
+      image: "/showcase/analytics.png?v=v3",
       title: "Focus Consistency & Weekly Activity",
       description: "Visualize your actual study habits with clean metrics logged automatically after every completed Pomodoro block.",
       features: [
@@ -147,7 +147,7 @@ export default function LandingPage() {
       name: "AI Study Coach",
       route: "/coach",
       badge: "Adaptive Diagnostics",
-      image: "/showcase/coach.png?v=logo2",
+      image: "/showcase/coach.png?v=v3",
       title: "Cognitive State & Personalized Advice",
       description: "Intelligent coaching engine that evaluates your study pacing, dwell times, and fatigue to adapt your study plan in real time.",
       features: [
@@ -787,7 +787,7 @@ export default function LandingPage() {
             <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/showcase/dashboard.png"
+                src="/showcase/dashboard.png?v=v3"
                 alt="iFocus Actual Dashboard Command Center"
                 style={{
                   width: '100%',

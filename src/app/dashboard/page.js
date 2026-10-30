@@ -78,6 +78,7 @@ export default function CommandCenterPage() {
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [customWorkTime, setCustomWorkTime] = useState({ min: '', sec: '' });
   const [customBreakTime, setCustomBreakTime] = useState({ min: '', sec: '' });
+  const [sessionTotalTime, setSessionTotalTime] = useState(25 * 60);
   const [customSessions, setCustomSessions] = useState(1);
   const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState('');
   const [showQuitModal, setShowQuitModal] = useState(false);
@@ -260,6 +261,86 @@ export default function CommandCenterPage() {
       window.removeEventListener('storage', updateStats);
     };
   }, []);
+
+  // Hydrate user focus sessions directly from PostgreSQL database on load
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let isMounted = true;
+    fetch('/api/study-sessions')
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted || !Array.isArray(data?.sessions)) return;
+
+        const now = new Date();
+        const todayStr = now.toDateString();
+
+        const dbList = data.sessions.map(s => {
+          const rawSec = Number(s.duration) || 0;
+          const mins = Math.max(1, Math.round(rawSec / 60));
+          return {
+            id: s.id,
+            duration: mins,
+            date: s.createdAt,
+            deckName: s.deck?.title || 'General Focus',
+            type: 'pomodoro',
+            score: s.score || 100,
+            synced: true
+          };
+        });
+
+        if (dbList.length > 0) {
+          let local = [];
+          try {
+            local = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+          } catch (e) {}
+
+          const unsynced = local.filter(l => !l.synced && !dbList.some(d => Math.abs(new Date(d.date).getTime() - new Date(l.date).getTime()) < 10000));
+          const combined = [...dbList, ...unsynced].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          localStorage.setItem('ifocus_session_history', JSON.stringify(combined));
+
+          const todaySessions = combined.filter(item => new Date(item.date).toDateString() === todayStr);
+          const todayMins = todaySessions.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+          const todayCount = todaySessions.length;
+
+          const dates = new Set(combined.map(s => {
+            const d = new Date(s.date);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          }));
+          let computedStreak = 0;
+          let checkDate = new Date();
+          const todayKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+          if (!dates.has(todayKey)) checkDate.setDate(checkDate.getDate() - 1);
+          while (true) {
+            const key = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+            if (dates.has(key)) {
+              computedStreak++;
+              checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+              break;
+            }
+          }
+          const finalStreak = Math.max(1, computedStreak);
+
+          setDailyFocusStats({
+            minutes: todayMins,
+            sessions: todayCount,
+            streak: finalStreak
+          });
+
+          localStorage.setItem('ifocus_focus_stats', JSON.stringify({
+            date: todayStr,
+            minutes: todayMins,
+            sessions: todayCount,
+            streak: finalStreak
+          }));
+
+          window.dispatchEvent(new CustomEvent('ifocus_stats_updated'));
+        }
+      })
+      .catch(() => {});
+
+    return () => { isMounted = false; };
+  }, [status]);
 
   const keydownTimesRef = useRef({});
   const lastKeyupTimeRef = useRef(null);
@@ -841,6 +922,9 @@ export default function CommandCenterPage() {
           const clamped = parsed.sessionCount > maxS ? 1 : parsed.sessionCount;
           setSessionCount(clamped);
         }
+        if (parsed.totalTime && typeof parsed.totalTime === 'number' && parsed.totalTime > 0) {
+          setSessionTotalTime(parsed.totalTime);
+        }
       }
 
       checkActiveDeck();
@@ -903,6 +987,9 @@ export default function CommandCenterPage() {
         setTimeLeft(e.detail.timeLeft);
         setIsActive(e.detail.isRunning);
         setIsFocus(e.detail.isFocus);
+        if (e.detail.totalTime && typeof e.detail.totalTime === 'number' && e.detail.totalTime > 0) {
+          setSessionTotalTime(e.detail.totalTime);
+        }
         if (e.detail.isAiRestRecovery !== undefined) {
           setIsAiRestRecovery(Boolean(e.detail.isAiRestRecovery));
         } else {
@@ -927,6 +1014,9 @@ export default function CommandCenterPage() {
         if (e.detail.isRunning !== undefined) setIsActive(e.detail.isRunning);
         if (e.detail.isFocus !== undefined) setIsFocus(e.detail.isFocus);
         if (e.detail.timerPreset) setTimerPreset(e.detail.timerPreset);
+        if (e.detail.totalTime && typeof e.detail.totalTime === 'number' && e.detail.totalTime > 0) {
+          setSessionTotalTime(e.detail.totalTime);
+        }
         if (e.detail.isAiRestRecovery !== undefined) {
           setIsAiRestRecovery(Boolean(e.detail.isAiRestRecovery));
         } else {
@@ -1997,6 +2087,14 @@ export default function CommandCenterPage() {
 
   // Calculate Progress Percent for Pomodoro Progress Bar
   const getTotalTime = () => {
+    // If AI Prescribed Rest Recovery is active, break is strictly 5 minutes (300s)
+    if (!isFocus && isAiRestRecovery) {
+      return 5 * 60;
+    }
+    if (sessionTotalTime && sessionTotalTime > 0) {
+      if (isFocus && sessionTotalTime >= 60) return sessionTotalTime;
+      if (!isFocus && sessionTotalTime >= 30) return sessionTotalTime;
+    }
     const workMin = parseInt(customWorkTime.min) || 0;
     const workSec = parseInt(customWorkTime.sec) || 0;
     const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;

@@ -104,7 +104,7 @@ export default function Sidebar() {
     }
   }, [status, isAdmin, userStatus, userStatusReason, pathname, router]);
 
-  if (pathname === '/' || pathname === '/login') return null;
+  if (pathname === '/' || pathname === '/login' || pathname.startsWith('/showcase-preview')) return null;
 
   // Dedicated Admin Sidebar (Zero Student Features)
   if (isAdmin) {
