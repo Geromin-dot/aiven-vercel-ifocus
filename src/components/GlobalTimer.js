@@ -1234,58 +1234,56 @@ export default function GlobalTimer() {
         if (activePresenceEnabled && isIntervalReached) {
           const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
           if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
-            // Never trigger presence check interruption while on landing page or exempt route
+            // Do not pause on exempt routes or if unauthenticated; advance check baseline so countdown never hangs
+            current.lastPresenceRemaining = remainingSeconds;
+            lastActivityRef.current = Date.now();
+          } else {
+            // Immediately pause timer! It CANNOT continue until user clicks confirm!
+            const pausedState = {
+              ...current,
+              isRunning: false,
+              targetEndTime: null,
+              timeLeft: remainingSeconds,
+              presencePaused: true,
+              lastPresenceRemaining: remainingSeconds,
+              lastPresenceElapsed: Math.max(0, totalTime - remainingSeconds),
+            };
+            commitStorageState(pausedState, true);
+            setShowPresenceModal(true);
+            playPresenceChime();
+            triggerVibration([250, 100, 250]);
+            sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
             lastActivityRef.current = Date.now();
             return;
           }
-
-          // Immediately pause timer! It CANNOT continue until user clicks confirm!
-          const pausedState = {
-            ...current,
-            isRunning: false,
-            targetEndTime: null,
-            timeLeft: remainingSeconds,
-            presencePaused: true,
-            lastPresenceRemaining: remainingSeconds,
-            lastPresenceElapsed: Math.max(0, totalTime - remainingSeconds),
-          };
-          commitStorageState(pausedState, true);
-          setShowPresenceModal(true);
-          playPresenceChime();
-          triggerVibration([250, 100, 250]);
-          sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
-          lastActivityRef.current = Date.now();
-          return;
         }
 
         // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
         if (!burnoutCheckedThisSessionRef.current) {
           const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-          if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
-            // Do not trigger burnout check on exempt routes
-            return;
-          }
-          let burnoutCheckEnabled = true;
-          let burnoutCheckMinutes = 20;
-          try {
-            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-            if (rawPrefs) {
-              const prefs = JSON.parse(rawPrefs);
-              if (prefs.burnoutCheckEnabled !== undefined) {
-                burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
+          if (!isExemptPath(livePath) && !isExemptPath(pathname) && !isAdmin && session?.user) {
+            let burnoutCheckEnabled = true;
+            let burnoutCheckMinutes = 20;
+            try {
+              const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
+              if (rawPrefs) {
+                const prefs = JSON.parse(rawPrefs);
+                if (prefs.burnoutCheckEnabled !== undefined) {
+                  burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
+                }
+                if (prefs.burnoutCheckMinutes) {
+                  burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
+                }
               }
-              if (prefs.burnoutCheckMinutes) {
-                burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
-              }
+            } catch (e) {}
+
+            const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
+            const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
+
+            if (burnoutCheckEnabled && focusElapsedMins >= burnoutCheckMinutes && tasksCompletedInSessionRef.current === 0) {
+              burnoutCheckedThisSessionRef.current = true;
+              triggerBurnoutCheck(false, burnoutCheckMinutes);
             }
-          } catch (e) {}
-
-          const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
-          const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
-
-          if (burnoutCheckEnabled && focusElapsedMins >= burnoutCheckMinutes && tasksCompletedInSessionRef.current === 0) {
-            burnoutCheckedThisSessionRef.current = true;
-            triggerBurnoutCheck(false, burnoutCheckMinutes);
           }
         }
       }
