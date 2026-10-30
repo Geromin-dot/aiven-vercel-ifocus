@@ -634,12 +634,28 @@ export default function CommandCenterPage() {
       setLoadingTodos(false);
     }
     
-    // Fetch Journal History from LocalStorage
-    const historyKey = `ifocus_journal_history_${userName}`;
-    let storedHistory = localStorage.getItem(historyKey);
-    if (!storedHistory && userName === 'richardx') {
-      storedHistory = localStorage.getItem('ifocus_journal_history');
-      if (storedHistory) localStorage.setItem(historyKey, storedHistory); // migrate
+    // Fetch Journal History from LocalStorage (resilient candidate keys across accounts)
+    const candidateKeys = [
+      `ifocus_journal_history_${userName}`,
+      session?.user?.username ? `ifocus_journal_history_${session.user.username}` : null,
+      session?.user?.id ? `ifocus_journal_history_${session.user.id}` : null,
+      'ifocus_journal_history_richardx',
+      'ifocus_journal_history_conx',
+      'ifocus_journal_history'
+    ].filter(Boolean);
+
+    let storedHistory = null;
+    for (const key of candidateKeys) {
+      const val = localStorage.getItem(key);
+      if (val) {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            storedHistory = val;
+            break;
+          }
+        } catch (e) {}
+      }
     }
     
     if (storedHistory) {
@@ -647,12 +663,16 @@ export default function CommandCenterPage() {
     } else {
       setPastEntries([]);
     }
-  }, [userName, status]);
+  }, [userName, status, session?.user?.username, session?.user?.id]);
 
   const saveHistory = (newHistory) => {
     setPastEntries(newHistory);
     try {
       localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(newHistory));
+      if (session?.user?.id) {
+        localStorage.setItem(`ifocus_journal_history_${session.user.id}`, JSON.stringify(newHistory));
+      }
+      localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
     } catch (e) {
       console.warn("LocalStorage failed:", e);
     }
