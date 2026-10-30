@@ -3734,13 +3734,9 @@ textarea:focus {
     padding: 0 !important;
   }
 
-  /* 10. Mini Timer adjustment on mobile */
+  /* 10. Mini Timer adjustment on mobile: hide completely on mobile screens to prevent bottom nav clipping */
   #globalMiniTimerPill {
-    max-width: 250px !important;
-    height: 46px !important;
-    max-height: 46px !important;
-    box-sizing: border-box !important;
-    overflow: hidden !important;
+    display: none !important;
   }
 
   /* 11. Slide up keyframe animation for PWA install banner */

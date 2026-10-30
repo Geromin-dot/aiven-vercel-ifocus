@@ -185,6 +185,7 @@ export default function CommandCenterPage() {
         presencePaused: false,
         lastPresenceElapsed: 0,
         lastPresenceRemaining: wMin * 60,
+        lastPresenceCheckElapsed: 0,
         breakGatePending: false
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
@@ -1190,6 +1191,7 @@ export default function CommandCenterPage() {
       presencePaused: false,
       lastPresenceElapsed: 0,
       lastPresenceRemaining: timeLeft,
+      lastPresenceCheckElapsed: 0,
       breakGatePending: false
     };
     try {
@@ -1238,6 +1240,7 @@ export default function CommandCenterPage() {
       presencePaused: false,
       lastPresenceElapsed: 0,
       lastPresenceRemaining: timeLeft,
+      lastPresenceCheckElapsed: 0,
       breakGatePending: false
     };
     try {
@@ -1314,6 +1317,7 @@ export default function CommandCenterPage() {
       presencePaused: false,
       lastPresenceElapsed: 0,
       lastPresenceRemaining: newTime,
+      lastPresenceCheckElapsed: 0,
       breakGatePending: false
     };
     try {
@@ -1446,6 +1450,7 @@ export default function CommandCenterPage() {
         presencePaused: false,
         lastPresenceElapsed: 0,
         lastPresenceRemaining: newTime,
+        lastPresenceCheckElapsed: 0,
         breakGatePending: false
       };
       try {
@@ -1526,6 +1531,7 @@ export default function CommandCenterPage() {
       presencePaused: false,
       lastPresenceElapsed: 0,
       lastPresenceRemaining: customWorkDuration,
+      lastPresenceCheckElapsed: 0,
       breakGatePending: false
     };
     try {
@@ -1926,6 +1932,8 @@ export default function CommandCenterPage() {
             sessionCount: 1,
             presencePaused: false,
             lastPresenceElapsed: 0,
+            lastPresenceRemaining: customWork.min * 60,
+            lastPresenceCheckElapsed: 0,
             breakGatePending: false
           };
           localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
@@ -2093,6 +2101,7 @@ export default function CommandCenterPage() {
           presencePaused: false,
           lastPresenceElapsed: 0,
           lastPresenceRemaining: fallbackWork.min * 60,
+          lastPresenceCheckElapsed: 0,
           breakGatePending: false
         };
         localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));

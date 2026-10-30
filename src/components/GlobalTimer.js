@@ -408,8 +408,21 @@ export default function GlobalTimer() {
   // Draggable Floating Mini-Timer State & Drag Gestures
   const [miniTimerPos, setMiniTimerPos] = useState({ x: null, y: null });
   const [isDraggingMiniTimer, setIsDraggingMiniTimer] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
   const miniTimerRef = useRef(null);
   const dragInfoRef = useRef({ isDragging: false, startX: 0, startY: 0, initialLeft: 0, initialTop: 0, moved: false });
+
+  // Detect mobile screen width (< 768px)
+  useEffect(() => {
+    const checkMobile = () => {
+      if (typeof window !== "undefined") {
+        setIsMobileScreen(window.innerWidth <= 768);
+      }
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Load saved mini-timer position from localStorage
   useEffect(() => {
@@ -613,6 +626,8 @@ export default function GlobalTimer() {
     const remainingSeconds = current.targetEndTime
       ? Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000))
       : (current.timeLeft !== undefined ? current.timeLeft : 25 * 60);
+    const totalTime = current.totalTime || 25 * 60;
+    const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
 
     const pausedState = {
       ...current,
@@ -620,8 +635,9 @@ export default function GlobalTimer() {
       targetEndTime: null,
       timeLeft: remainingSeconds,
       presencePaused: true,
+      lastPresenceCheckElapsed: elapsedSeconds,
       lastPresenceRemaining: remainingSeconds,
-      lastPresenceElapsed: current.totalTime ? Math.max(0, current.totalTime - remainingSeconds) : 0,
+      lastPresenceElapsed: elapsedSeconds,
     };
 
     commitStorageState(pausedState, true);
@@ -948,7 +964,7 @@ export default function GlobalTimer() {
         }
         if (e.detail.presencePaused) {
           const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-          if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+          if (!isExemptPath(currentLive) && !isExemptPath(pathname) && !isAdmin) {
             setShowPresenceModal(true);
           }
         } else if (!e.detail.presencePaused) {
@@ -976,7 +992,7 @@ export default function GlobalTimer() {
           setTimerState(saved);
           if (saved.presencePaused) {
             const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-            if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+            if (!isExemptPath(currentLive) && !isExemptPath(pathname) && !isAdmin) {
               setShowPresenceModal(true);
             }
           }
@@ -1029,7 +1045,7 @@ export default function GlobalTimer() {
       setTimerState(initial);
       if (initial.presencePaused) {
         const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-        if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+        if (!isExemptPath(currentLive) && !isExemptPath(pathname) && !isAdmin) {
           setShowPresenceModal(true);
         }
       }
@@ -1222,29 +1238,22 @@ export default function GlobalTimer() {
         const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
 
         // Track focus seconds elapsed since the last confirmed presence check
-        let baseRemaining = current.lastPresenceRemaining !== undefined && current.lastPresenceRemaining !== null
-          ? Number(current.lastPresenceRemaining)
-          : (current.timeLeft !== undefined ? Number(current.timeLeft) : Number(totalTime));
+        const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number"
+          ? current.lastPresenceCheckElapsed
+          : 0;
 
-        // Guard: baseRemaining cannot exceed the session's totalTime, and cannot be lower than current remainingSeconds
-        if (baseRemaining > totalTime) {
-          baseRemaining = totalTime;
-          current.lastPresenceRemaining = totalTime;
-        }
-        if (baseRemaining < remainingSeconds) {
-          baseRemaining = remainingSeconds;
-          current.lastPresenceRemaining = remainingSeconds;
-        }
+        // Reset baseline if lastCheckElapsed is ahead of elapsedSeconds (e.g. new session started or reset)
+        const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
+        const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
 
-        const focusSecondsSinceLastCheck = Math.max(0, baseRemaining - remainingSeconds);
-
-        // Periodic Elapsed Focus Time Check: triggers strictly when the full interval has elapsed (e.g. exactly 60s for 1m, 300s for 5m)
+        // Periodic Elapsed Focus Time Check: triggers strictly when the interval has elapsed (e.g. 60s for 1m test, 300s for 5m)
         const isIntervalReached = focusSecondsSinceLastCheck >= intervalSeconds;
 
         if (activePresenceEnabled && isIntervalReached) {
           const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
           if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin) {
             // Do not pause on exempt routes; advance check baseline so countdown never hangs
+            current.lastPresenceCheckElapsed = elapsedSeconds;
             current.lastPresenceRemaining = remainingSeconds;
             lastActivityRef.current = Date.now();
           } else {
@@ -1255,8 +1264,9 @@ export default function GlobalTimer() {
               targetEndTime: null,
               timeLeft: remainingSeconds,
               presencePaused: true,
+              lastPresenceCheckElapsed: elapsedSeconds,
               lastPresenceRemaining: remainingSeconds,
-              lastPresenceElapsed: Math.max(0, totalTime - remainingSeconds),
+              lastPresenceElapsed: elapsedSeconds,
             };
             commitStorageState(pausedState, true);
             setShowPresenceModal(true);
@@ -1645,6 +1655,8 @@ export default function GlobalTimer() {
       const updatedState = {
         ...current,
         timeLeft: remainingSeconds,
+        lastPresenceCheckElapsed: typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0,
+        lastPresenceRemaining: remainingSeconds,
       };
       
       // Update both React state and localStorage on tick for 100% continuous persistence
@@ -1679,6 +1691,8 @@ export default function GlobalTimer() {
     lastActivityRef.current = Date.now();
     const current = readStorageState() || timerState;
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
+    const total = current.totalTime || 25 * 60;
+    const currentElapsed = Math.max(0, total - remaining);
 
     const resumedState = {
       ...current,
@@ -1687,7 +1701,8 @@ export default function GlobalTimer() {
       timeLeft: remaining,
       targetEndTime: Date.now() + remaining * 1000,
       lastPresenceRemaining: remaining,
-      lastPresenceElapsed: current.totalTime ? Math.max(0, current.totalTime - remaining) : 0,
+      lastPresenceCheckElapsed: currentElapsed,
+      lastPresenceElapsed: currentElapsed,
     };
     commitStorageState(resumedState, true);
   };
@@ -1699,11 +1714,18 @@ export default function GlobalTimer() {
       return; // Do NOT pause the real timer if this was just a preview test!
     }
     const current = readStorageState() || timerState;
+    const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
+    const total = current.totalTime || 25 * 60;
+    const currentElapsed = Math.max(0, total - remaining);
     const pausedState = {
       ...current,
       isRunning: false,
       presencePaused: false,
       targetEndTime: null,
+      timeLeft: remaining,
+      lastPresenceCheckElapsed: currentElapsed,
+      lastPresenceRemaining: remaining,
+      lastPresenceElapsed: currentElapsed,
     };
     commitStorageState(pausedState, true);
   };
@@ -1850,11 +1872,13 @@ export default function GlobalTimer() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const isDashboard = pathname === "/dashboard";
+  const isDashboard = pathname === "/dashboard" || pathname?.startsWith("/dashboard");
 
-  // Floating mini-timer strictly appears ONLY when navigating away from the dashboard
-  // (e.g. studying in /flashcards, reviewing in /analytics, /coach, or adjusting /settings)
+  // Floating mini-timer strictly appears ONLY on desktop/tablet viewports (> 768px)
+  // when navigating away from the dashboard. On mobile screens (<= 768px), navigation
+  // to the timer is cleanly provided by the elevated center Timer button on the bottom nav bar.
   const showFloatingMiniTimer =
+    !isMobileScreen &&
     !isDashboard &&
     (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
 
