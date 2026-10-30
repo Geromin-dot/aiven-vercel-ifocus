@@ -352,6 +352,29 @@ export default function SettingsPage() {
         }
       }
 
+      // Sync latest timer preferences from cloud database
+      fetch('/api/user/telemetry')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.timerPreferences) {
+            const tp = data.timerPreferences;
+            if (tp.activePresenceInterval) {
+              setActivePresenceInterval(Number(tp.activePresenceInterval));
+            }
+            if (tp.activePresenceEnabled !== undefined) {
+              setActivePresenceEnabled(Boolean(tp.activePresenceEnabled));
+            }
+            if (tp.afkCoachMinutes !== undefined) {
+              setAfkCoachMinutes(Number(tp.afkCoachMinutes));
+            }
+            try {
+              const cur = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+              localStorage.setItem('ifocus_timer_preferences', JSON.stringify({ ...cur, ...tp }));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
+
       // Check if active breakgate deck exists
       const checkActiveBreakGate = () => {
         try {
@@ -626,6 +649,13 @@ export default function SettingsPage() {
       localStorage.setItem('ifocus_breakgate_question_count', String(cleanBgCount));
       setInitialFocusPrefs(timerPrefs);
       window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: timerPrefs }));
+
+      // Sync focus preferences to cloud for cross-device consistency (e.g. PC to iPhone PWA)
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timerPreferences: timerPrefs })
+      }).catch(() => {});
 
       // 2. Save Sound & Notification Preferences
       const soundPrefs = {
@@ -1329,6 +1359,11 @@ export default function SettingsPage() {
                         parsed.activePresenceEnabled = val;
                         parsed.activePresenceInterval = activePresenceInterval;
                         localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                        fetch('/api/user/telemetry', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ timerPreferences: parsed })
+                        }).catch(() => {});
                       } catch(err) {}
                     }} 
                   />
@@ -1371,6 +1406,11 @@ export default function SettingsPage() {
                             parsed.activePresenceEnabled = activePresenceEnabled;
                             parsed.activePresenceInterval = mins;
                             localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                            fetch('/api/user/telemetry', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ timerPreferences: parsed })
+                            }).catch(() => {});
                           } catch(err) {}
                         }}
                         style={{

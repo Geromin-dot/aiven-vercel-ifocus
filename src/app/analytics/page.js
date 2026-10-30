@@ -49,6 +49,26 @@ export default function AnalyticsPage() {
             .catch(() => { });
         }
       } catch (e) { }
+
+      // Sync cloud telemetry & cognitive state
+      fetch('/api/user/telemetry')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.telemetryState) {
+            const cloud = data.telemetryState;
+            if (cloud.latestTelemetry) {
+              localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(cloud.latestTelemetry));
+            }
+            if (cloud.recoveryCompleted) {
+              localStorage.setItem('ifocus_recovery_completed', String(cloud.recoveryCompleted));
+            }
+            if (cloud.cognitiveReset) {
+              localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
+            }
+            setForceUpdate(prev => prev + 1);
+          }
+        })
+        .catch(() => {});
     }
   }, [status]);
 

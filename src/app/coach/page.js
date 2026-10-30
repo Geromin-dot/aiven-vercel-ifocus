@@ -155,8 +155,37 @@ export default function CoachPage() {
     }
   ]);
 
-  const loadDiagnostics = useCallback(() => {
+  const loadDiagnostics = useCallback(async () => {
     try {
+      // 0. Cloud Telemetry Sync: Retrieve cloud state from database (e.g. from PC when on iPhone PWA)
+      try {
+        const cloudRes = await fetch('/api/user/telemetry');
+        if (cloudRes.ok) {
+          const cloudData = await cloudRes.json();
+          if (cloudData?.telemetryState) {
+            const cloud = cloudData.telemetryState;
+            if (cloud.latestTelemetry) {
+              const cloudTime = new Date(cloud.latestTelemetry.timestamp || cloud.latestTelemetry.date || 0).getTime();
+              const localRaw = localStorage.getItem('ifocus_latest_telemetry');
+              const localTime = localRaw ? new Date(JSON.parse(localRaw).timestamp || 0).getTime() : 0;
+              if (cloudTime >= localTime) {
+                localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(cloud.latestTelemetry));
+                if (userName) localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(cloud.latestTelemetry));
+              }
+            }
+            if (cloud.recoveryCompleted) {
+              localStorage.setItem('ifocus_recovery_completed', String(cloud.recoveryCompleted));
+            }
+            if (cloud.cognitiveReset) {
+              localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
+            }
+            if (cloud.activeIdleAlert) {
+              localStorage.setItem('ifocus_active_idle_alert', JSON.stringify(cloud.activeIdleAlert));
+            }
+          }
+        }
+      } catch (err) {}
+
       // 0. Check Active AI Rest Recovery status
       let restRunning = false;
       try {
@@ -919,6 +948,20 @@ export default function CoachPage() {
       localStorage.removeItem('ifocus_active_idle_alert');
       setInsight(null);
       window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+
+      // Sync dismissal to cloud database
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            latestTelemetry: null,
+            activeIdleAlert: null,
+            cognitiveReset: Date.now(),
+            updatedAt: new Date().toISOString()
+          }
+        })
+      }).catch(() => {});
     } catch (e) {
       console.error("Error applying coach rhythm:", e);
     }
@@ -1231,6 +1274,18 @@ export default function CoachPage() {
                       localStorage.removeItem('ifocus_latest_telemetry');
                       localStorage.removeItem('ifocus_active_idle_alert');
                       localStorage.setItem('ifocus_cognitive_reset', String(Date.now()));
+                      fetch('/api/user/telemetry', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          telemetryState: {
+                            latestTelemetry: null,
+                            activeIdleAlert: null,
+                            cognitiveReset: Date.now(),
+                            updatedAt: new Date().toISOString()
+                          }
+                        })
+                      }).catch(() => {});
                       loadDiagnostics();
                     } catch (e) {}
                   } else {

@@ -450,8 +450,7 @@ export default function CommandCenterPage() {
       }
     };
     try {
-      localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemetryData));
-      localStorage.setItem('ifocus_latest_telemetry', JSON.stringify({
+      const latestPayload = {
         state: stateType,
         sentiment: stateType,
         type: 'friction',
@@ -463,8 +462,23 @@ export default function CommandCenterPage() {
         flight: Math.round(flight),
         source: 'keystroke_anomaly',
         timestamp: nowIso
-      }));
+      };
+      localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemetryData));
+      localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(latestPayload));
       window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemetryData }));
+
+      // Sync telemetry anomaly to database for cross-device consistency (e.g. PC to iPhone PWA)
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            latestTelemetry: latestPayload,
+            insightData: telemetryData,
+            updatedAt: nowIso
+          }
+        })
+      }).catch(() => {});
     } catch (e) {
       console.warn("Telemetry storage failed:", e);
     }
@@ -1984,6 +1998,18 @@ export default function CommandCenterPage() {
           };
           localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
           window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
+
+          // Sync reflection sentiment to cloud for multi-device parity
+          fetch('/api/user/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telemetryState: {
+                latestTelemetry: telemPayload,
+                updatedAt: new Date().toISOString()
+              }
+            })
+          }).catch(() => {});
         } catch (e) {}
 
         setReflectionInput('');

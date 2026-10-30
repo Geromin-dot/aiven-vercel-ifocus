@@ -74,20 +74,47 @@ const triggerVibration = (pattern = [200, 100, 200]) => {
   }
 };
 
-// Cross-Platform Native System Notification Helper (iOS 16.4+, Android, Desktop)
-const sendSystemNotification = (title, body) => {
+// Cross-Platform Native System Notification Helper (iOS 16.4+ PWA ServiceWorker, Android, Desktop)
+const sendSystemNotification = async (title, body, tag = "ifocus-presence") => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   try {
-    if (Notification.permission === "granted") {
-      new Notification(title, { body, icon: "/favicon.ico" });
-    } else if (Notification.permission === "default") {
-      Notification.requestPermission().then((perm) => {
-        if (perm === "granted") {
-          new Notification(title, { body, icon: "/favicon.ico" });
-        }
-      }).catch(() => {});
+    if (Notification.permission === "default") {
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") return;
+      } catch (err) {
+        return;
+      }
+    } else if (Notification.permission !== "granted") {
+      return;
     }
-  } catch (e) {}
+
+    const options = {
+      body,
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/icon-192x192.png",
+      tag,
+      renotify: true,
+      silent: false,
+      data: { url: "/dashboard" },
+    };
+
+    // 1. Primary path for iOS PWA and modern Service Workers:
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && typeof registration.showNotification === "function") {
+          await registration.showNotification(title, options);
+          return;
+        }
+      } catch (swErr) {}
+    }
+
+    // 2. Desktop browser fallback:
+    new Notification(title, options);
+  } catch (e) {
+    console.warn("sendSystemNotification error:", e);
+  }
 };
 
 // Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - zero external MP3 dependencies)
@@ -700,6 +727,19 @@ export default function GlobalTimer() {
       localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(insightData));
       localStorage.setItem("ifocus_active_idle_alert", JSON.stringify(insightData));
       window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
+
+      // Sync proactive idle alert to database for multi-device parity
+      fetch("/api/user/telemetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telemetryState: {
+            latestTelemetry: insightData,
+            activeIdleAlert: insightData,
+            updatedAt: new Date().toISOString()
+          }
+        })
+      }).catch(() => {});
     } catch (e) {}
   }, [session?.user, pathname, isAdmin]);
 
@@ -728,6 +768,19 @@ export default function GlobalTimer() {
       localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(insightData));
       localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(insightData));
       window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
+
+      // Sync proactive idle alert to database for multi-device parity
+      fetch("/api/user/telemetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telemetryState: {
+            latestTelemetry: insightData,
+            activeIdleAlert: insightData,
+            updatedAt: new Date().toISOString()
+          }
+        })
+      }).catch(() => {});
     } catch (e) {}
   }, [session?.user, pathname, isAdmin]);
 
@@ -795,6 +848,47 @@ export default function GlobalTimer() {
         if (current?.presencePaused) {
           setShowPresenceModal(true);
           playPresenceChime();
+          return;
+        }
+
+        // Active Presence Catch-Up on Mobile Screen Unlock or Tab Switch:
+        if (current?.isRunning && current?.isFocus && current?.targetEndTime) {
+          let activePresenceEnabled = true;
+          let activePresenceInterval = 5;
+          try {
+            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
+            if (rawPrefs) {
+              const prefs = JSON.parse(rawPrefs);
+              if (prefs.activePresenceEnabled !== undefined) activePresenceEnabled = Boolean(prefs.activePresenceEnabled);
+              if (prefs.activePresenceInterval) activePresenceInterval = Number(prefs.activePresenceInterval);
+            }
+          } catch (e) {}
+
+          const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
+          const totalTime = current.totalTime || 25 * 60;
+          const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
+          const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
+          const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0;
+          const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
+          const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
+
+          if (activePresenceEnabled && focusSecondsSinceLastCheck >= intervalSeconds) {
+            const pausedState = {
+              ...current,
+              isRunning: false,
+              targetEndTime: null,
+              timeLeft: remainingSeconds,
+              presencePaused: true,
+              lastPresenceCheckElapsed: elapsedSeconds,
+              lastPresenceRemaining: remainingSeconds,
+              lastPresenceElapsed: elapsedSeconds,
+            };
+            commitStorageState(pausedState, true);
+            setShowPresenceModal(true);
+            playPresenceChime();
+            triggerVibration([250, 100, 250]);
+            sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
+          }
         }
       }
     };
@@ -1203,6 +1297,30 @@ export default function GlobalTimer() {
     };
   }, [readStorageState, triggerPresencePause]);
 
+  // Sync timer preferences & telemetry from database on mount for multi-device parity (e.g. PC to iPhone PWA)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let isMounted = true;
+    fetch("/api/user/telemetry")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        if (data.timerPreferences) {
+          const raw = localStorage.getItem("ifocus_timer_preferences") || "{}";
+          try {
+            const local = JSON.parse(raw);
+            localStorage.setItem("ifocus_timer_preferences", JSON.stringify({ ...local, ...data.timerPreferences }));
+          } catch (e) {}
+        }
+        if (data.telemetryState?.latestTelemetry) {
+          localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(data.telemetryState.latestTelemetry));
+          window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: data.telemetryState.latestTelemetry }));
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [session?.user?.id]);
+
   // Main Global Timer Loop (Runs continuously across all routes in background)
   useEffect(() => {
     if (isAdmin || pathname.startsWith("/admin")) return;
@@ -1575,6 +1693,21 @@ export default function GlobalTimer() {
               const uName = session?.user?.name || session?.user?.username || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_name') : '') || 'Student';
               localStorage.removeItem(`ifocus_telemetry_insight_${uName}`);
               localStorage.removeItem('ifocus_telemetry_insight_anonymous');
+
+              // Sync completed restorative break to cloud database
+              fetch("/api/user/telemetry", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  telemetryState: {
+                    latestTelemetry: null,
+                    activeIdleAlert: null,
+                    recoveryCompleted: Date.now(),
+                    cognitiveReset: Date.now(),
+                    updatedAt: new Date().toISOString()
+                  }
+                })
+              }).catch(() => {});
             } catch (e) {}
             window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated"));
           }
