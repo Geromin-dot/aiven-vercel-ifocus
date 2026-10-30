@@ -881,7 +881,7 @@ export default function FlashcardsPage() {
 
       {/* ================= 1. COLLECTIONS VIEW ================= */}
       {view === 'collections' && (
-        <div className="glass-panel" style={{ minHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel flashcard-collections-panel" style={{ minHeight: decks.length === 0 ? 'calc(100vh - 3.5rem)' : 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', flexShrink: 0 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
@@ -1246,10 +1246,10 @@ export default function FlashcardsPage() {
 
       {/* ================= 4. STUDY / REVIEW VIEW (Interactive 3D Card) ================= */}
       {view === 'study' && activeDeck && (
-        <div style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
+        <div className="flashcard-study-container" style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
           
           {/* Deck Header & Animated Mastery Progress Bar */}
-          <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <div className="glass-panel flashcard-study-header" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem' }}>
@@ -1261,7 +1261,7 @@ export default function FlashcardsPage() {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div className="flashcard-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                 <button
                   className="btn-secondary small"
                   onClick={() => handleStartExam(activeDeck)}
@@ -1517,146 +1517,142 @@ export default function FlashcardsPage() {
           <div 
             className={`flashcard-card ${isFlipped ? 'flipped' : ''}`}
             onClick={() => setIsFlipped(f => !f)}
-            style={{ flex: 1, minHeight: '380px', width: '100%' }}
+            style={{ flex: 1, minHeight: '380px', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '1.4rem 1.75rem' }}
           >
-            {/* Top Left Tag */}
-            <span 
-              className="tag" 
-              style={{ 
-                position: 'absolute', 
-                top: '1.4rem', 
-                left: '1.75rem', 
-                background: isFlipped ? 'rgba(95, 143, 94, 0.18)' : 'rgba(95, 143, 94, 0.12)', 
-                color: 'var(--primary-accent)', 
-                padding: '0.35rem 0.85rem', 
-                borderRadius: '999px', 
-                fontSize: '0.78rem', 
-                fontWeight: 700, 
-                letterSpacing: '0.5px', 
-                transition: 'all 0.25s ease'
-              }}
-            >
-              {isFlipped 
-                ? (definitionFirst ? 'Term / Answer' : 'Answer / Definition') 
-                : (definitionFirst ? 'Definition Review' : (currentCard?.tag || 'Concept'))}
-            </span>
+            {/* Top Bar inside Card: Tag on Left, Hint Pill on Right (Zero Collision) */}
+            <div className="flashcard-top-bar" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.65rem', zIndex: 2, position: 'relative' }}>
+              <span 
+                className="flashcard-tag" 
+                style={{ 
+                  position: 'relative',
+                  margin: 0,
+                  background: isFlipped ? 'rgba(95, 143, 94, 0.18)' : 'rgba(95, 143, 94, 0.12)', 
+                  color: 'var(--primary-accent)', 
+                  padding: '0.35rem 0.85rem', 
+                  borderRadius: '999px', 
+                  fontSize: '0.78rem', 
+                  fontWeight: 700, 
+                  letterSpacing: '0.5px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0
+                }}
+              >
+                {isFlipped 
+                  ? (definitionFirst ? 'Term / Answer' : 'Answer / Definition') 
+                  : (definitionFirst ? 'Definition Review' : (currentCard?.tag || 'Concept'))}
+              </span>
 
-            {/* Front View (Smooth Fade) */}
-            {!isFlipped && (
-              <div key={`front-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem', textAlign: 'center', maxWidth: '88%' }}>
-                {/* Show Hint only when showHints is true */}
-                {showHints && cardHint && (
-                  <div style={{ 
+              {showHints && cardHint && (
+                <div 
+                  className="flashcard-hint-pill"
+                  style={{ 
+                    position: 'relative',
+                    margin: 0,
                     display: 'inline-flex', 
                     alignItems: 'center', 
                     gap: '0.45rem', 
                     background: 'rgba(95, 143, 94, 0.12)', 
                     border: '1px solid rgba(95, 143, 94, 0.28)', 
                     borderRadius: '999px', 
-                    padding: '0.35rem 1.05rem', 
-                    fontSize: '0.86rem', 
+                    padding: '0.32rem 0.85rem', 
+                    fontSize: '0.8rem', 
                     fontWeight: 700, 
                     color: '#2e7d32',
-                    boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)'
+                    boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)',
+                    maxWidth: '100%',
+                    wordBreak: 'break-word'
                   }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 18h6"></path>
-                      <path d="M10 22h4"></path>
-                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z"></path>
-                    </svg>
-                    <span>Hint:</span>
-                    <span style={{ textDecoration: 'underline' }}>{cardHint}</span>
-                  </div>
-                )}
-
-                <div style={{ 
-                  fontSize: definitionFirst ? 'clamp(1.2rem, 1.8vw, 1.6rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
-                  fontWeight: definitionFirst ? 500 : 700, 
-                  color: 'var(--text-primary)', 
-                  lineHeight: definitionFirst ? 1.6 : 1.35, 
-                  letterSpacing: '-0.02em',
-                  padding: '0.75rem',
-                  whiteSpace: definitionFirst ? 'pre-wrap' : 'normal'
-                }}>
-                  {definitionFirst ? currentCard?.back : currentCard?.front}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M9 18h6"></path>
+                    <path d="M10 22h4"></path>
+                    <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z"></path>
+                  </svg>
+                  <span style={{ flexShrink: 0 }}>{isFlipped ? 'Key Concept:' : 'Hint:'}</span>
+                  <span style={{ textDecoration: 'underline' }}>{cardHint}</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Back View (Smooth Fade) */}
-            {isFlipped && (
-              <div key={`back-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', textAlign: 'center', maxWidth: '88%' }}>
-                {showHints && cardHint && (
+            {/* Middle Main Content (Vertically & Horizontally Centered) */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', margin: '1rem 0' }}>
+              {!isFlipped ? (
+                <div key={`front-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', maxWidth: '92%' }}>
                   <div style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '0.45rem', 
-                    background: 'rgba(95, 143, 94, 0.12)', 
-                    border: '1px solid rgba(95, 143, 94, 0.28)', 
-                    borderRadius: '999px', 
-                    padding: '0.4rem 1.1rem', 
-                    fontSize: '0.88rem', 
-                    fontWeight: 700, 
-                    color: '#2e7d32',
-                    boxShadow: '0 2px 6px rgba(46, 125, 50, 0.08)'
+                    fontSize: definitionFirst ? 'clamp(1.1rem, 1.8vw, 1.55rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
+                    fontWeight: definitionFirst ? 500 : 700, 
+                    color: 'var(--text-primary)', 
+                    lineHeight: definitionFirst ? 1.6 : 1.35, 
+                    letterSpacing: '-0.02em',
+                    padding: '0.5rem',
+                    whiteSpace: definitionFirst ? 'pre-wrap' : 'normal'
                   }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 18h6"></path>
-                      <path d="M10 22h4"></path>
-                      <path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.5 3 5.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3c1.8-1.2 3-3.3 3-5.7a7 7 0 0 0-7-7z"></path>
-                    </svg>
-                    <span>Key Concept:</span>
-                    <span style={{ textDecoration: 'underline' }}>{cardHint}</span>
+                    {definitionFirst ? currentCard?.back : currentCard?.front}
                   </div>
-                )}
-
-                <div style={{ 
-                  fontSize: !definitionFirst ? 'clamp(1.2rem, 1.8vw, 1.55rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
-                  fontWeight: !definitionFirst ? 500 : 700, 
-                  color: 'var(--text-primary)', 
-                  lineHeight: !definitionFirst ? 1.6 : 1.35, 
-                  padding: '0.5rem', 
-                  whiteSpace: !definitionFirst ? 'pre-wrap' : 'normal'
-                }}>
-                  {definitionFirst ? currentCard?.front : currentCard?.back}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div key={`back-${currentCardIndex}`} className="flashcard-content-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', maxWidth: '92%' }}>
+                  <div style={{ 
+                    fontSize: !definitionFirst ? 'clamp(1.1rem, 1.8vw, 1.55rem)' : 'clamp(1.6rem, 2.6vw, 2.4rem)', 
+                    fontWeight: !definitionFirst ? 500 : 700, 
+                    color: 'var(--text-primary)', 
+                    lineHeight: !definitionFirst ? 1.6 : 1.35, 
+                    padding: '0.5rem', 
+                    whiteSpace: !definitionFirst ? 'pre-wrap' : 'normal'
+                  }}>
+                    {definitionFirst ? currentCard?.front : currentCard?.back}
+                  </div>
+                </div>
+              )}
+            </div>
 
-            {/* Bottom Flip Hint */}
-            <div style={{ position: 'absolute', bottom: '1.4rem', color: 'var(--text-secondary)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-              {isFlipped 
-                ? (definitionFirst ? 'Click or press Space to view definition' : 'Click or press Space to view question') 
-                : (definitionFirst ? 'Click or press Space to reveal term' : 'Click or press Space to reveal answer')}
+            {/* Bottom Flip Hint (Clean Bottom Bar) */}
+            <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+              <span>
+                {isFlipped 
+                  ? (definitionFirst ? 'Click or press Space to view definition' : 'Click or press Space to view question') 
+                  : (definitionFirst ? 'Click or press Space to reveal term' : 'Click or press Space to reveal answer')}
+              </span>
             </div>
           </div>
 
           {/* Controls Bar */}
-          <div className="glass-panel" style={{ padding: '0.85rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="glass-panel flashcard-study-controls-bar" style={{ padding: '0.85rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             
-            {/* Previous Card */}
-            <button 
-              className="btn-secondary small" 
-              onClick={handlePrevCard}
-              disabled={currentCardIndex === 0}
-              style={{ opacity: currentCardIndex === 0 ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              ← Previous
-            </button>
+            {/* Top Row on Mobile / Nav Cluster: Previous, Counter, Next */}
+            <div className="flashcard-study-nav-cluster" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button 
+                className="btn-secondary small" 
+                onClick={handlePrevCard}
+                disabled={currentCardIndex === 0}
+                style={{ opacity: currentCardIndex === 0 ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+              >
+                ← Prev
+              </button>
 
-            {/* Card Counter & Shuffle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+              <span className="flashcard-study-counter" style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                 {currentCardIndex + 1} / {totalCards}
               </span>
 
+              <button 
+                className="btn-secondary small" 
+                onClick={handleNextCard}
+                disabled={currentCardIndex === totalCards - 1}
+                style={{ opacity: currentCardIndex === totalCards - 1 ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+              >
+                Next →
+              </button>
+            </div>
+
+            {/* Bottom Row on Mobile / Actions Cluster: Shuffle & Mastery */}
+            <div className="flashcard-study-actions-cluster" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
               <button 
                 type="button" 
                 onClick={handleShuffle}
                 className="btn-secondary small"
                 title="Shuffle Deck"
-                style={{ padding: '0.4rem 0.75rem', fontSize: '0.82rem' }}
+                style={{ padding: '0.4rem 0.75rem', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
               >
                 Shuffle
               </button>
@@ -1672,22 +1668,13 @@ export default function FlashcardsPage() {
                   borderColor: masteredCards.has(currentCardIndex) ? '#2e7d32' : 'var(--glass-border)',
                   color: masteredCards.has(currentCardIndex) ? '#ffffff' : 'var(--text-secondary)',
                   fontWeight: 600,
-                  transition: 'all 0.25s ease'
+                  transition: 'all 0.25s ease',
+                  whiteSpace: 'nowrap'
                 }}
               >
                 {masteredCards.has(currentCardIndex) ? 'Mastered' : 'Mark as Mastered'}
               </button>
             </div>
-
-            {/* Next Card */}
-            <button 
-              className="btn-secondary small" 
-              onClick={handleNextCard}
-              disabled={currentCardIndex === totalCards - 1}
-              style={{ opacity: currentCardIndex === totalCards - 1 ? 0.4 : 1, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              Next →
-            </button>
 
           </div>
         </div>
@@ -1697,9 +1684,9 @@ export default function FlashcardsPage() {
 
       {/* ================= 5. PRACTICE EXAM / QUIZ MODE ================= */}
       {view === 'exam' && activeDeck && (
-        <div style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
+        <div className="flashcard-exam-container" style={{ width: '100%', height: 'calc(100vh - 2.8rem)', display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'space-between' }}>
           {/* Exam Header */}
-          <div className="glass-panel" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <div className="glass-panel flashcard-exam-header" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
@@ -1829,7 +1816,7 @@ export default function FlashcardsPage() {
             </div>
           ) : (
             /* Active Question Card */
-            <div className="glass-panel" style={{ flex: 1, minHeight: '380px', display: 'flex', flexDirection: 'column', padding: '2rem 2.5rem', gap: '1.25rem', justifyContent: 'space-between' }}>
+            <div className="glass-panel flashcard-exam-card" style={{ flex: 1, minHeight: '380px', display: 'flex', flexDirection: 'column', padding: '2rem 2.5rem', gap: '1.25rem', justifyContent: 'space-between' }}>
               <div>
                 <span style={{
                   background: 'rgba(95, 143, 94, 0.12)',
@@ -1896,6 +1883,7 @@ export default function FlashcardsPage() {
                       key={i}
                       onClick={() => handleSelectOption(opt)}
                       disabled={isOptionChecked}
+                      className="flashcard-exam-option-btn"
                       style={{
                         background: btnBg,
                         border: btnBorder,
@@ -1931,15 +1919,15 @@ export default function FlashcardsPage() {
                         {String.fromCharCode(65 + i)}
                       </span>
                       <span style={{ flex: 1, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{opt}</span>
-                      {isOptionChecked && isCorrect && <span style={{ color: '#2e7d32', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Correct</span>}
-                      {isOptionChecked && isSelected && !isCorrect && <span style={{ color: 'var(--error)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Incorrect</span>}
+                      {isOptionChecked && isCorrect && <span style={{ color: '#2e7d32', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg> Correct</span>}
+                      {isOptionChecked && isSelected && !isCorrect && <span style={{ color: 'var(--error)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Incorrect</span>}
                     </button>
                   );
                 })}
               </div>
 
               {/* Footer / Next Action */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <div className="flashcard-exam-footer" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                 {isOptionChecked && (
                   <button
                     className="btn-primary"

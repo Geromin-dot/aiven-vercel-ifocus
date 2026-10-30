@@ -41,6 +41,7 @@ export default function Sidebar() {
         'ifocus_session_history',
         'ifocus_focus_stats',
         'ifocus_latest_telemetry',
+        'ifocus_pending_study_sessions',
         'ifocus_ai_adjusted_active',
         'ifocus_ai_adjusted_details',
         'ifocus_applied_toast',
@@ -65,6 +66,7 @@ export default function Sidebar() {
             'ifocus_session_history',
             'ifocus_focus_stats',
             'ifocus_latest_telemetry',
+            'ifocus_pending_study_sessions',
             'ifocus_ai_adjusted_active',
             'ifocus_ai_adjusted_details',
             'ifocus_applied_toast',
@@ -235,8 +237,8 @@ export default function Sidebar() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Quick Sign Out Button on Mobile Header */}
-          {session && (
+          {/* Quick Sign Out Button on Mobile Header (Hidden on Profile / Settings page to prevent duplicate buttons) */}
+          {session && pathname !== '/settings' && (
             <button 
               type="button"
               onClick={handleSignOutAndClear}

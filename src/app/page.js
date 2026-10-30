@@ -152,7 +152,7 @@ export default function LandingPage() {
       description: "Intelligent coaching engine that evaluates your study pacing, dwell times, and fatigue to adapt your study plan in real time.",
       features: [
         { title: "Cognitive State Telemetry", desc: "Detects flow states ('In the Zone') or cognitive friction based on interaction dwell times." },
-        { title: "Study Stamina Diagnostics", desc: "Calculates cognitive resilience percentage and checks BreakGate cycle compliance." },
+        { title: "Study Resilience Diagnostics", desc: "Calculates study resilience percentage and checks BreakGate cycle compliance." },
         { title: "Recommended Rhythm", desc: "Recommends optimal work/rest intervals (e.g. 25m Work / 5m Gate) based on observed fatigue." },
         { title: "Consult Your Study Coach", desc: "Interactive Q&A for memory mnemonics, anti-procrastination tips, and complex concept breakdowns." },
         { title: "Simulate Focus Intervention", desc: "Test active coaching suggestions when pacing slows down during prolonged study sessions." },
@@ -531,6 +531,64 @@ export default function LandingPage() {
             align-items: center !important;
           }
         }
+
+        @media (max-width: 640px) {
+          .landing-header-inner {
+            padding: 0 0.85rem !important;
+            height: 60px !important;
+            gap: 8px !important;
+          }
+          .landing-btn-nav-primary {
+            padding: 7px 12px !important;
+            font-size: 0.82rem !important;
+          }
+          .landing-btn-nav-signin {
+            padding: 6px 8px !important;
+            font-size: 0.82rem !important;
+          }
+          .desktop-only-btn-text {
+            display: none !important;
+          }
+          .mobile-only-btn-text {
+            display: inline !important;
+          }
+          .tab-buttons-container {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            width: 100% !important;
+            max-width: 420px !important;
+            margin: 0 auto !important;
+            gap: 4px !important;
+          }
+          .tab-btn {
+            width: 100% !important;
+            text-align: center !important;
+            justify-content: center !important;
+            padding: 8px 6px !important;
+            font-size: 0.78rem !important;
+            white-space: normal !important;
+            line-height: 1.25 !important;
+          }
+          .system-pill {
+            padding: 5px 12px !important;
+            font-size: 0.74rem !important;
+            letter-spacing: 0.01em !important;
+            max-width: 95% !important;
+            text-align: center !important;
+          }
+          .hero-section-pad {
+            padding: 3rem 1rem 2.5rem 1rem !important;
+          }
+        }
+
+        @media (min-width: 641px) {
+          .desktop-only-btn-text {
+            display: inline !important;
+          }
+          .mobile-only-btn-text {
+            display: none !important;
+          }
+        }
       `}</style>
 
       {/* ===== 1. TOP NAVIGATION BAR (BALANCED & RICH BRAND IDENTITY) ===== */}
@@ -546,7 +604,7 @@ export default function LandingPage() {
         width: '100%',
         transition: 'all 0.25s ease'
       }}>
-        <div style={{
+        <div className="landing-header-inner" style={{
           maxWidth: '1200px',
           margin: '0 auto',
           padding: '0 1.5rem',
@@ -575,15 +633,16 @@ export default function LandingPage() {
           </nav>
 
           {/* Right Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             {session ? (
-              <Link href="/dashboard" className="landing-btn-primary" style={{ padding: '9px 20px', fontSize: '0.9rem' }}>
+              <Link href="/dashboard" className="landing-btn-primary landing-btn-nav-primary" style={{ padding: '9px 20px', fontSize: '0.9rem' }}>
                 Open Dashboard &rarr;
               </Link>
             ) : (
               <>
                 <Link 
                   href="/login?tab=login" 
+                  className="landing-btn-nav-signin"
                   style={{
                     color: '#334155',
                     fontSize: '0.9rem',
@@ -601,13 +660,14 @@ export default function LandingPage() {
                 </Link>
                 <Link 
                   href="/login?tab=register" 
-                  className="landing-btn-primary" 
+                  className="landing-btn-primary landing-btn-nav-primary" 
                   style={{ 
                     padding: '9px 20px', 
                     fontSize: '0.9rem'
                   }}
                 >
-                  Get Started Free
+                  <span className="desktop-only-btn-text">Get Started Free</span>
+                  <span className="mobile-only-btn-text">Start Free</span>
                 </Link>
               </>
             )}
@@ -619,7 +679,7 @@ export default function LandingPage() {
       <div className="hero-atmospheric-wrapper">
         <div className="hero-grid-mesh"></div>
 
-        <section style={{
+        <section className="hero-section-pad" style={{
           position: 'relative',
           zIndex: 1,
           padding: '4.5rem 1.5rem 3.5rem 1.5rem',
@@ -701,8 +761,11 @@ export default function LandingPage() {
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <span style={{ color: '#16a34a' }}>&#128274;</span>
-                <span>http://localhost:3000/dashboard</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>https://ifocus-study.vercel.app/dashboard</span>
               </div>
               <div style={{
                 fontSize: '0.74rem',

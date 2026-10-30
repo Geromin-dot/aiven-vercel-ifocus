@@ -8,8 +8,8 @@ const playBreakGateUnlockChime = () => {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') ctx.resume();
+    const ctx = window.__ifocusSharedAudioCtx || window.__ifocusAudioCtx || new AudioCtx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const now = ctx.currentTime;
 
     let volFactor = 0.7;
@@ -224,11 +224,13 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       setIsFinished(true);
       try {
         const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+        const iso = new Date().toISOString();
         events.push({
           status: 'completed',
           score: score,
           total: total,
-          date: new Date().toISOString()
+          date: iso,
+          timestamp: iso
         });
         localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
         window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
@@ -239,11 +241,13 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
   const handleSkip = () => {
     try {
       const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+      const iso = new Date().toISOString();
       events.push({
         status: 'skipped',
         score: 0,
         total: total,
-        date: new Date().toISOString()
+        date: iso,
+        timestamp: iso
       });
       localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
       window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));

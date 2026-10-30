@@ -17,13 +17,71 @@ const getUserAudioVolumeFactor = () => {
   return 0.7; // default 70%
 };
 
+// High-Reliability Shared Web Audio Context & Mobile iOS Unlocker
+const getSharedAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!window.__ifocusSharedAudioCtx || window.__ifocusSharedAudioCtx.state === "closed") {
+    window.__ifocusSharedAudioCtx = new AudioCtx();
+  }
+  return window.__ifocusSharedAudioCtx;
+};
+
+// Automatic One-Time Audio Unlocker for iOS Safari WebKit (requires user gesture)
+if (typeof window !== "undefined") {
+  const unlockEvents = ["touchstart", "touchend", "pointerdown", "mousedown", "click"];
+  const handleUnlockAudio = () => {
+    try {
+      const ctx = getSharedAudioContext();
+      if (ctx) {
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+        // Play silent 1-sample buffer to warm up iOS hardware output
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      }
+    } catch (e) {}
+    unlockEvents.forEach((evt) => window.removeEventListener(evt, handleUnlockAudio));
+  };
+  unlockEvents.forEach((evt) => window.addEventListener(evt, handleUnlockAudio, { passive: true, once: true }));
+}
+
+// Vibration Support (for mobile browsers that support navigator.vibrate)
+const triggerVibration = (pattern = [200, 100, 200]) => {
+  if (typeof window !== "undefined" && typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      navigator.vibrate(pattern);
+    } catch (e) {}
+  }
+};
+
+// Cross-Platform Native System Notification Helper (iOS 16.4+, Android, Desktop)
+const sendSystemNotification = (title, body) => {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  try {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body, icon: "/favicon.ico" });
+    } else if (Notification.permission === "default") {
+      Notification.requestPermission().then((perm) => {
+        if (perm === "granted") {
+          new Notification(title, { body, icon: "/favicon.ico" });
+        }
+      }).catch(() => {});
+    }
+  } catch (e) {}
+};
+
 // Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - zero external MP3 dependencies)
 const playPresenceChime = () => {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    if (ctx.state === "suspended") ctx.resume();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const now = ctx.currentTime;
 
     // Harmonic double chime (D5 -> A5)
@@ -45,7 +103,7 @@ const playPresenceChime = () => {
     osc2.type = "sine";
     osc2.frequency.setValueAtTime(880, now + 0.14);
     gain2.gain.setValueAtTime(0, now);
-    gain2.gain.setValueAtTime(0.26, now + 0.14);
+    gain2.gain.setValueAtTime(0.26 * volFactor, now + 0.14);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
@@ -58,10 +116,9 @@ const playPresenceChime = () => {
 
 const playCompletionAlarm = () => {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    if (ctx.state === "suspended") ctx.resume();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     const now = ctx.currentTime;
 
     const volFactor = getUserAudioVolumeFactor();
@@ -175,6 +232,14 @@ export default function GlobalTimer() {
   });
   const [isTestReflectionModal, setIsTestReflectionModal] = useState(false);
   const [isTestPresenceModal, setIsTestPresenceModal] = useState(false);
+  const [showIdleCoachModal, setShowIdleCoachModal] = useState(false);
+  const [isTestIdleCoachModal, setIsTestIdleCoachModal] = useState(false);
+  const [idleModalMinutes, setIdleModalMinutes] = useState(1);
+  const [showBurnoutModal, setShowBurnoutModal] = useState(false);
+  const [isTestBurnoutModal, setIsTestBurnoutModal] = useState(false);
+  const [burnoutModalMinutes, setBurnoutModalMinutes] = useState(20);
+  const tasksCompletedInSessionRef = useRef(0);
+  const burnoutCheckedThisSessionRef = useRef(false);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
@@ -442,8 +507,10 @@ export default function GlobalTimer() {
   const stateRef = useRef(timerState);
   stateRef.current = timerState;
 
-  // Track User Activity across the entire screen for AFK Detection
-  const lastActivityRef = useRef(Date.now());
+  // Track User Activity across the entire screen for AFK Detection (Persisted across route navigation)
+  const lastActivityRef = useRef(
+    (typeof window !== "undefined" && Number(localStorage.getItem("ifocus_last_user_activity"))) || Date.now()
+  );
 
   // Read latest timer state from localStorage
   const readStorageState = useCallback(() => {
@@ -520,25 +587,288 @@ export default function GlobalTimer() {
     playPresenceChime();
   }, [commitStorageState, readStorageState]);
 
-  // Global Inactivity (AFK) Listeners
-  useEffect(() => {
-    if (isAdmin || pathname.startsWith("/admin")) return;
-    const handleUserActivity = () => {
-      lastActivityRef.current = Date.now();
+  // Proactive Idle Coach Intervention Trigger
+  const triggerIdleCoachIntervention = useCallback((isTest = false, explicitMinutes = null) => {
+    // Strictly prevent firing if user is on public landing page, login, signup, admin, or unauthenticated
+    if (!isTest && (pathname === '/' || pathname === '/login' || pathname === '/signup' || pathname?.startsWith('/admin') || !session?.user)) {
+      return;
+    }
+
+    let afkMinutes = 1;
+    try {
+      const raw = localStorage.getItem("ifocus_timer_preferences");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.afkCoachMinutes !== undefined) {
+          afkMinutes = Number(parsed.afkCoachMinutes) || 1;
+        }
+      }
+    } catch (e) {}
+
+    const effectiveMinutes = explicitMinutes !== null ? explicitMinutes : afkMinutes;
+    setIdleModalMinutes(effectiveMinutes);
+    setIsTestIdleCoachModal(isTest);
+    setShowIdleCoachModal(true);
+    lastActivityRef.current = Date.now();
+    try {
+      localStorage.setItem("ifocus_last_user_activity", String(Date.now()));
+    } catch (e) {}
+
+    playPresenceChime();
+
+    const userName = session?.user?.name || session?.user?.username || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_name') : '') || 'Student';
+    const minText = `${effectiveMinutes} ${effectiveMinutes === 1 ? 'minute' : 'minutes'}`;
+
+    const insightData = {
+      type: 'idle',
+      state: 'idle',
+      sentiment: 'Inactivity & Task Friction',
+      idleMinutes: effectiveMinutes,
+      timestamp: new Date().toISOString(),
+      reason: `Inactivity detected: You have been idle for ${minText} with no active timer. Student appears stuck, hesitant, or experiencing task friction.`,
+      actionPlan: `You have been idle for ${minText} without starting a focus session. Feeling stuck on where to begin? Break your upcoming task into just one simple step, or start a gentle 15m focus session to build momentum.`,
+      metrics: {
+        dwellTime: 0,
+        flightTime: 0,
+        errorRate: 0,
+      }
     };
 
-    window.addEventListener("mousemove", handleUserActivity, { passive: true });
-    window.addEventListener("keydown", handleUserActivity, { passive: true });
-    window.addEventListener("mousedown", handleUserActivity, { passive: true });
-    window.addEventListener("touchstart", handleUserActivity, { passive: true });
-    window.addEventListener("scroll", handleUserActivity, { passive: true });
+    try {
+      localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(insightData));
+      localStorage.setItem("ifocus_telemetry_insight_anonymous", JSON.stringify(insightData));
+      localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(insightData));
+      localStorage.setItem("ifocus_active_idle_alert", JSON.stringify(insightData));
+      window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
+    } catch (e) {}
+  }, [session?.user]);
+
+  // Proactive Task Stagnation & Burnout Check Trigger (While Focus Timer is Running)
+  const triggerBurnoutCheck = useCallback((isTest = false, minutes = 20) => {
+    setIsTestBurnoutModal(isTest);
+    setBurnoutModalMinutes(minutes);
+    setShowBurnoutModal(true);
+    playPresenceChime();
+
+    if (isTest) return;
+
+    const userName = session?.user?.name || session?.user?.username || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_name') : '') || 'Student';
+    const insightData = {
+      timestamp: new Date().toISOString(),
+      reason: `Task stagnation alert: Active focus for ${minutes} minutes without completing any task.`,
+      actionPlan: `You have been focusing for ${minutes} minutes without completing a task. If feeling stuck or experiencing task friction, switch to an easier task from your list or take a brief mental pause.`,
+      metrics: {
+        dwellTime: 0,
+        flightTime: 0,
+        errorRate: 0,
+      }
+    };
+
+    try {
+      localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(insightData));
+      localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(insightData));
+      window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
+    } catch (e) {}
+  }, [session?.user]);
+
+  // Global Inactivity (AFK) Listeners across all user input methods
+  useEffect(() => {
+    if (isAdmin || pathname.startsWith("/admin") || pathname === "/" || pathname === "/login" || pathname === "/signup" || !session?.user) return;
+
+    const handleUserActivity = () => {
+      // Do not run idle checks on public routes or unauthenticated visitors
+      if (isAdmin || pathname === "/" || pathname === "/login" || pathname === "/signup" || pathname?.startsWith("/admin") || !session?.user) {
+        lastActivityRef.current = Date.now();
+        return;
+      }
+
+      const now = Date.now();
+      const last = lastActivityRef.current || now;
+      const idleMs = now - last;
+
+      // Update in-memory & persistent activity timestamp
+      lastActivityRef.current = now;
+      try {
+        localStorage.setItem("ifocus_last_user_activity", String(now));
+      } catch (e) {}
+
+      // If user returns after being AFK for longer than timeout and NO timer is running:
+      const current = readStorageState() || stateRef.current;
+      const isTimerRunning = Boolean(current?.isRunning);
+
+      if (!isTimerRunning && !showIdleCoachModal && !showPresenceModal && !showBreakGateModal && !showReflectionModal && !showCycleCompleteModal && !showBurnoutModal) {
+        let afkEnabled = true;
+        let afkMinutes = 1;
+        try {
+          const raw = localStorage.getItem("ifocus_timer_preferences");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.afkCoachEnabled !== undefined) afkEnabled = Boolean(parsed.afkCoachEnabled);
+            if (parsed.afkCoachMinutes !== undefined) afkMinutes = Number(parsed.afkCoachMinutes) || 1;
+          }
+        } catch (e) {}
+
+        const thresholdMs = Math.max(30000, afkMinutes * 60 * 1000);
+        if (afkEnabled && idleMs >= thresholdMs) {
+          triggerIdleCoachIntervention(false, afkMinutes);
+        }
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        handleUserActivity();
+        const current = readStorageState() || stateRef.current;
+        // If presence paused while away or screen locked on mobile, re-prompt and re-chime
+        if (current?.presencePaused) {
+          setShowPresenceModal(true);
+          playPresenceChime();
+        }
+      }
+    };
+
+    const events = ["mousemove", "keydown", "mousedown", "touchstart", "touchmove", "scroll", "wheel", "pointerdown", "click"];
+    events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
 
     return () => {
-      window.removeEventListener("mousemove", handleUserActivity);
-      window.removeEventListener("keydown", handleUserActivity);
-      window.removeEventListener("mousedown", handleUserActivity);
-      window.removeEventListener("touchstart", handleUserActivity);
-      window.removeEventListener("scroll", handleUserActivity);
+      events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+    };
+  }, [isAdmin, pathname, readStorageState, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, triggerIdleCoachIntervention]);
+
+  // Test Listeners for Idle Coach & Burnout Check
+  useEffect(() => {
+    const handleTestTrigger = (e) => {
+      let mins = e?.detail?.minutes;
+      if (!mins) {
+        try {
+          const raw = localStorage.getItem("ifocus_timer_preferences");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.afkCoachMinutes !== undefined) mins = Number(parsed.afkCoachMinutes);
+          }
+        } catch (err) {}
+      }
+      triggerIdleCoachIntervention(true, mins || 1);
+    };
+    const handleBurnoutTest = (e) => {
+      let mins = e?.detail?.minutes;
+      if (!mins) {
+        try {
+          const raw = localStorage.getItem("ifocus_timer_preferences");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.burnoutCheckMinutes !== undefined) mins = Number(parsed.burnoutCheckMinutes);
+          }
+        } catch (err) {}
+      }
+      triggerBurnoutCheck(true, mins || 20);
+    };
+    const handleTaskCompleted = () => {
+      tasksCompletedInSessionRef.current += 1;
+    };
+
+    window.addEventListener("ifocus_trigger_afk_coach_test", handleTestTrigger);
+    window.addEventListener("ifocus_trigger_burnout_check_test", handleBurnoutTest);
+    window.addEventListener("ifocus_task_completed", handleTaskCompleted);
+
+    return () => {
+      window.removeEventListener("ifocus_trigger_afk_coach_test", handleTestTrigger);
+      window.removeEventListener("ifocus_trigger_burnout_check_test", handleBurnoutTest);
+      window.removeEventListener("ifocus_task_completed", handleTaskCompleted);
+    };
+  }, [triggerIdleCoachIntervention, triggerBurnoutCheck]);
+
+  // Idle AFK Coach Inactivity Watcher (When NO timer is running)
+  useEffect(() => {
+    if (isAdmin || pathname.startsWith("/admin") || pathname === "/login" || pathname === "/signup" || pathname === "/" || !session?.user) return;
+
+    const checkAfkInactivity = () => {
+      // 1. MUST NOT have an actively ticking timer
+      const current = readStorageState() || stateRef.current;
+      const isTimerRunning = Boolean(current?.isRunning);
+
+      if (isTimerRunning) {
+        lastActivityRef.current = Date.now();
+        try {
+          localStorage.setItem("ifocus_last_user_activity", String(Date.now()));
+        } catch (e) {}
+        return;
+      }
+
+      // 2. Do not trigger if any modal is currently visible
+      if (showIdleCoachModal || showPresenceModal || showBreakGateModal || showReflectionModal || showCycleCompleteModal || showBurnoutModal) {
+        return;
+      }
+
+      // 3. Read AFK preferences
+      let afkEnabled = true;
+      let afkMinutes = 1;
+      try {
+        const raw = localStorage.getItem("ifocus_timer_preferences");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.afkCoachEnabled !== undefined) afkEnabled = Boolean(parsed.afkCoachEnabled);
+          if (parsed.afkCoachMinutes !== undefined) afkMinutes = Number(parsed.afkCoachMinutes) || 1;
+        }
+      } catch (e) {}
+
+      if (!afkEnabled) return;
+
+      const idleDurationMs = Date.now() - (lastActivityRef.current || Date.now());
+      const thresholdMs = Math.max(30000, afkMinutes * 60 * 1000); // e.g. 5m = 300,000ms
+
+      if (idleDurationMs >= thresholdMs) {
+        // Inactivity threshold exceeded! Trigger AFK Coach Intervention!
+        triggerIdleCoachIntervention(false, afkMinutes);
+      }
+    };
+
+    const intervalId = setInterval(checkAfkInactivity, 1000);
+    return () => clearInterval(intervalId);
+  }, [pathname, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, readStorageState, isAdmin, triggerIdleCoachIntervention]);
+
+  // Automatic Offline Re-sync Handler (ISO/IEC 25010 Item 8)
+  useEffect(() => {
+    const syncPendingOfflineSessions = async () => {
+      try {
+        const raw = localStorage.getItem('ifocus_pending_study_sessions');
+        if (!raw) return;
+        const pending = JSON.parse(raw);
+        if (!Array.isArray(pending) || pending.length === 0) return;
+
+        const remaining = [];
+        for (const sessionItem of pending) {
+          try {
+            const res = await fetch('/api/study-sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sessionItem)
+            });
+            if (!res.ok) remaining.push(sessionItem);
+          } catch (e) {
+            remaining.push(sessionItem);
+          }
+        }
+
+        if (remaining.length === 0) {
+          localStorage.removeItem('ifocus_pending_study_sessions');
+        } else {
+          localStorage.setItem('ifocus_pending_study_sessions', JSON.stringify(remaining));
+        }
+      } catch (err) {}
+    };
+
+    window.addEventListener('online', syncPendingOfflineSessions);
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      syncPendingOfflineSessions();
+    }
+
+    return () => {
+      window.removeEventListener('online', syncPendingOfflineSessions);
     };
   }, []);
 
@@ -577,6 +907,16 @@ export default function GlobalTimer() {
         if (saved) {
           setTimerState(saved);
           if (saved.presencePaused) setShowPresenceModal(true);
+          if (saved.breakGatePending) {
+            try {
+              const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
+              if (rawDeck) {
+                const parsed = JSON.parse(rawDeck);
+                setActiveBreakGateDeck(parsed);
+                setShowBreakGateModal(true);
+              }
+            } catch (err) {}
+          }
         }
       }
     };
@@ -615,6 +955,16 @@ export default function GlobalTimer() {
       }
       setTimerState(initial);
       if (initial.presencePaused) setShowPresenceModal(true);
+      if (initial.breakGatePending) {
+        try {
+          const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
+          if (rawDeck) {
+            const parsed = JSON.parse(rawDeck);
+            setActiveBreakGateDeck(parsed);
+            setShowBreakGateModal(true);
+          }
+        } catch (err) {}
+      }
     }
 
     const handleTestReflection = () => {
@@ -648,7 +998,8 @@ export default function GlobalTimer() {
         }
       }
       const currentCount = current.sessionCount || 1;
-      const nextCount = currentCount + 1;
+      const isPreSessionRest = Boolean(current.isAiRestRecovery);
+      const nextCount = isPreSessionRest ? currentCount : currentCount + 1;
 
       let focusDuration = 25 * 60;
       if (current.timerPreset === "50/10") focusDuration = 50 * 60;
@@ -700,6 +1051,13 @@ export default function GlobalTimer() {
         window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: maxSessions } }));
         return;
       }
+
+      try {
+        localStorage.removeItem("ifocus_ai_rest_recovery");
+        localStorage.removeItem("ifocus_recovery_completed");
+        localStorage.removeItem("ifocus_cognitive_reset");
+      } catch (e) {}
+      window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated"));
 
       const nextFocusState = {
         ...current,
@@ -782,13 +1140,19 @@ export default function GlobalTimer() {
           }
         } catch (e) {}
 
-        const intervalSeconds = Math.max(30, activePresenceInterval * 60);
+        // Minimum active presence check interval is 60 seconds (1 minute)
+        const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
 
         // Track focus seconds elapsed since the last confirmed presence check
         let baseRemaining = current.lastPresenceRemaining !== undefined && current.lastPresenceRemaining !== null
           ? Number(current.lastPresenceRemaining)
           : (current.timeLeft !== undefined ? Number(current.timeLeft) : Number(totalTime));
 
+        // Guard: baseRemaining cannot exceed the session's totalTime, and cannot be lower than current remainingSeconds
+        if (baseRemaining > totalTime) {
+          baseRemaining = totalTime;
+          current.lastPresenceRemaining = totalTime;
+        }
         if (baseRemaining < remainingSeconds) {
           baseRemaining = remainingSeconds;
           current.lastPresenceRemaining = remainingSeconds;
@@ -796,14 +1160,10 @@ export default function GlobalTimer() {
 
         const focusSecondsSinceLastCheck = Math.max(0, baseRemaining - remainingSeconds);
 
-        // A. AFK Inactivity Check: user has not touched mouse or keyboard for the interval
-        const idleTimeMs = now - lastActivityRef.current;
-        const isAfk = idleTimeMs >= intervalSeconds * 1000 && focusSecondsSinceLastCheck >= 30;
-
-        // B. Periodic Elapsed Focus Time Check: user completed a full interval of active focus
+        // Periodic Elapsed Focus Time Check: triggers strictly when the full interval has elapsed (e.g. exactly 60s for 1m, 300s for 5m)
         const isIntervalReached = focusSecondsSinceLastCheck >= intervalSeconds;
 
-        if (activePresenceEnabled && (isIntervalReached || isAfk)) {
+        if (activePresenceEnabled && isIntervalReached) {
           // Immediately pause timer! It CANNOT continue until user clicks confirm!
           const pausedState = {
             ...current,
@@ -817,13 +1177,43 @@ export default function GlobalTimer() {
           commitStorageState(pausedState, true);
           setShowPresenceModal(true);
           playPresenceChime();
+          triggerVibration([250, 100, 250]);
+          sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
           lastActivityRef.current = Date.now();
           return;
+        }
+
+        // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
+        if (!burnoutCheckedThisSessionRef.current) {
+          let burnoutCheckEnabled = true;
+          let burnoutCheckMinutes = 20;
+          try {
+            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
+            if (rawPrefs) {
+              const prefs = JSON.parse(rawPrefs);
+              if (prefs.burnoutCheckEnabled !== undefined) {
+                burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
+              }
+              if (prefs.burnoutCheckMinutes) {
+                burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
+              }
+            }
+          } catch (e) {}
+
+          const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
+          const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
+
+          if (burnoutCheckEnabled && focusElapsedMins >= burnoutCheckMinutes && tasksCompletedInSessionRef.current === 0) {
+            burnoutCheckedThisSessionRef.current = true;
+            triggerBurnoutCheck(false, burnoutCheckMinutes);
+          }
         }
       }
 
       // --- 2. TIMER FINISHED (remainingSeconds === 0) ---
       if (remainingSeconds <= 0) {
+        tasksCompletedInSessionRef.current = 0;
+        burnoutCheckedThisSessionRef.current = false;
         playCompletionAlarm();
 
         // Check if an active deck is set for BreakGate
@@ -937,17 +1327,35 @@ export default function GlobalTimer() {
                 streak: Math.max(1, streakCount),
               })
             );
+            window.dispatchEvent(new CustomEvent("ifocus_stats_updated"));
 
-            // Cloud Sync to PostgreSQL Database for Admin & Institutional Overview
-            fetch('/api/study-sessions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                duration: focusMins * 60,
-                score: 100,
-                deckId: breakGateDeck?.id || null
-              })
-            }).catch(() => {});
+            // Cloud Sync to PostgreSQL Database with Offline Queue Resilience (ISO/IEC 25010 Item 8)
+            const sessionPayload = {
+              duration: focusMins * 60,
+              score: 100,
+              deckId: breakGateDeck?.id || null,
+              createdAt: new Date().toISOString()
+            };
+
+            const recordPendingOffline = (payload) => {
+              try {
+                const pending = JSON.parse(localStorage.getItem('ifocus_pending_study_sessions') || '[]');
+                pending.push(payload);
+                localStorage.setItem('ifocus_pending_study_sessions', JSON.stringify(pending));
+              } catch (e) {}
+            };
+
+            if (typeof navigator !== 'undefined' && !navigator.onLine) {
+              recordPendingOffline(sessionPayload);
+            } else {
+              fetch('/api/study-sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sessionPayload)
+              }).catch(() => {
+                recordPendingOffline(sessionPayload);
+              });
+            }
           } catch (e) {
             console.warn("Could not save session stats:", e);
           }
@@ -1033,6 +1441,9 @@ export default function GlobalTimer() {
           } catch (e) {}
 
           // Transition to Break mode
+          playCompletionAlarm();
+          triggerVibration([250, 100, 250]);
+          sendSystemNotification("Focus Session Complete", "Great job! Time for your scheduled break.");
           const nextBreakState = {
             ...current,
             isFocus: false,
@@ -1052,8 +1463,23 @@ export default function GlobalTimer() {
           return;
         } else {
           // Break finished -> Switch to next focus session with Custom timer support
-          const nextCount = currentCount + 1;
+          const isPreSessionRest = Boolean(current.isAiRestRecovery);
+          const nextCount = isPreSessionRest ? currentCount : currentCount + 1;
           const isBreakCycleFinished = nextCount > maxSessions;
+
+          if (isPreSessionRest) {
+            try {
+              localStorage.setItem("ifocus_recovery_completed", String(Date.now()));
+              localStorage.setItem("ifocus_cognitive_reset", String(Date.now()));
+              localStorage.removeItem("ifocus_ai_rest_recovery");
+              localStorage.removeItem("ifocus_latest_telemetry");
+              localStorage.removeItem("ifocus_active_idle_alert");
+              const uName = session?.user?.name || session?.user?.username || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_name') : '') || 'Student';
+              localStorage.removeItem(`ifocus_telemetry_insight_${uName}`);
+              localStorage.removeItem('ifocus_telemetry_insight_anonymous');
+            } catch (e) {}
+            window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated"));
+          }
 
           if (isBreakCycleFinished) {
             playCompletionAlarm();
@@ -1091,6 +1517,20 @@ export default function GlobalTimer() {
               const tPrefs = JSON.parse(rawTimerPrefs);
               if (tPrefs.autoStartFocus !== undefined) autoStartFocusPref = tPrefs.autoStartFocus;
             }
+          } catch (e) {}
+
+          try {
+            localStorage.removeItem("ifocus_ai_rest_recovery");
+          } catch (e) {}
+
+          playCompletionAlarm();
+          triggerVibration([300, 150, 300]);
+          sendSystemNotification("Break Complete", `Your break has ended. Ready to continue Session ${nextCount}?`);
+          try {
+            localStorage.setItem("ifocus_applied_toast", JSON.stringify({
+              title: `Break Finished • Next: Session ${nextCount}`,
+              message: `Your break is complete. Tap Start to continue Session ${nextCount}.`
+            }));
           } catch (e) {}
 
           const nextFocusState = {
@@ -1132,6 +1572,7 @@ export default function GlobalTimer() {
             isRunning: true,
             isFocus: current.isFocus,
             totalTime: current.totalTime,
+            isAiRestRecovery: Boolean(current.isAiRestRecovery),
           },
         })
       );
@@ -1184,41 +1625,39 @@ export default function GlobalTimer() {
     setShowBreakGateModal(false);
     const current = readStorageState() || timerState;
 
-    // Check if user completed their planned cycle target
     let maxSessions = 4;
-    if (current.timerPreset === "Custom") {
-      if (current.customSessions) {
-        maxSessions = Number(current.customSessions) || 1;
-      } else {
-        try {
-          const customStored = localStorage.getItem("ifocus_custom_timer");
-          if (customStored) {
-            const parsed = JSON.parse(customStored);
-            if (parsed.customSessions) maxSessions = Number(parsed.customSessions) || 1;
-          }
-        } catch (e) {}
-      }
+    let focusDuration = 25 * 60;
+    let breakDuration = 5 * 60;
+
+    if (current.timerPreset === "50/10") {
+      focusDuration = 50 * 60;
+      breakDuration = 10 * 60;
+    } else if (current.timerPreset === "15/3") {
+      focusDuration = 15 * 60;
+      breakDuration = 3 * 60;
+    } else if (current.timerPreset === "90/20") {
+      focusDuration = 90 * 60;
+      breakDuration = 20 * 60;
+    } else if (current.timerPreset === "Custom") {
+      if (current.customSessions) maxSessions = Number(current.customSessions) || 1;
+      if (current.customWorkDuration) focusDuration = current.customWorkDuration;
+      if (current.customBreakDuration) breakDuration = current.customBreakDuration;
+
+      try {
+        const customStored = localStorage.getItem("ifocus_custom_timer");
+        if (customStored) {
+          const parsed = JSON.parse(customStored);
+          if (parsed.customSessions && !current.customSessions) maxSessions = Number(parsed.customSessions) || 1;
+          if (parsed.customWorkDuration && !current.customWorkDuration) focusDuration = parsed.customWorkDuration;
+          if (parsed.customBreakDuration && !current.customBreakDuration) breakDuration = parsed.customBreakDuration;
+        }
+      } catch (e) {}
     }
+    if (!breakDuration) breakDuration = 5 * 60;
+
     const currentCount = current.sessionCount || 1;
     if (currentCount >= maxSessions) {
       playCompletionAlarm();
-      let focusDuration = 25 * 60;
-      if (current.timerPreset === "50/10") focusDuration = 50 * 60;
-      else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
-      else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
-      else if (current.timerPreset === "Custom") {
-        if (current.customWorkDuration) focusDuration = current.customWorkDuration;
-        else {
-          try {
-            const customStored = localStorage.getItem("ifocus_custom_timer");
-            if (customStored) {
-              const parsed = JSON.parse(customStored);
-              if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
-            }
-          } catch(e) {}
-        }
-      }
-
       const completedCycleState = {
         ...current,
         isFocus: true,
@@ -1244,38 +1683,6 @@ export default function GlobalTimer() {
       window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: currentCount } }));
       return;
     }
-    let breakDuration = current.totalTime;
-    let focusDuration = 25 * 60;
-    if (current.timerPreset === "50/10") focusDuration = 50 * 60;
-    else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
-    else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
-    else if (current.timerPreset === "Custom") {
-      if (current.customWorkDuration) focusDuration = current.customWorkDuration;
-      else {
-        try {
-          const customStored = localStorage.getItem("ifocus_custom_timer");
-          if (customStored) {
-            const parsed = JSON.parse(customStored);
-            if (parsed.customWorkDuration) focusDuration = parsed.customWorkDuration;
-          }
-        } catch(e) {}
-      }
-    }
-
-    if (current.timerPreset === "Custom") {
-      if (current.customBreakDuration) {
-        breakDuration = current.customBreakDuration;
-      } else {
-        try {
-          const customStored = localStorage.getItem("ifocus_custom_timer");
-          if (customStored) {
-            const parsed = JSON.parse(customStored);
-            if (parsed.customBreakDuration) breakDuration = parsed.customBreakDuration;
-          }
-        } catch(e) {}
-      }
-    }
-    if (!breakDuration) breakDuration = 5 * 60;
 
     let reflectionPromptEnabled = true;
     try {
@@ -1990,6 +2397,260 @@ export default function GlobalTimer() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-secondary, #f1f5f9)")}
               >
                 Stay Paused
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Idle AFK Coach Intervention Toast (iOS Spring Toast Style - 100% Emoji-Free) */}
+      {showIdleCoachModal && pathname !== '/' && pathname !== '/login' && pathname !== '/signup' && session?.user && (
+        <div className="ios-notification-toast" style={{ zIndex: 99999 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-accent)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+              <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {isTestIdleCoachModal ? "Coach has noticed something (AFK Test)" : "Coach has noticed something"}
+              </h4>
+            </div>
+            <button
+              onClick={() => {
+                setShowIdleCoachModal(false);
+                lastActivityRef.current = Date.now();
+              }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.95rem', padding: '2px', display: 'flex', alignItems: 'center' }}
+              aria-label="Close notification"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 0.85rem 0', lineHeight: '1.45' }}>
+            You have been idle for {idleModalMinutes} {idleModalMinutes === 1 ? 'minute' : 'minutes'} with no timer running. Feeling stuck or experiencing task friction? Let us get back on track.
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setShowIdleCoachModal(false);
+                lastActivityRef.current = Date.now();
+
+                const userName = session?.user?.name || session?.user?.username || (typeof window !== 'undefined' ? localStorage.getItem('ifocus_user_name') : '') || 'Student';
+                const minText = `${idleModalMinutes} ${idleModalMinutes === 1 ? 'minute' : 'minutes'}`;
+                const insightData = {
+                  type: 'idle',
+                  state: 'idle',
+                  sentiment: 'Inactivity & Task Friction',
+                  idleMinutes: idleModalMinutes,
+                  timestamp: new Date().toISOString(),
+                  reason: `Inactivity detected: You have been idle for ${minText} with no active timer. Student appears stuck, hesitant, or experiencing task friction.`,
+                  actionPlan: `You have been idle for ${minText} without starting a focus session. Feeling stuck on where to begin? Break your upcoming task into just one simple step, or start a gentle 15m focus session to build momentum.`,
+                  metrics: { dwellTime: 0, flightTime: 0, errorRate: 0 }
+                };
+
+                try {
+                  localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(insightData));
+                  localStorage.setItem('ifocus_telemetry_insight_anonymous', JSON.stringify(insightData));
+                  localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(insightData));
+                  localStorage.setItem('ifocus_active_idle_alert', JSON.stringify(insightData));
+                  window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: insightData }));
+                } catch (e) {}
+
+                if (pathname !== "/coach") {
+                  router.push("/coach");
+                }
+              }}
+              style={{ flex: 1, padding: '0.5rem', fontSize: '0.82rem', borderRadius: '9999px', margin: 0, height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+            >
+              View Coach Strategy
+            </button>
+            <button
+              onClick={() => {
+                setShowIdleCoachModal(false);
+                lastActivityRef.current = Date.now();
+              }}
+              style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer', height: '36px' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Global Task Stagnation & Burnout Check Modal (100% Emoji-Free) */}
+      {showBurnoutModal && (
+        <div
+          id="globalBurnoutCheckModal"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(10px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            animation: "fadeIn 0.25s ease-out forwards",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--card-bg, #ffffff)",
+              border: "1.5px solid rgba(217, 119, 6, 0.3)",
+              borderRadius: "24px",
+              padding: "2rem 2.2rem",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "1.15rem",
+            }}
+          >
+            {/* Visual Icon */}
+            <div
+              style={{
+                width: "58px",
+                height: "58px",
+                borderRadius: "50%",
+                background: "rgba(217, 119, 6, 0.12)",
+                border: "1px solid rgba(217, 119, 6, 0.28)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#d97706",
+              }}
+            >
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+            </div>
+
+            {/* Badge */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "0.3rem 0.85rem",
+                borderRadius: "9999px",
+                background: isTestBurnoutModal ? "rgba(59, 130, 246, 0.12)" : "rgba(217, 119, 6, 0.12)",
+                color: isTestBurnoutModal ? "#1d4ed8" : "#b45309",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+              }}
+            >
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isTestBurnoutModal ? "#2563eb" : "#d97706", boxShadow: "0 0 8px rgba(217, 119, 6, 0.6)" }} />
+              {isTestBurnoutModal ? "Burnout Test Preview" : "AI Study Coach Check-in"}
+            </div>
+
+            {/* Title & Body */}
+            <div>
+              <h3
+                style={{
+                  fontSize: "1.35rem",
+                  fontWeight: 800,
+                  color: "var(--text-primary)",
+                  margin: "0 0 0.5rem 0",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Taking a while on this focus block?
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.92rem",
+                  color: "var(--text-secondary)",
+                  lineHeight: "1.55",
+                  margin: 0,
+                }}
+              >
+                You have been focusing for {burnoutModalMinutes} minutes without completing a task from your list. If you are experiencing task friction or feeling stuck, consider breaking your task into smaller steps or taking a brief mental pause.
+              </p>
+            </div>
+
+            {/* Action Buttons (Go to Pomodoro Timer & Dismiss only) */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.65rem",
+                width: "100%",
+                marginTop: "0.4rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setShowBurnoutModal(false);
+                  if (pathname !== "/dashboard") {
+                    router.push("/dashboard");
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.92rem",
+                  fontWeight: 700,
+                  borderRadius: "12px",
+                  margin: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>Go to Pomodoro Timer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBurnoutModal(false);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  fontSize: "0.86rem",
+                  fontWeight: 600,
+                  borderRadius: "12px",
+                  background: "rgba(0, 0, 0, 0.04)",
+                  border: "1px solid rgba(0, 0, 0, 0.08)",
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                  margin: 0,
+                  transition: "background 0.15s ease",
+                }}
+              >
+                Dismiss
               </button>
             </div>
           </div>

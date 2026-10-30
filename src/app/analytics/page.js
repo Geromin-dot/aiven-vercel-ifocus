@@ -46,9 +46,9 @@ export default function AnalyticsPage() {
                 localStorage.setItem('ifocus_session_history', JSON.stringify(marked));
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [status]);
 
@@ -91,46 +91,90 @@ export default function AnalyticsPage() {
 
   const loadComplianceData = useCallback(() => {
     try {
-      // 1. BreakGate Compliance (Events: completed vs skipped)
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      let recoveryCompletedTime = 0;
+      try {
+        const rc = localStorage.getItem('ifocus_recovery_completed');
+        if (rc) recoveryCompletedTime = Number(rc) || 0;
+      } catch (e) {}
+
+      let cognitiveResetTime = 0;
+      try {
+        const cr = localStorage.getItem('ifocus_cognitive_reset');
+        if (cr) cognitiveResetTime = Number(cr) || 0;
+      } catch (e) {}
+
+      const effectiveResetTime = Math.max(recoveryCompletedTime, cognitiveResetTime);
+
+      // 1. BreakGate Compliance (Events: completed vs skipped - Daily Reset Aware)
       let gateComp = {
         label: '100% On-Track',
         color: '#16a34a',
         bg: 'rgba(22, 163, 74, 0.12)',
-        subtext: 'Break challenges met on schedule'
+        subtext: recoveryCompletedTime >= todayStart
+          ? 'Recovery break completed: cognitive baseline restored'
+          : 'Fresh study day: ready for your first focus session'
       };
 
       const rawEvents = localStorage.getItem('ifocus_breakgate_events');
       if (rawEvents) {
-        const events = JSON.parse(rawEvents);
-        if (Array.isArray(events) && events.length > 0) {
-          const completed = events.filter(e => e.status === 'completed').length;
-          const total = events.length;
-          const pct = Math.round((completed / total) * 100);
-          const latest = events[events.length - 1];
+        try {
+          const events = JSON.parse(rawEvents);
+          if (Array.isArray(events) && events.length > 0) {
+            // Daily reset: strictly isolate events logged today (starting from 12:00 AM)
+            const todayEvents = events.filter(e => {
+              const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
+              return t >= todayStart;
+            });
 
-          if (latest?.status === 'skipped') {
-            gateComp = {
-              label: `${pct}% Pacing Lag`,
-              color: '#d97706',
-              bg: 'rgba(217, 119, 6, 0.12)',
-              subtext: 'Latest BreakGate challenge was skipped'
-            };
-          } else if (pct < 60) {
-            gateComp = {
-              label: `${pct}% Low Compliance`,
-              color: '#dc2626',
-              bg: 'rgba(220, 38, 38, 0.12)',
-              subtext: `${completed} of ${total} challenges completed`
-            };
-          } else {
-            gateComp = {
-              label: `${pct}% On-Track`,
-              color: '#16a34a',
-              bg: 'rgba(22, 163, 74, 0.12)',
-              subtext: `${completed} of ${total} challenges completed`
-            };
+            // If recovery was completed today, any skipped BreakGate events that occurred BEFORE recovery completed have been reconciled!
+            const unrecoveredEvents = recoveryCompletedTime >= todayStart
+              ? todayEvents.filter(e => {
+                  const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
+                  return t > recoveryCompletedTime;
+                })
+              : todayEvents;
+
+            if (unrecoveredEvents.length > 0) {
+              const total = unrecoveredEvents.length;
+              const completed = unrecoveredEvents.filter(e => e.status === 'completed').length;
+              const pct = Math.round((completed / total) * 100);
+              const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
+
+              if (latest?.status === 'skipped') {
+                gateComp = {
+                  label: `${pct}% Pacing Lag`,
+                  color: '#d97706',
+                  bg: 'rgba(217, 119, 6, 0.12)',
+                  subtext: `${completed} of ${total} challenges completed today`
+                };
+              } else if (pct < 60) {
+                gateComp = {
+                  label: `${pct}% Low Compliance`,
+                  color: '#dc2626',
+                  bg: 'rgba(220, 38, 38, 0.12)',
+                  subtext: `${completed} of ${total} challenges completed today`
+                };
+              } else {
+                gateComp = {
+                  label: `${pct}% On-Track`,
+                  color: '#16a34a',
+                  bg: 'rgba(22, 163, 74, 0.12)',
+                  subtext: `${completed} of ${total} challenges completed today`
+                };
+              }
+            } else if (recoveryCompletedTime >= todayStart) {
+              gateComp = {
+                label: '100% On-Track',
+                color: '#16a34a',
+                bg: 'rgba(22, 163, 74, 0.12)',
+                subtext: 'Recovery break completed: cognitive baseline restored'
+              };
+            }
           }
-        }
+        } catch (e) {}
       }
 
       // 2. Focus-to-Rest Ratio
@@ -177,27 +221,29 @@ export default function AnalyticsPage() {
             subtext: `${workMin}m focus to ${breakMin}m rest cadence`
           };
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Cognitive Fatigue Status
       let fatigueData = {
         label: 'Low (Resilient)',
         color: '#059669',
         bg: 'rgba(5, 150, 105, 0.12)',
-        subtext: 'Keystroke cadence & stability optimal'
+        subtext: recoveryCompletedTime >= todayStart
+          ? 'Restorative break completed: cognitive baseline restored'
+          : 'Fresh study day: cognitive baseline optimal'
       };
 
       let latestTelem = null;
       try {
         const telemRaw = localStorage.getItem('ifocus_latest_telemetry');
         if (telemRaw) latestTelem = JSON.parse(telemRaw);
-      } catch (e) {}
+      } catch (e) { }
 
       if (!latestTelem) {
         try {
           const insightRaw = localStorage.getItem(`ifocus_telemetry_insight_${userName}`);
           if (insightRaw) latestTelem = JSON.parse(insightRaw);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (!latestTelem) {
@@ -209,11 +255,20 @@ export default function AnalyticsPage() {
               const lastEntry = list[0];
               latestTelem = {
                 state: lastEntry.state,
-                reason: lastEntry.text
+                reason: lastEntry.text,
+                timestamp: lastEntry.date || lastEntry.timestamp || lastEntry.createdAt
               };
             }
           }
-        } catch (e) {}
+        } catch (e) { }
+      }
+
+      // Daily Reset & Recovery Aware: If telemetry/reflection is from yesterday or resolved by recovery/reset, clear it
+      if (latestTelem) {
+        const telemTime = latestTelem.timestamp ? new Date(latestTelem.timestamp).getTime() : (latestTelem.date ? new Date(latestTelem.date).getTime() : null);
+        if (telemTime && (telemTime < todayStart || (effectiveResetTime > 0 && telemTime <= effectiveResetTime))) {
+          latestTelem = null;
+        }
       }
 
       if (latestTelem) {
@@ -328,7 +383,7 @@ export default function AnalyticsPage() {
       let storedMastered = [];
       try {
         storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
-      } catch (e) {}
+      } catch (e) { }
 
       fetch('/api/decks')
         .then(res => res.json())
@@ -341,8 +396,8 @@ export default function AnalyticsPage() {
               cardTotal += cards.length;
               cards.forEach(c => {
                 const isMastered = Boolean(
-                  c.mastered || 
-                  (c.front && storedMastered.includes(c.front)) || 
+                  c.mastered ||
+                  (c.front && storedMastered.includes(c.front)) ||
                   (c.id && storedMastered.includes(c.id))
                 );
                 if (isMastered) masteredTotal++;
@@ -352,7 +407,7 @@ export default function AnalyticsPage() {
             setMasteredCount(masteredTotal);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     };
 
     loadDeckMastery();
@@ -557,7 +612,7 @@ export default function AnalyticsPage() {
           }
         }
       `}</style>
-      
+
       {/* Header Bar */}
       <div style={{ flexShrink: 0, marginBottom: '0.05rem' }}>
         <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
@@ -583,9 +638,9 @@ export default function AnalyticsPage() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <span style={{ fontSize: '0.74rem', color: '#92400e', fontWeight: 600 }}>
               Offline Local Mode: Metrics stored locally. Sign in to sync across devices.
@@ -611,7 +666,7 @@ export default function AnalyticsPage() {
 
       {/* 4 Core Stat Cards with Large Punchy Numbers & Icons */}
       <div className="analytics-stat-grid">
-        
+
         {/* 1. Today's Focus */}
         <div style={{
           background: '#ffffff',
@@ -776,7 +831,7 @@ export default function AnalyticsPage() {
 
       {/* Main 2x2 Dashboard Grid */}
       <div className="analytics-grid-2x2">
-        
+
         {/* Row 1, Col 1: Weekly Focus Bar Chart */}
         <div style={{
           padding: '0.9rem 1.15rem',
@@ -874,7 +929,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, justifyContent: 'center', padding: '0.35rem 0' }}>
-            
+
             {/* Tile 1 */}
             <div style={{
               padding: '0.65rem 0.95rem',
@@ -888,7 +943,7 @@ export default function AnalyticsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.gateCompliance.bg}`, color: complianceData.gateCompliance.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                 </div>
                 <div>
@@ -914,8 +969,8 @@ export default function AnalyticsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.focusRestRatio.bg}`, color: complianceData.focusRestRatio.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 14 14"/>
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 14 14" />
                   </svg>
                 </div>
                 <div>
@@ -941,7 +996,7 @@ export default function AnalyticsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.cognitiveFatigue.bg}`, color: complianceData.cognitiveFatigue.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                   </svg>
                 </div>
                 <div>
@@ -1017,12 +1072,12 @@ export default function AnalyticsPage() {
                       }}>
                         {session.type === 'breakgate' ? (
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                           </svg>
                         ) : (
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
                           </svg>
                         )}
                       </div>

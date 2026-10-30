@@ -81,12 +81,15 @@ export default function CommandCenterPage() {
   const [customSessions, setCustomSessions] = useState(1);
   const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState('');
   const [showQuitModal, setShowQuitModal] = useState(false);
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [saveSessionToast, setSaveSessionToast] = useState({ show: false, message: '' });
 
   // AI-Adapted Timer State & Override Confirmation Prompt
   const [isAiAdjustedTimer, setIsAiAdjustedTimer] = useState(false);
   const [aiAdjustedDetails, setAiAdjustedDetails] = useState(null);
   const [pendingTimerChange, setPendingTimerChange] = useState(null);
+  const [isAiRestRecovery, setIsAiRestRecovery] = useState(false);
+  const [showAiRestExitModal, setShowAiRestExitModal] = useState(false);
 
   const getEntryAiReply = (entry) => {
     if (entry?.aiReply) return entry.aiReply;
@@ -180,6 +183,7 @@ export default function CommandCenterPage() {
         sessionCount: 1,
         presencePaused: false,
         lastPresenceElapsed: 0,
+        lastPresenceRemaining: wMin * 60,
         breakGatePending: false
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
@@ -222,6 +226,28 @@ export default function CommandCenterPage() {
     metrics: { dwellTime: 0, flightTime: 0, errorRate: 0 }
   });
 
+  const [dailyFocusStats, setDailyFocusStats] = useState({ minutes: 0, sessions: 0, streak: 1 });
+
+  useEffect(() => {
+    const updateStats = () => {
+      try {
+        const s = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
+        setDailyFocusStats({
+          minutes: s.minutes || 0,
+          sessions: s.sessions || 0,
+          streak: s.streak || 1
+        });
+      } catch (e) {}
+    };
+    updateStats();
+    window.addEventListener('ifocus_stats_updated', updateStats);
+    window.addEventListener('storage', updateStats);
+    return () => {
+      window.removeEventListener('ifocus_stats_updated', updateStats);
+      window.removeEventListener('storage', updateStats);
+    };
+  }, []);
+
   const keydownTimesRef = useRef({});
   const lastKeyupTimeRef = useRef(null);
   const dwellTimesRef = useRef([]);
@@ -229,6 +255,7 @@ export default function CommandCenterPage() {
   const backspaceCountRef = useRef(0);
   const totalKeystrokesRef = useRef(0);
   const anomalyTriggeredRef = useRef(false);
+  const recentKeyTimestampsRef = useRef([]);
 
   // Comprehensive Frustration / Profanity / Anxiety Trigger Words (Legacy Prototype Parity)
   const profanityList = [
@@ -306,7 +333,7 @@ export default function CommandCenterPage() {
     }
   };
 
-  const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio) => {
+  const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio, customTitle = "Coach has noticed something") => {
     const telemetryData = {
       timestamp: new Date().toISOString(),
       reason: reason,
@@ -328,6 +355,7 @@ export default function CommandCenterPage() {
 
     setTelemetryToast({
       show: true,
+      title: customTitle,
       reason: reason,
       actionPlan: actionPlan,
       metrics: telemetryData.metrics
@@ -415,6 +443,46 @@ export default function CommandCenterPage() {
     if (ignoredKeys.includes(e.key)) return;
 
     const now = performance.now();
+    keydownTimesRef.current[e.code] = now;
+
+    // 1. Multiple Simultaneous Keys Down Check (Hammering / Dabog: 5 or more keys held together)
+    const simultaneousKeysDown = Object.keys(keydownTimesRef.current).length;
+    if (simultaneousKeysDown >= 5 && !anomalyTriggeredRef.current) {
+      anomalyTriggeredRef.current = true;
+      const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
+      const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
+      const backspaceRatio = totalKeystrokesRef.current > 0 ? backspaceCountRef.current / totalKeystrokesRef.current : 0;
+
+      triggerTelemetryAlert(
+        "Multiple simultaneous keys detected. It looks like you might be feeling overwhelmed or experiencing keyboard friction.",
+        "Take your hands off the keyboard for a moment. Take a slow, deep breath to reset before writing your reflection.",
+        avgDwell, avgFlight, backspaceRatio,
+        "Coach has noticed something"
+      );
+    }
+
+    // 2. High-speed Keyboard Spamming / Key Mashing Check (e.g. rapid gibberish spamming)
+    recentKeyTimestampsRef.current.push(now);
+    if (recentKeyTimestampsRef.current.length > 8) {
+      recentKeyTimestampsRef.current.shift();
+    }
+    if (recentKeyTimestampsRef.current.length >= 6) {
+      const windowDuration = now - recentKeyTimestampsRef.current[0];
+      // 6 keystrokes in under 320ms indicates rapid key spamming / keyboard mashing
+      if (windowDuration < 320 && !anomalyTriggeredRef.current) {
+        anomalyTriggeredRef.current = true;
+        const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
+        const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
+        const backspaceRatio = totalKeystrokesRef.current > 0 ? backspaceCountRef.current / totalKeystrokesRef.current : 0;
+
+        triggerTelemetryAlert(
+          "Unusually rapid keystrokes or key mashing detected. It seems like frustration or cognitive tension.",
+          "Pause for a moment and take a gentle mental breath. You do not have to rush your reflection.",
+          avgDwell, avgFlight, backspaceRatio,
+          "Coach has noticed something"
+        );
+      }
+    }
 
     if (e.repeat) {
       const ignoreRepeatKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
@@ -429,7 +497,8 @@ export default function CommandCenterPage() {
             triggerTelemetryAlert(
               "You seem to be holding down a key. This often indicates frustration or zoning out.",
               "Take your hands off the keyboard for a moment. Close your eyes, take a deep breath, and reset before continuing.",
-              avgDwell, avgFlight, backspaceRatio
+              avgDwell, avgFlight, backspaceRatio,
+              "Coach has noticed something"
             );
           }
         }
@@ -442,7 +511,6 @@ export default function CommandCenterPage() {
       return;
     }
 
-    keydownTimesRef.current[e.code] = now;
     if (e.key === 'Backspace' || e.key === 'Delete') {
       backspaceCountRef.current++;
     }
@@ -785,6 +853,17 @@ export default function CommandCenterPage() {
         if (details) setAiAdjustedDetails(JSON.parse(details));
       }
 
+      // Check if AI Prescribed Rest Recovery is active
+      try {
+        const restStored = localStorage.getItem('ifocus_ai_rest_recovery');
+        if (restStored) {
+          const parsed = JSON.parse(restStored);
+          if (parsed && parsed.active) {
+            setIsAiRestRecovery(true);
+          }
+        }
+      } catch (e) {}
+
       // Check if arriving from AI Coach with applied cadence toast
       const appliedToast = localStorage.getItem('ifocus_applied_toast');
       if (appliedToast) {
@@ -811,6 +890,21 @@ export default function CommandCenterPage() {
         setTimeLeft(e.detail.timeLeft);
         setIsActive(e.detail.isRunning);
         setIsFocus(e.detail.isFocus);
+        if (e.detail.isAiRestRecovery !== undefined) {
+          setIsAiRestRecovery(Boolean(e.detail.isAiRestRecovery));
+        } else {
+          try {
+            const restStored = localStorage.getItem('ifocus_ai_rest_recovery');
+            if (restStored) {
+              const parsed = JSON.parse(restStored);
+              setIsAiRestRecovery(Boolean(parsed && parsed.active));
+            } else {
+              setIsAiRestRecovery(false);
+            }
+          } catch (err) {
+            setIsAiRestRecovery(false);
+          }
+        }
       }
     };
 
@@ -820,6 +914,21 @@ export default function CommandCenterPage() {
         if (e.detail.isRunning !== undefined) setIsActive(e.detail.isRunning);
         if (e.detail.isFocus !== undefined) setIsFocus(e.detail.isFocus);
         if (e.detail.timerPreset) setTimerPreset(e.detail.timerPreset);
+        if (e.detail.isAiRestRecovery !== undefined) {
+          setIsAiRestRecovery(Boolean(e.detail.isAiRestRecovery));
+        } else {
+          try {
+            const restStored = localStorage.getItem('ifocus_ai_rest_recovery');
+            if (restStored) {
+              const parsed = JSON.parse(restStored);
+              setIsAiRestRecovery(Boolean(parsed && parsed.active));
+            } else {
+              setIsAiRestRecovery(false);
+            }
+          } catch (err) {
+            setIsAiRestRecovery(false);
+          }
+        }
         if (e.detail.customSessions !== undefined) setCustomSessions(Number(e.detail.customSessions) || 1);
         if (e.detail.customWorkDuration !== undefined) {
           const wMin = Math.floor(e.detail.customWorkDuration / 60);
@@ -955,6 +1064,10 @@ export default function CommandCenterPage() {
   };
 
   const handleSkipBreak = () => {
+    if (!isFocus && isAiRestRecovery) {
+      setShowAiRestExitModal(true);
+      return;
+    }
     window.dispatchEvent(new CustomEvent('ifocus_skip_break'));
   };
 
@@ -995,6 +1108,15 @@ export default function CommandCenterPage() {
   };
 
   const toggleTimer = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission().catch(() => {});
+      } catch (e) {}
+    }
+    if (!isFocus && isAiRestRecovery && isActive) {
+      setShowAiRestExitModal(true);
+      return;
+    }
     if (!isActive) {
       // User is starting a focus session: check if a BreakGate deck is active
       let hasDeck = Boolean(activeBreakGateDeck);
@@ -1021,6 +1143,8 @@ export default function CommandCenterPage() {
 
   const forceResetTimer = () => {
     setIsActive(false);
+    setSessionCount(1);
+    setIsFocus(true);
     const workMin = parseInt(customWorkTime.min) || 0;
     const workSec = parseInt(customWorkTime.sec) || 0;
     const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
@@ -1031,15 +1155,15 @@ export default function CommandCenterPage() {
 
     let newTime = 25 * 60;
     if (timerPreset === 'Custom') {
-      newTime = isFocus ? customWorkDuration : customBreakDuration;
+      newTime = customWorkDuration;
     } else {
       const focusTime = parseInt(timerPreset.split('/')[0]) || 25;
-      newTime = isFocus ? focusTime * 60 : 5 * 60;
+      newTime = focusTime * 60;
     }
     setTimeLeft(newTime);
     const nextState = {
       isRunning: false,
-      isFocus,
+      isFocus: true,
       timeLeft: newTime,
       totalTime: newTime,
       targetEndTime: null,
@@ -1047,7 +1171,7 @@ export default function CommandCenterPage() {
       customWorkDuration,
       customBreakDuration,
       customSessions: currentCustomSessions,
-      sessionCount,
+      sessionCount: 1,
       presencePaused: false,
       lastPresenceElapsed: 0,
       lastPresenceRemaining: newTime,
@@ -1056,16 +1180,32 @@ export default function CommandCenterPage() {
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
+      window.dispatchEvent(new CustomEvent('ifocus_stats_updated'));
     } catch (e) {}
   };
 
   const resetTimer = () => {
-    const total = getTotalTime();
-    const elapsed = Math.max(0, total - timeLeft);
-    if (isFocus && elapsed >= 15) {
-      setShowQuitModal(true);
+    if (!isFocus && isAiRestRecovery) {
+      setShowAiRestExitModal(true);
       return;
     }
+    setShowResetConfirmModal(true);
+  };
+
+  const confirmExitRestEarly = () => {
+    setShowAiRestExitModal(false);
+    setIsAiRestRecovery(false);
+    try {
+      localStorage.removeItem('ifocus_ai_rest_recovery');
+      localStorage.removeItem('ifocus_recovery_completed');
+      localStorage.removeItem('ifocus_cognitive_reset');
+    } catch (e) {}
+    forceResetTimer();
+    window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+  };
+
+  const confirmResetTimer = () => {
+    setShowResetConfirmModal(false);
     forceResetTimer();
   };
 
@@ -1075,7 +1215,12 @@ export default function CommandCenterPage() {
 
     const total = getTotalTime();
     const elapsed = Math.max(0, total - timeLeft);
-    const focusMins = Math.max(1, Math.round(elapsed / 60));
+    const focusMins = Math.floor(elapsed / 60);
+
+    if (focusMins < 1) {
+      forceResetTimer();
+      return;
+    }
 
     try {
       const history = JSON.parse(localStorage.getItem("ifocus_session_history") || "[]");
@@ -1161,6 +1306,7 @@ export default function CommandCenterPage() {
         sessionCount,
         presencePaused: false,
         lastPresenceElapsed: 0,
+        lastPresenceRemaining: newTime,
         breakGatePending: false
       };
       try {
@@ -1171,6 +1317,10 @@ export default function CommandCenterPage() {
   };
 
   const setPreset = (preset) => {
+    if (!isFocus && isAiRestRecovery) {
+      setShowAiRestExitModal(true);
+      return;
+    }
     if (isAiAdjustedTimer) {
       setPendingTimerChange({ type: 'preset', value: preset });
       return;
@@ -1179,6 +1329,10 @@ export default function CommandCenterPage() {
   };
 
   const handleOpenCustomSettings = () => {
+    if (!isFocus && isAiRestRecovery) {
+      setShowAiRestExitModal(true);
+      return;
+    }
     if (isAiAdjustedTimer) {
       setPendingTimerChange({ type: 'open_custom' });
       return;
@@ -1455,6 +1609,9 @@ export default function CommandCenterPage() {
     
     if (newStatus) {
       playTaskCheckSound(); // Play joyful checkmark double-chime!
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent("ifocus_task_completed", { detail: { id } }));
+      }
     }
     
     try {
@@ -1795,6 +1952,7 @@ export default function CommandCenterPage() {
           sessionCount: 1,
           presencePaused: false,
           lastPresenceElapsed: 0,
+          lastPresenceRemaining: fallbackWork.min * 60,
           breakGatePending: false
         };
         localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
@@ -1851,7 +2009,7 @@ export default function CommandCenterPage() {
       {/* Global audio is managed in GlobalTimer */}
 
       {/* Column 1: Task Command Center (Apple Reminders iOS Style) */}
-      <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.4rem 1.45rem', overflow: 'hidden' }}>
+      <div className="glass-panel dashboard-tasks-column" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, padding: '1.4rem 1.45rem', overflow: 'hidden' }}>
         
         {/* Header Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
@@ -1921,7 +2079,7 @@ export default function CommandCenterPage() {
             }}
           />
           {/* Custom Effort Level Dropdown Pill (iOS Style) */}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
             <button
               type="button"
               onClick={(e) => {
@@ -1942,6 +2100,7 @@ export default function CommandCenterPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
+                flexShrink: 0,
                 transition: 'all 0.18s ease'
               }}
             >
@@ -2061,6 +2220,7 @@ export default function CommandCenterPage() {
               fontWeight: 600,
               borderRadius: '8px',
               cursor: 'pointer',
+              flexShrink: 0,
               transition: 'all 0.2s ease',
               boxShadow: '0 2px 6px rgba(78, 130, 83, 0.3)'
             }}
@@ -2283,7 +2443,7 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Column 2: Pomodoro Timer & Audio Centerpiece (Full Height) */}
-      <div className="glass-panel dashboard-timer-column" id="dashboardTimerSection">
+      <div className="glass-panel dashboard-timer-column" id="dashboardTimerSection" style={{ overflow: 'hidden', minWidth: 0, boxSizing: 'border-box' }}>
         
         {/* Dynamic Ambient Audio Island Widget */}
         <div 
@@ -2417,6 +2577,33 @@ export default function CommandCenterPage() {
           <HelpButton topic="breakgate" title="BreakGate Challenge Tutorial" />
         </div>
 
+        {/* AI Prescribed Rest Recovery Banner */}
+        {isAiRestRecovery && !isFocus && (
+          <div 
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              background: 'rgba(39, 82, 45, 0.08)',
+              border: '1px solid rgba(39, 82, 45, 0.22)',
+              borderRadius: '999px',
+              padding: '0.32rem 0.95rem',
+              fontSize: '0.78rem',
+              color: '#27522d',
+              fontWeight: 700,
+              marginBottom: '0.45rem',
+              boxShadow: '0 1px 4px rgba(39, 82, 45, 0.06)',
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>AI Prescribed Rest: 5m Recovery Protocol</span>
+          </div>
+        )}
+
         {/* Grand Circular Pomodoro Timer Ring - Enlarged Centerpiece Hero */}
         <div 
           className={`timer-circle ${!isFocus ? 'break-mode' : ''}`}
@@ -2429,7 +2616,7 @@ export default function CommandCenterPage() {
               {formatTime(timeLeft)}
             </div>
             <div className="timer-label">
-              {isFocus ? 'Focus Time' : 'Break Time'}
+              {isFocus ? 'Focus Time' : (isAiRestRecovery ? 'AI Restorative Break' : 'Break Time')}
             </div>
           </div>
         </div>
@@ -2450,7 +2637,7 @@ export default function CommandCenterPage() {
             className={`ios-pill-action-btn ${isActive ? 'paused' : ''}`}
             onClick={toggleTimer}
             style={{
-              background: isActive ? '#d97706' : '#4e8253',
+              background: isActive ? '#1e3f23' : '#27522d',
               padding: '0.7rem 2.4rem',
               borderRadius: '9999px',
               color: '#ffffff',
@@ -2461,7 +2648,8 @@ export default function CommandCenterPage() {
               gap: '8px',
               border: 'none',
               cursor: 'pointer',
-              boxShadow: '0 8px 20px -4px rgba(78, 130, 83, 0.4)'
+              boxShadow: '0 8px 20px -4px rgba(39, 82, 45, 0.35)',
+              transition: 'all 0.2s ease'
             }}
           >
             {isActive ? (
@@ -2522,13 +2710,13 @@ export default function CommandCenterPage() {
                 <polygon points="5 4 15 12 5 20 5 4"></polygon>
                 <line x1="19" y1="5" x2="19" y2="19"></line>
               </svg>
-              <span>Skip Break & Start Session {Math.min((sessionCount || 1) + 1, timerPreset === 'Custom' ? (customSessions || 1) : 4)}</span>
+              <span>Skip Break & Start Session {isAiRestRecovery ? (sessionCount || 1) : Math.min((sessionCount || 1) + 1, timerPreset === 'Custom' ? (customSessions || 1) : 4)}</span>
             </button>
           </div>
         )}
 
-        {/* Quit & Save Progress Option (Appears whenever user has focused for at least 15 seconds) */}
-        {isFocus && (totalTime - timeLeft >= 15) && (
+        {/* Quit & Save Progress Option (Appears only after focusing for at least 1 full minute) */}
+        {isFocus && (totalTime - timeLeft >= 60) && (
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.35rem', animation: 'fadeIn 0.2s ease-out' }}>
             <button
               type="button"
@@ -2564,7 +2752,7 @@ export default function CommandCenterPage() {
                 <polyline points="17 21 17 13 7 13 7 21"></polyline>
                 <polyline points="7 3 7 8 15 8"></polyline>
               </svg>
-              <span>Quit & Save Progress ({Math.max(1, Math.round((totalTime - timeLeft) / 60))}m)</span>
+              <span>Quit & Save Progress ({Math.floor((totalTime - timeLeft) / 60)}m)</span>
             </button>
           </div>
         )}
@@ -2614,11 +2802,13 @@ export default function CommandCenterPage() {
             <div className="session-counter" style={{ margin: 0, fontSize: '0.8rem' }}>
               {isFocus 
                 ? `Session ${currentDisplaySession} of ${totalSessions}` 
-                : `Break Time • Next: Session ${Math.min(currentDisplaySession + 1, totalSessions)} of ${totalSessions}`
+                : (isAiRestRecovery 
+                    ? `Rest Recovery • Next: Session ${currentDisplaySession} of ${totalSessions}` 
+                    : `Break Time • Next: Session ${Math.min(currentDisplaySession + 1, totalSessions)} of ${totalSessions}`)
               }
               <div className="session-dots" style={{ marginTop: '0.4rem' }}>
                 {Array.from({ length: totalSessions }).map((_, i) => (
-                  <div key={i} className={`session-dot ${i < currentDisplaySession ? 'current' : ''}`}></div>
+                  <div key={i} className={`session-dot ${isAiRestRecovery ? '' : (i < currentDisplaySession ? 'current' : '')}`}></div>
                 ))}
               </div>
             </div>
@@ -2671,9 +2861,47 @@ export default function CommandCenterPage() {
             </div>
           </div>
 
+          {/* Daily Momentum Mini Stats (Focus Time, Sessions, Streak) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '0.5rem',
+            padding: '0.65rem 0.6rem',
+            background: 'rgba(0, 0, 0, 0.02)',
+            borderRadius: '14px',
+            border: '1px solid rgba(0, 0, 0, 0.05)'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.64rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Focus
+              </div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-accent)', marginTop: '2px' }}>
+                {dailyFocusStats.minutes >= 60 
+                  ? `${Math.floor(dailyFocusStats.minutes / 60)}h ${dailyFocusStats.minutes % 60}m` 
+                  : `${dailyFocusStats.minutes}m`}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(0, 0, 0, 0.06)', borderRight: '1px solid rgba(0, 0, 0, 0.06)' }}>
+              <div style={{ fontSize: '0.64rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Sessions
+              </div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#2563eb', marginTop: '2px' }}>
+                {dailyFocusStats.sessions}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.64rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Streak
+              </div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#d97706', marginTop: '2px' }}>
+                {dailyFocusStats.streak} {dailyFocusStats.streak === 1 ? 'Day' : 'Days'}
+              </div>
+            </div>
+          </div>
+
           {/* Luxury High-Contrast Focus Quote Widget */}
           <div style={{
-            marginTop: '0.25rem',
+            marginTop: '0.15rem',
             padding: '0.95rem 1.15rem',
             background: '#f2f7f3',
             border: '1px solid rgba(78, 130, 83, 0.18)',
@@ -2724,10 +2952,30 @@ export default function CommandCenterPage() {
               — {currentQuote.author}
             </div>
           </div>
+
+          {/* Task Completion Health Indicator */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.55rem 0.85rem',
+            background: 'rgba(78, 130, 83, 0.06)',
+            borderRadius: '12px',
+            border: '1px solid rgba(78, 130, 83, 0.12)',
+            fontSize: '0.76rem',
+            color: 'var(--text-secondary)'
+          }}>
+            <span>
+              Active: <strong style={{ color: 'var(--text-primary)' }}>{todos.filter(t => !t.completed).length}</strong> pending · <strong style={{ color: 'var(--primary-accent)' }}>{todos.filter(t => t.completed).length}</strong> done
+            </span>
+            <span style={{ fontWeight: 700, color: '#2e7d32', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {todos.length > 0 && todos.filter(t => t.completed).length === todos.length ? 'All Clear' : 'In Flow'}
+            </span>
+          </div>
         </div>
 
         {/* Bottom Card: Quick Reflection & Adaptive AI Coach (Seamless Fit) */}
-        <div id="quick-reflection-card" className="glass-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem' }}>
+        <div id="quick-reflection-card" className="glass-panel" style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem', overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem' }}>
             <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
             <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
@@ -3551,7 +3799,7 @@ export default function CommandCenterPage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Save & Log Progress ({Math.max(1, Math.round(Math.max(0, totalTime - timeLeft) / 60))} mins)
+                Save & Log Progress ({Math.floor(Math.max(0, totalTime - timeLeft) / 60)} min{Math.floor(Math.max(0, totalTime - timeLeft) / 60) > 1 ? 's' : ''})
               </button>
 
               <button
@@ -3590,6 +3838,237 @@ export default function CommandCenterPage() {
                 }}
               >
                 Resume Studying
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Timer Confirmation Modal (Zero Emojis, 100% English) */}
+      {showResetConfirmModal && (
+        <div
+          id="pomodoroResetConfirmModal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out forwards',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '430px',
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '1.85rem',
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.28)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              animation: 'ifocusModalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              textAlign: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(239, 68, 68, 0.22)',
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.35rem 0', color: '#111827', letterSpacing: '-0.02em' }}>
+                Reset to Session 1?
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.86rem', color: '#6b7280', lineHeight: 1.5 }}>
+                Are you sure you want to reset the Pomodoro cycle? Current progress on session {sessionCount} will be reset back to session 1.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '0.4rem' }}>
+              <button
+                type="button"
+                id="confirmResetSessionBtn"
+                onClick={confirmResetTimer}
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '12px',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 8px 20px -4px rgba(220, 38, 38, 0.35)',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                  <path d="M3 3v5h5"></path>
+                </svg>
+                <span>Reset to Session 1</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmModal(false)}
+                style={{
+                  padding: '0.75rem',
+                  background: 'rgba(0, 0, 0, 0.04)',
+                  border: '1px solid rgba(0, 0, 0, 0.08)',
+                  borderRadius: '12px',
+                  color: '#4b5563',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Prescribed Rest Recovery Early Exit Confirmation Modal */}
+      {showAiRestExitModal && (
+        <div
+          id="aiRestExitModal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.68)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem',
+            animation: 'fadeIn 0.2s ease-out forwards',
+          }}
+          onClick={() => setShowAiRestExitModal(false)}
+        >
+          <div
+            style={{
+              maxWidth: '450px',
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '1.85rem',
+              boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.32)',
+              border: '1px solid rgba(220, 38, 38, 0.18)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+              animation: 'ifocusModalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              textAlign: 'center',
+              alignItems: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '50%',
+                background: 'rgba(220, 38, 38, 0.1)',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(220, 38, 38, 0.22)',
+              }}
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.45rem 0', color: '#111827', letterSpacing: '-0.02em' }}>
+                Exit Restorative Break Early?
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#4b5563', lineHeight: 1.55 }}>
+                Your AI Study Coach specifically prescribed this 5-minute restorative recovery to prevent cognitive saturation and protect long-term retention. Are you sure you want to end your recovery early?
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '0.4rem' }}>
+              <button
+                type="button"
+                id="continueRestingBtn"
+                onClick={() => setShowAiRestExitModal(false)}
+                className="btn-primary"
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: '12px',
+                  background: '#27522d',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 8px 20px -4px rgba(39, 82, 45, 0.35)',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Continue Resting (Recommended)
+              </button>
+
+              <button
+                type="button"
+                id="exitRestAnywayBtn"
+                onClick={confirmExitRestEarly}
+                style={{
+                  padding: '0.75rem',
+                  background: 'transparent',
+                  border: '1px solid rgba(220, 38, 38, 0.35)',
+                  borderRadius: '12px',
+                  color: '#dc2626',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                Exit Rest Anyway
               </button>
             </div>
           </div>
@@ -3805,7 +4284,7 @@ export default function CommandCenterPage() {
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-accent)' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
               </div>
-              <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Coach Intervened</h4>
+              <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>{telemetryToast.title || "Coach has noticed something"}</h4>
             </div>
             <button
               onClick={dismissTelemetryToast}

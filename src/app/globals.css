@@ -30,6 +30,7 @@ html {
     padding: 0;
     box-sizing: border-box;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
 }
 
 input, button, textarea, select {
@@ -1159,9 +1160,7 @@ textarea:focus {
 }
 
 .tag {
-    position: absolute;
-    top: 1.5rem;
-    left: 1.5rem;
+    position: static;
     background: rgba(0, 0, 0, 0.05);
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
@@ -1236,6 +1235,7 @@ textarea:focus {
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .collection-card::before {
@@ -1250,14 +1250,30 @@ textarea:focus {
     transition: opacity 0.3s ease;
 }
 
-.collection-card:hover {
-    border-color: var(--primary-accent);
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(95, 143, 94, 0.2);
+/* Hover effects only for devices with actual mouse pointer, NOT touch screens / tablets */
+@media (hover: hover) and (pointer: fine) {
+    .collection-card:hover {
+        border-color: var(--primary-accent);
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(95, 143, 94, 0.2);
+    }
+
+    .collection-card:hover::before {
+        opacity: 1;
+    }
 }
 
-.collection-card:hover::before {
-    opacity: 1;
+@media (hover: none) or (pointer: coarse) {
+    .collection-card:hover,
+    .collection-card:focus,
+    .collection-card:active {
+        transform: none !important;
+        box-shadow: none !important;
+        border-color: var(--glass-border) !important;
+    }
+    .collection-card:hover::before {
+        opacity: 0 !important;
+    }
 }
 
 .collection-card h4 {
@@ -1529,6 +1545,9 @@ textarea:focus {
   height: 100%;
   min-height: 0;
   padding: 1.5rem 1.4rem;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 /* Dynamic Ambient Audio Widget */
@@ -1581,8 +1600,10 @@ textarea:focus {
 /* Circular Pomodoro Timer Ring */
 .timer-circle {
   position: relative;
-  width: 260px;
-  height: 260px;
+  width: min(240px, 86%);
+  max-width: 240px;
+  max-height: 240px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: conic-gradient(var(--primary-accent, #4e8253) var(--progress, 0%), #eef3ee 0deg);
   display: flex !important;
@@ -1591,18 +1612,19 @@ textarea:focus {
   box-shadow: 0 10px 32px -6px rgba(78, 130, 83, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
   transition: background 0.3s ease;
   margin: 0.35rem auto;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  box-sizing: border-box;
 }
 
 .timer-circle.break-mode {
-  background: conic-gradient(#0284c7 var(--progress, 0%), #e0f2fe 0deg);
-  box-shadow: 0 10px 32px -6px rgba(2, 132, 199, 0.22), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  background: conic-gradient(#27522d var(--progress, 0%), #eaf1ea 0deg);
+  box-shadow: 0 10px 32px -6px rgba(39, 82, 45, 0.18), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .timer-circle::after {
   content: '';
   position: absolute;
-  inset: 12px;
+  inset: 10px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -1620,7 +1642,7 @@ textarea:focus {
 }
 
 .timer-display {
-  font-size: 3.8rem !important;
+  font-size: clamp(2.4rem, 4.2vw, 3.6rem) !important;
   font-weight: 700 !important;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
@@ -2366,9 +2388,7 @@ textarea:focus {
 }
 
 .tag {
-    position: absolute;
-    top: 1.5rem;
-    left: 1.5rem;
+    position: static;
     background: rgba(0, 0, 0, 0.05);
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
@@ -2443,6 +2463,7 @@ textarea:focus {
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .collection-card::before {
@@ -2457,14 +2478,30 @@ textarea:focus {
     transition: opacity 0.3s ease;
 }
 
-.collection-card:hover {
-    border-color: var(--primary-accent);
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(95, 143, 94, 0.2);
+/* Hover effects only for devices with actual mouse pointer, NOT touch screens / tablets */
+@media (hover: hover) and (pointer: fine) {
+    .collection-card:hover {
+        border-color: var(--primary-accent);
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(95, 143, 94, 0.2);
+    }
+
+    .collection-card:hover::before {
+        opacity: 1;
+    }
 }
 
-.collection-card:hover::before {
-    opacity: 1;
+@media (hover: none) or (pointer: coarse) {
+    .collection-card:hover,
+    .collection-card:focus,
+    .collection-card:active {
+        transform: none !important;
+        box-shadow: none !important;
+        border-color: var(--glass-border) !important;
+    }
+    .collection-card:hover::before {
+        opacity: 0 !important;
+    }
 }
 
 .collection-card h4 {
@@ -2736,6 +2773,9 @@ textarea:focus {
   height: 100%;
   min-height: 0;
   padding: 1.5rem 1.4rem;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 /* Dynamic Ambient Audio Widget */
@@ -2788,8 +2828,10 @@ textarea:focus {
 /* Circular Pomodoro Timer Ring */
 .timer-circle {
   position: relative;
-  width: 260px;
-  height: 260px;
+  width: min(240px, 86%);
+  max-width: 240px;
+  max-height: 240px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: conic-gradient(var(--primary-accent, #4e8253) var(--progress, 0%), #eef3ee 0deg);
   display: flex !important;
@@ -2798,18 +2840,19 @@ textarea:focus {
   box-shadow: 0 10px 32px -6px rgba(78, 130, 83, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
   transition: background 0.3s ease;
   margin: 0.35rem auto;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  box-sizing: border-box;
 }
 
 .timer-circle.break-mode {
-  background: conic-gradient(#0284c7 var(--progress, 0%), #e0f2fe 0deg);
-  box-shadow: 0 10px 32px -6px rgba(2, 132, 199, 0.22), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  background: conic-gradient(#27522d var(--progress, 0%), #eaf1ea 0deg);
+  box-shadow: 0 10px 32px -6px rgba(39, 82, 45, 0.18), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 .timer-circle::after {
   content: '';
   position: absolute;
-  inset: 12px;
+  inset: 10px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -2827,7 +2870,7 @@ textarea:focus {
 }
 
 .timer-display {
-  font-size: 3.8rem !important;
+  font-size: clamp(2.4rem, 4.2vw, 3.6rem) !important;
   font-weight: 700 !important;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
@@ -3871,7 +3914,7 @@ textarea:focus {
 
 
 /* Study Analytics & AI Coach Viewport Fit on Desktop - Guarantees zero vertical scroll */
-@media (min-width: 961px) {
+@media (min-width: 1281px) and (min-aspect-ratio: 1.15/1) {
   .app-container:has(.analytics-page-root) main,
   .app-container:has(.coach-page-root) main {
     overflow-y: hidden !important;
@@ -3932,12 +3975,337 @@ textarea:focus {
   }
 }
 
-@media (min-width: 641px) and (max-width: 960px) {
+@media (max-width: 1280px) {
   .coach-metrics-row {
     grid-template-columns: 1fr 1fr !important;
     gap: 0.65rem !important;
   }
   .coach-metric-primary {
     grid-column: 1 / -1 !important;
+  }
+}
+
+/* ================= TABLET & IPAD PRO 13 RESPONSIVE ADAPTATION ================= */
+@media (min-width: 769px) and (max-width: 1280px), (min-width: 769px) and (max-aspect-ratio: 1/1) {
+  /* Prevent main from forcing a fixed 100vh that squeezes columns vertically */
+  main {
+    padding: 1.25rem 1.4rem !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Slim down sidebar on split screen / intermediate tablet widths to give main area ample space */
+  header.modern-sidebar,
+  .modern-sidebar {
+    width: 205px !important;
+    min-width: 205px !important;
+    padding: 1.25rem 0.85rem !important;
+  }
+
+  .sidebar-header-box {
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.85rem !important;
+  }
+
+  .brand-title {
+    font-size: 1.15rem !important;
+  }
+
+  .nav-links a {
+    padding: 0.55rem 0.75rem !important;
+    font-size: 0.88rem !important;
+  }
+
+  .app-container:has(.coach-page-root) main,
+  .app-container:has(.analytics-page-root) main {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-y: auto !important;
+  }
+
+  .coach-main-grid {
+    align-items: start !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .coach-card-telemetry,
+  .coach-card-journal {
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .coach-journal-list {
+    max-height: 600px !important;
+  }
+
+  /* Command Center 2-Column Responsive Layout on Tablet & Windows Split Screen */
+  .command-center-layout {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 1.25rem !important;
+    height: auto !important;
+    min-height: calc(100vh - 2.8rem) !important;
+    max-height: none !important;
+    width: 100% !important;
+    align-items: stretch !important;
+    flex: 1 !important;
+  }
+
+  .dashboard-timer-column {
+    order: 1 !important;
+    width: calc(50% - 0.65rem) !important;
+    flex: 1 1 calc(50% - 0.65rem) !important;
+    min-width: 280px !important;
+    height: auto !important;
+    min-height: 520px !important;
+    justify-content: space-evenly !important;
+    gap: 1rem !important;
+    padding: 1.4rem 1.3rem !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .dashboard-timer-column .timer-circle {
+    width: min(220px, 80%) !important;
+    max-width: 220px !important;
+    max-height: 220px !important;
+    margin: 0.35rem auto !important;
+  }
+
+  .dashboard-tasks-column {
+    order: 2 !important;
+    width: calc(50% - 0.65rem) !important;
+    flex: 1 1 calc(50% - 0.65rem) !important;
+    min-width: 280px !important;
+    height: auto !important;
+    min-height: 520px !important;
+    padding: 1.4rem 1.3rem !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .dashboard-tasks-column .todo-list {
+    flex: 1 !important;
+    min-height: 260px !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+
+  .dashboard-column-3 {
+    order: 3 !important;
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1.25rem !important;
+    height: auto !important;
+    min-height: 480px !important;
+  }
+
+  .dashboard-daily-progress-card {
+    height: 100% !important;
+    min-height: auto !important;
+    justify-content: space-between !important;
+  }
+
+  #quick-reflection-card {
+    height: 100% !important;
+    min-height: 480px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  #quick-reflection-card .journal-textarea {
+    flex: 1 !important;
+    min-height: 160px !important;
+  }
+
+  /* Ensure Quick Add Bar and input do not collapse */
+  .todo-input-row,
+  .dashboard-tasks-column input[type="text"] {
+    min-width: 0 !important;
+  }
+}
+
+/* Extra safety for very narrow split screen (<= 880px) */
+@media (min-width: 769px) and (max-width: 880px) {
+  .dashboard-timer-column,
+  .dashboard-tasks-column {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  .dashboard-column-3 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ================= FLASHCARDS RESPONSIVE (STUDY & EXAM MODES) ================= */
+/* iPad Pro 13, iPad Air & Tablet Responsiveness for Flashcard Collections */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .collections-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1.15rem !important;
+  }
+  .flashcard-collections-panel {
+    min-height: auto !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Ensure collections grid is clean single column on mobile */
+  .collections-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  /* Ensure study & exam containers scroll naturally and clear bottom GCash nav bar */
+  .flashcard-study-container,
+  .flashcard-exam-container {
+    height: auto !important;
+    min-height: auto !important;
+    justify-content: flex-start !important;
+    padding-bottom: calc(130px + env(safe-area-inset-bottom)) !important;
+    gap: 0.85rem !important;
+  }
+
+  /* Study Header & Controls */
+  .flashcard-study-header {
+    padding: 0.85rem 1rem !important;
+    gap: 0.65rem !important;
+  }
+
+  .flashcard-header-actions {
+    gap: 0.45rem !important;
+  }
+
+  .flashcard-header-actions label {
+    font-size: 0.76rem !important;
+    gap: 0.35rem !important;
+    background: rgba(0, 0, 0, 0.03) !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+  }
+
+  /* Study 3D Flashcard Height & Padding */
+  .flashcard-card {
+    min-height: 290px !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  /* Top Bar in Flashcard: Clean Vertical Stack on Mobile to prevent any hint/tag collision */
+  .flashcard-top-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+    position: relative !important;
+  }
+
+  .flashcard-tag,
+  .flashcard-study-tag {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+  }
+
+  .flashcard-hint-pill {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    max-width: 100% !important;
+    font-size: 0.78rem !important;
+    padding: 0.28rem 0.75rem !important;
+  }
+
+  /* Study Controls Bar: 2 Ergonomic Rows on Phone */
+  .flashcard-study-controls-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.65rem !important;
+    padding: 0.75rem 0.95rem !important;
+  }
+
+  .flashcard-study-nav-cluster {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .flashcard-study-nav-cluster button {
+    padding: 0.45rem 1.1rem !important;
+    font-size: 0.86rem !important;
+  }
+
+  .flashcard-study-actions-cluster {
+    display: flex !important;
+    justify-content: center !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .flashcard-study-actions-cluster button {
+    flex: 1 !important;
+    text-align: center !important;
+    justify-content: center !important;
+    padding: 0.45rem 0.75rem !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* Exam Mode Responsive Styling */
+  .flashcard-exam-header {
+    padding: 0.85rem 1rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .flashcard-exam-card {
+    padding: 1.15rem 1rem !important;
+    min-height: auto !important;
+    gap: 1rem !important;
+    height: auto !important;
+  }
+
+  .flashcard-exam-card h3 {
+    font-size: 1.25rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .flashcard-exam-option-btn {
+    padding: 0.75rem 0.85rem !important;
+    font-size: 0.88rem !important;
+    gap: 0.65rem !important;
+    border-radius: 12px !important;
+    align-items: flex-start !important;
+  }
+
+  .flashcard-exam-option-btn span:first-child {
+    margin-top: 1px !important;
+  }
+
+  .flashcard-exam-footer {
+    width: 100% !important;
+    margin-top: 1rem !important;
+    margin-bottom: 2.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  .flashcard-exam-footer .btn-primary {
+    width: 100% !important;
+    padding: 0.85rem 1.25rem !important;
+    font-size: 0.95rem !important;
+    text-align: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 16px rgba(46, 125, 50, 0.35) !important;
   }
 }

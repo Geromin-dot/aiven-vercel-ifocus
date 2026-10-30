@@ -142,6 +142,10 @@ export default function SettingsPage() {
   const [timerChimeSound, setTimerChimeSound] = useState(true);
   const [activePresenceEnabled, setActivePresenceEnabled] = useState(true);
   const [activePresenceInterval, setActivePresenceInterval] = useState(5);
+  const [afkCoachEnabled, setAfkCoachEnabled] = useState(true);
+  const [afkCoachMinutes, setAfkCoachMinutes] = useState(1);
+  const [burnoutCheckEnabled, setBurnoutCheckEnabled] = useState(true);
+  const [burnoutCheckMinutes, setBurnoutCheckMinutes] = useState(20);
 
   // 2. Notifications & Sound Preferences State
   const [defaultAmbientTrack, setDefaultAmbientTrack] = useState('Chill Lofi');
@@ -161,6 +165,10 @@ export default function SettingsPage() {
     timerChimeSound: true,
     activePresenceEnabled: true,
     activePresenceInterval: 5,
+    afkCoachEnabled: true,
+    afkCoachMinutes: 1,
+    burnoutCheckEnabled: true,
+    burnoutCheckMinutes: 20,
   });
 
   const [initialSoundPrefs, setInitialSoundPrefs] = useState({
@@ -289,6 +297,10 @@ export default function SettingsPage() {
         timerChimeSound: true,
         activePresenceEnabled: true,
         activePresenceInterval: 5,
+        afkCoachEnabled: true,
+        afkCoachMinutes: 1,
+        burnoutCheckEnabled: true,
+        burnoutCheckMinutes: 20,
       };
 
       if (savedTimer) {
@@ -317,6 +329,26 @@ export default function SettingsPage() {
           const pi = Number(parsed.activePresenceInterval) || 5;
           setActivePresenceInterval(pi);
           loadedTimerPrefs.activePresenceInterval = pi;
+        }
+        if (parsed.afkCoachEnabled !== undefined) {
+          const ae = Boolean(parsed.afkCoachEnabled);
+          setAfkCoachEnabled(ae);
+          loadedTimerPrefs.afkCoachEnabled = ae;
+        }
+        if (parsed.afkCoachMinutes !== undefined) {
+          const am = Number(parsed.afkCoachMinutes) || 1;
+          setAfkCoachMinutes(am);
+          loadedTimerPrefs.afkCoachMinutes = am;
+        }
+        if (parsed.burnoutCheckEnabled !== undefined) {
+          const be = Boolean(parsed.burnoutCheckEnabled);
+          setBurnoutCheckEnabled(be);
+          loadedTimerPrefs.burnoutCheckEnabled = be;
+        }
+        if (parsed.burnoutCheckMinutes !== undefined) {
+          const bm = Number(parsed.burnoutCheckMinutes) || 20;
+          setBurnoutCheckMinutes(bm);
+          loadedTimerPrefs.burnoutCheckMinutes = bm;
         }
       }
 
@@ -390,7 +422,9 @@ export default function SettingsPage() {
     Number(breakGateQuestionCount) !== Number(initialFocusPrefs.breakGateQuestionCount) ||
     Boolean(timerChimeSound) !== Boolean(initialFocusPrefs.timerChimeSound) ||
     Boolean(activePresenceEnabled) !== Boolean(initialFocusPrefs.activePresenceEnabled) ||
-    Number(activePresenceInterval) !== Number(initialFocusPrefs.activePresenceInterval);
+    Number(activePresenceInterval) !== Number(initialFocusPrefs.activePresenceInterval) ||
+    Boolean(afkCoachEnabled) !== Boolean(initialFocusPrefs.afkCoachEnabled) ||
+    Number(afkCoachMinutes) !== Number(initialFocusPrefs.afkCoachMinutes);
 
   const hasSoundChanges =
     String(defaultAmbientTrack) !== String(initialSoundPrefs.defaultAmbientTrack) ||
@@ -454,6 +488,8 @@ export default function SettingsPage() {
       setTimerChimeSound(initialFocusPrefs.timerChimeSound);
       setActivePresenceEnabled(initialFocusPrefs.activePresenceEnabled);
       setActivePresenceInterval(initialFocusPrefs.activePresenceInterval);
+      setAfkCoachEnabled(initialFocusPrefs.afkCoachEnabled !== undefined ? initialFocusPrefs.afkCoachEnabled : true);
+      setAfkCoachMinutes(initialFocusPrefs.afkCoachMinutes || 1);
     }
 
     if (initialSoundPrefs) {
@@ -489,6 +525,8 @@ export default function SettingsPage() {
       setTimerChimeSound(initialFocusPrefs.timerChimeSound);
       setActivePresenceEnabled(initialFocusPrefs.activePresenceEnabled);
       setActivePresenceInterval(initialFocusPrefs.activePresenceInterval);
+      setAfkCoachEnabled(initialFocusPrefs.afkCoachEnabled !== undefined ? initialFocusPrefs.afkCoachEnabled : true);
+      setAfkCoachMinutes(initialFocusPrefs.afkCoachMinutes || 1);
     }
 
     if (initialSoundPrefs) {
@@ -579,10 +617,15 @@ export default function SettingsPage() {
         timerChimeSound: Boolean(timerChimeSound),
         activePresenceEnabled: Boolean(activePresenceEnabled),
         activePresenceInterval: cleanInterval,
+        afkCoachEnabled: Boolean(afkCoachEnabled),
+        afkCoachMinutes: Number(afkCoachMinutes || 1),
+        burnoutCheckEnabled: Boolean(burnoutCheckEnabled),
+        burnoutCheckMinutes: Number(burnoutCheckMinutes || 20),
       };
       localStorage.setItem('ifocus_timer_preferences', JSON.stringify(timerPrefs));
       localStorage.setItem('ifocus_breakgate_question_count', String(cleanBgCount));
       setInitialFocusPrefs(timerPrefs);
+      window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: timerPrefs }));
 
       // 2. Save Sound & Notification Preferences
       const soundPrefs = {
@@ -1198,14 +1241,23 @@ export default function SettingsPage() {
 
 
               <div className="settings-input-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <label className="settings-label" style={{ fontSize: '0.84rem', margin: 0, fontWeight: 700 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.4rem' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                    <label className="settings-label" style={{ fontSize: '0.85rem', margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       BreakGate Questions Count
                     </label>
-                    <HelpButton topic="breakgate" title="BreakGate Challenge Questions Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
+                    <HelpButton topic="breakgate" title="BreakGate Challenge Questions Tutorial" size={12} style={{ width: '20px', height: '20px', flexShrink: 0 }} />
                   </div>
-                  <span style={{ fontSize: '0.78rem', color: hasActiveBreakGateDeck ? 'var(--text-secondary)' : '#d97706', fontWeight: hasActiveBreakGateDeck ? 400 : 600 }}>
+                  <span style={{ 
+                    fontSize: '0.74rem', 
+                    color: hasActiveBreakGateDeck ? 'var(--text-secondary)' : '#b45309', 
+                    fontWeight: 600,
+                    backgroundColor: hasActiveBreakGateDeck ? 'rgba(0, 0, 0, 0.04)' : 'rgba(245, 158, 11, 0.1)',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    border: hasActiveBreakGateDeck ? '1px solid rgba(0, 0, 0, 0.06)' : '1px solid rgba(245, 158, 11, 0.25)',
+                    whiteSpace: 'nowrap'
+                  }}>
                     {hasActiveBreakGateDeck ? 'Recommended: 1 to 5 questions' : 'No Deck Active in Flashcards'}
                   </span>
                 </div>
@@ -1343,6 +1395,185 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {/* Idle AFK Coach Intervention Setting */}
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.15rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Idle AFK Coach Intervention</h4>
+                    <HelpButton topic="reflection" title="Proactive AFK Coach Intervention Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    Proactively checks in when you are inactive and no study timer is running.
+                  </p>
+                </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={afkCoachEnabled} 
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setAfkCoachEnabled(val);
+                      try {
+                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                        const parsed = JSON.parse(raw);
+                        parsed.afkCoachEnabled = val;
+                        parsed.afkCoachMinutes = afkCoachMinutes;
+                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                        window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                      } catch(err) {}
+                    }} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              {afkCoachEnabled && (
+                <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
+                      AFK Inactivity Timeout (No Timer Running)
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
+                      {afkCoachMinutes === 1 ? '1 min (Rapid Test)' : `After ${afkCoachMinutes} mins idle`}
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(92px, 1fr))',
+                    gap: '8px',
+                    width: '100%'
+                  }}>
+                    {[
+                      { mins: 1, label: '1m (Test)' },
+                      { mins: 2, label: '2 mins' },
+                      { mins: 3, label: '3 mins' },
+                      { mins: 5, label: '5 mins' },
+                      { mins: 10, label: '10 mins' }
+                    ].map(({ mins, label }) => (
+                      <button 
+                        key={mins} 
+                        type="button" 
+                        className={`option-chip ${afkCoachMinutes === mins ? 'selected' : ''}`}
+                        onClick={() => {
+                          setAfkCoachMinutes(mins);
+                          try {
+                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                            const parsed = JSON.parse(raw);
+                            parsed.afkCoachEnabled = afkCoachEnabled;
+                            parsed.afkCoachMinutes = mins;
+                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                            window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                          } catch(err) {}
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '38px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          borderRadius: '10px',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                          margin: 0
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Task Stagnation & Burnout Check Toggle & Options (While Timer Running) */}
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Task Stagnation & Burnout Check</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically checks in if the focus timer has been active for the set threshold without any task completed.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={burnoutCheckEnabled} 
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setBurnoutCheckEnabled(val);
+                      try {
+                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                        const parsed = JSON.parse(raw);
+                        parsed.burnoutCheckEnabled = val;
+                        parsed.burnoutCheckMinutes = burnoutCheckMinutes;
+                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                        window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                      } catch(err) {}
+                    }} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              {burnoutCheckEnabled && (
+                <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
+                      Burnout Check Interval (During Focus Session)
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
+                      After {burnoutCheckMinutes} mins without completed task
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
+                    gap: '8px',
+                    width: '100%'
+                  }}>
+                    {[
+                      { mins: 10, label: '10 mins' },
+                      { mins: 20, label: '20 mins' },
+                      { mins: 30, label: '30 mins' },
+                      { mins: 40, label: '40 mins' },
+                      { mins: 50, label: '50 mins' }
+                    ].map(({ mins, label }) => (
+                      <button 
+                        key={mins} 
+                        type="button" 
+                        className={`option-chip ${burnoutCheckMinutes === mins ? 'selected' : ''}`}
+                        onClick={() => {
+                          setBurnoutCheckMinutes(mins);
+                          try {
+                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                            const parsed = JSON.parse(raw);
+                            parsed.burnoutCheckEnabled = burnoutCheckEnabled;
+                            parsed.burnoutCheckMinutes = mins;
+                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                            window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                          } catch(err) {}
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '38px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          borderRadius: '10px',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                          margin: 0
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Testing Utilities Row - Symmetrical Responsive Grid */}
               <div style={{
                 display: 'grid',
@@ -1400,6 +1631,54 @@ export default function SettingsPage() {
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   <span>Test Presence Popup</span>
+                </button>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('ifocus_trigger_afk_coach_test', { detail: { minutes: afkCoachMinutes } }));
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    fontSize: '0.82rem',
+                    padding: '0 12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '10px',
+                    margin: 0
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                  <span>Test Idle Coach</span>
+                </button>
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('ifocus_trigger_burnout_check_test', { detail: { minutes: burnoutCheckMinutes } }));
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    fontSize: '0.82rem',
+                    padding: '0 12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                    borderRadius: '10px',
+                    margin: 0
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+                  <span>Test Burnout Check</span>
                 </button>
               </div>
 
@@ -1510,7 +1789,7 @@ export default function SettingsPage() {
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Post-Session Reflection Prompts</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Paalala na mag-log sa Quick Reflection pagkatapos ng bawat Pomodoro cycle para ma-adjust ng AI Coach ang focus plan mo.</p>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Reminds you to log your Quick Reflection after completing Pomodoro sessions so the AI Coach can tune your focus plan.</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
                   <button

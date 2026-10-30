@@ -61,6 +61,7 @@ export default function CoachPage() {
   };
 
   const [applyingHome, setApplyingHome] = useState(false);
+  const [isAiRestRunning, setIsAiRestRunning] = useState(false);
 
   const applyCoachAiRhythm = (reply) => {
     let wMin = 25, bMin = 5;
@@ -137,8 +138,104 @@ export default function CoachPage() {
     }
   });
 
+  const [adaptiveStrategies, setAdaptiveStrategies] = useState([
+    {
+      title: 'Pacing & BreakGate Cadence',
+      badge: 'Active Protocol',
+      badgeColor: '#27522d',
+      badgeBg: 'rgba(95, 143, 94, 0.12)',
+      text: 'Consistently reviewing 3 retrieval questions before taking a break activates the testing effect, enhancing long-term conceptual recall without mental overload.'
+    },
+    {
+      title: 'Flow State Maintenance',
+      badge: 'Optimal Flow',
+      badgeColor: '#27522d',
+      badgeBg: 'rgba(95, 143, 94, 0.12)',
+      text: 'Attention markers are stable. Keep external distractions out of reach and maintain your current Pomodoro cadence to maximize uninterrupted knowledge encoding.'
+    }
+  ]);
+
   const loadDiagnostics = useCallback(() => {
     try {
+      // 0. Check Active AI Rest Recovery status
+      let restRunning = false;
+      try {
+        const restRaw = localStorage.getItem('ifocus_ai_rest_recovery');
+        const timerRaw = localStorage.getItem('ifocus_timer_state');
+        if (restRaw) {
+          const restData = JSON.parse(restRaw);
+          if (restData && restData.active) {
+            if (timerRaw) {
+              const timerData = JSON.parse(timerRaw);
+              if (timerData && !timerData.isFocus && (timerData.isRunning || timerData.timeLeft > 0)) {
+                restRunning = true;
+              }
+            } else {
+              restRunning = true;
+            }
+          }
+        }
+      } catch (e) {}
+      setIsAiRestRunning(restRunning);
+
+      // Check Recovery Completed and Cognitive Reset timestamps
+      let recoveryCompletedTime = 0;
+      try {
+        const rc = localStorage.getItem('ifocus_recovery_completed');
+        if (rc) recoveryCompletedTime = Number(rc) || 0;
+      } catch (e) {}
+
+      let cognitiveResetTime = 0;
+      try {
+        const cr = localStorage.getItem('ifocus_cognitive_reset');
+        if (cr) cognitiveResetTime = Number(cr) || 0;
+      } catch (e) {}
+
+      const effectiveResetTime = Math.max(recoveryCompletedTime, cognitiveResetTime);
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+      // If Rest Recovery is actively running, display dedicated resting state
+      if (restRunning) {
+        setTelemetryDiagnostics({
+          cognitiveState: {
+            title: 'Restorative Recovery Active',
+            status: 'Resting',
+            color: '#059669',
+            dotColor: '#10b981',
+            subtext: '5-minute restorative recovery in progress: resetting cognitive fatigue'
+          },
+          studyStamina: {
+            title: 'Recovery In Progress',
+            color: '#059669',
+            subtext: '5-minute restorative protocol active to restore depleted stamina'
+          },
+          recommendedRhythm: {
+            title: '5m Recovery Break',
+            color: '#059669',
+            subtext: 'Active restorative pause before beginning Session 1'
+          }
+        });
+
+        setAdaptiveStrategies([
+          {
+            title: 'Active Restorative Protocol',
+            badge: 'Recovery Active',
+            badgeColor: '#059669',
+            badgeBg: 'rgba(5, 150, 105, 0.12)',
+            text: 'A 5-minute restorative step-away break is currently active. Step back from the screen, hydrate, and relax your breathing to clear cognitive fatigue before starting Session 1.'
+          },
+          {
+            title: 'Session 1 Focus Readiness',
+            badge: 'Upcoming Cadence',
+            badgeColor: '#27522d',
+            badgeBg: 'rgba(95, 143, 94, 0.12)',
+            text: 'Once your 5-minute recovery break finishes, the AI Coach will transition to your focus schedule so you can start Session 1 with high cognitive clarity.'
+          }
+        ]);
+        return;
+      }
+
       // 1. Telemetry / Cognitive State
       let telem = null;
       try {
@@ -155,6 +252,20 @@ export default function CoachPage() {
 
       if (!telem) {
         try {
+          const anonRaw = localStorage.getItem('ifocus_telemetry_insight_anonymous');
+          if (anonRaw) telem = JSON.parse(anonRaw);
+        } catch (e) {}
+      }
+
+      if (!telem) {
+        try {
+          const idleRaw = localStorage.getItem('ifocus_active_idle_alert');
+          if (idleRaw) telem = JSON.parse(idleRaw);
+        } catch (e) {}
+      }
+
+      if (!telem) {
+        try {
           const journalRaw = localStorage.getItem(`ifocus_journal_history_${userName}`);
           if (journalRaw) {
             const list = JSON.parse(journalRaw);
@@ -163,22 +274,33 @@ export default function CoachPage() {
         } catch (e) {}
       }
 
-      const stateStr = String(telem?.state || telem?.sentiment || '').toLowerCase();
+      // Check if telemetry/reflection is from today and not invalidated by a newer recovery/reset
+      if (telem) {
+        const telemTime = telem.timestamp ? new Date(telem.timestamp).getTime() : (telem.date ? new Date(telem.date).getTime() : null);
+        if (telemTime && (telemTime < todayStart || (effectiveResetTime > 0 && telemTime <= effectiveResetTime))) {
+          telem = null;
+        }
+      }
+
+      const stateStr = String(telem?.state || telem?.sentiment || telem?.type || '').toLowerCase();
       const reasonStr = String(telem?.reason || '').toLowerCase();
       const backspaces = Number(telem?.backspaces) || 0;
       const errorRate = Number(telem?.errorRate) || 0;
 
-      const isStress = stateStr.includes('stress') || reasonStr.includes('stress') || stateStr === 'friction' || backspaces >= 6 || errorRate > 30;
-      const isDistracted = stateStr.includes('distract') || reasonStr.includes('distract') || errorRate > 15;
-      const isFatigued = stateStr.includes('fatigue') || reasonStr.includes('fatigue') || stateStr === 'hesitant';
-      const isMotivated = stateStr.includes('motivat') || stateStr.includes('energetic') || stateStr.includes('ready');
+      const isIdle = stateStr.includes('idle') || stateStr.includes('inactivity') || reasonStr.includes('idle') || reasonStr.includes('inactivity');
+      const isStress = !isIdle && (stateStr.includes('stress') || reasonStr.includes('stress') || stateStr === 'friction' || backspaces >= 6 || errorRate > 30);
+      const isDistracted = !isIdle && (stateStr.includes('distract') || reasonStr.includes('distract') || errorRate > 15);
+      const isFatigued = !isIdle && (stateStr.includes('fatigue') || reasonStr.includes('fatigue') || stateStr === 'hesitant');
+      const isMotivated = !isIdle && (stateStr.includes('motivat') || stateStr.includes('energetic') || stateStr.includes('ready'));
 
       let cogState = {
         title: 'In the Zone',
         status: 'Optimal',
         color: '#27522d',
         dotColor: '#16a34a',
-        subtext: 'Silent observation: Attention levels optimal'
+        subtext: recoveryCompletedTime >= todayStart
+          ? 'Restorative break completed: cognitive baseline restored and ready for study'
+          : 'Silent observation: Attention levels optimal'
       };
 
       let recRhythm = {
@@ -187,7 +309,22 @@ export default function CoachPage() {
         subtext: 'Prevents cognitive burnout during intense study sessions'
       };
 
-      if (isStress) {
+      if (isIdle) {
+        const idleMinsMatch = reasonStr.match(/(\d+)\s*minute/i) || reasonStr.match(/(\d+)m/i);
+        const idleMins = telem?.idleMinutes || (idleMinsMatch ? idleMinsMatch[1] : 5);
+        cogState = {
+          title: 'Task Hesitation / Idle',
+          status: 'Friction',
+          color: '#d97706',
+          dotColor: '#d97706',
+          subtext: `Inactivity detected: idle for ${idleMins}m with no focus timer running`
+        };
+        recRhythm = {
+          title: '15m Work / 5m Gate',
+          color: '#d97706',
+          subtext: 'Short 15m focus kickstart to break task inertia and rebuild momentum'
+        };
+      } else if (isStress) {
         cogState = {
           title: 'High Tension / Stress',
           status: 'Tension',
@@ -241,8 +378,8 @@ export default function CoachPage() {
         };
       }
 
-      // Check custom timer overrides if not currently in high stress
-      if (!isStress) {
+      // Check custom timer overrides if not currently in high stress or idle
+      if (!isStress && !isIdle) {
         try {
           const customTimerRaw = localStorage.getItem('ifocus_custom_timer');
           if (customTimerRaw) {
@@ -260,49 +397,222 @@ export default function CoachPage() {
         } catch (e) {}
       }
 
-      // 2. BreakGate / Study Stamina
+      // 2. BreakGate / Study Stamina Calculation (Daily Reset Aware & Recovery Aware)
       let stamina = {
-        title: '94% Resilience',
-        color: '#2e7d32',
-        subtext: 'BreakGate cycle compliance on track'
+        title: '100% Resilience',
+        color: '#16a34a',
+        subtext: recoveryCompletedTime >= todayStart
+          ? 'Recovery break completed: cognitive baseline restored'
+          : 'Fresh study day: ready for your first focus session'
       };
+
+      let staminaPct = 100;
+      let totalEvents = 0;
+      let completedEvents = 0;
+      let skippedEvents = 0;
 
       const rawEvents = localStorage.getItem('ifocus_breakgate_events');
       if (rawEvents) {
-        const events = JSON.parse(rawEvents);
-        if (Array.isArray(events) && events.length > 0) {
-          const completed = events.filter(e => e.status === 'completed').length;
-          const total = events.length;
-          const pct = Math.round((completed / total) * 100);
-          const latest = events[events.length - 1];
+        try {
+          const events = JSON.parse(rawEvents);
+          if (Array.isArray(events) && events.length > 0) {
+            // Daily reset: strictly isolate events logged today (starting from 12:00 AM)
+            const todayEvents = events.filter(e => {
+              const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
+              return t >= todayStart;
+            });
 
-          if (latest?.status === 'skipped' || pct < 60) {
-            stamina = {
-              title: `${pct}% Resilience`,
-              color: '#dc2626',
-              subtext: `Break challenges skipped (${completed} of ${total} met) - rest needed`
-            };
-          } else if (pct < 80) {
-            stamina = {
-              title: `${pct}% Resilience`,
-              color: '#d97706',
-              subtext: `Pacing lag detected (${completed} of ${total} challenges completed)`
-            };
-          } else {
-            stamina = {
-              title: `${pct}% Resilience`,
-              color: '#16a34a',
-              subtext: `High consistency: ${completed} of ${total} BreakGates completed`
-            };
+            // If recovery was completed today, any skipped BreakGate events that occurred BEFORE recovery completed have been reconciled!
+            const unrecoveredEvents = recoveryCompletedTime >= todayStart
+              ? todayEvents.filter(e => {
+                  const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
+                  return t > recoveryCompletedTime;
+                })
+              : todayEvents;
+
+            if (unrecoveredEvents.length > 0) {
+              totalEvents = unrecoveredEvents.length;
+              completedEvents = unrecoveredEvents.filter(e => e.status === 'completed').length;
+              skippedEvents = totalEvents - completedEvents;
+              staminaPct = Math.round((completedEvents / totalEvents) * 100);
+              const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
+
+              if (latest?.status === 'skipped' || staminaPct < 60) {
+                stamina = {
+                  title: `${staminaPct}% Resilience`,
+                  color: '#dc2626',
+                  subtext: `Break challenges skipped (${completedEvents} of ${totalEvents} met today) - rest needed`
+                };
+              } else if (staminaPct < 80) {
+                stamina = {
+                  title: `${staminaPct}% Resilience`,
+                  color: '#d97706',
+                  subtext: `Pacing lag detected (${completedEvents} of ${totalEvents} challenges completed today)`
+                };
+              } else {
+                stamina = {
+                  title: `${staminaPct}% Resilience`,
+                  color: '#16a34a',
+                  subtext: `High consistency: ${completedEvents} of ${totalEvents} BreakGates completed today`
+                };
+              }
+            } else if (recoveryCompletedTime >= todayStart) {
+              // Recovery completed today and no new unaddressed skips
+              totalEvents = 0;
+              completedEvents = 0;
+              skippedEvents = 0;
+              staminaPct = 100;
+              stamina = {
+                title: '100% Resilience',
+                color: '#16a34a',
+                subtext: 'Recovery break completed: cognitive baseline restored'
+              };
+            } else if (isStress) {
+              // BreakGate inactive/no events today, but user has cognitive stress/frustration
+              stamina = {
+                title: '65% Resilience',
+                color: '#d97706',
+                subtext: 'Cognitive strain detected - lighter study block advised'
+              };
+              staminaPct = 65;
+            } else {
+              // No sessions recorded yet today -> Full 100% Resilience reset for the fresh day
+              totalEvents = 0;
+              completedEvents = 0;
+              skippedEvents = 0;
+              staminaPct = 100;
+              stamina = {
+                title: '100% Resilience',
+                color: '#16a34a',
+                subtext: 'BreakGate cycle compliance on track'
+              };
+            }
           }
-        }
+        } catch (e) {}
+      } else if (recoveryCompletedTime >= todayStart) {
+        stamina = {
+          title: '100% Resilience',
+          color: '#16a34a',
+          subtext: 'Recovery break completed: cognitive baseline restored'
+        };
+        staminaPct = 100;
       } else if (isStress) {
         stamina = {
           title: '65% Resilience',
           color: '#d97706',
           subtext: 'Cognitive strain detected - lighter study block advised'
         };
+        staminaPct = 65;
       }
+
+      // 4. Generate Truly Dynamic Adaptive Coaching Strategy Cards
+      const dynamicStrategies = [];
+
+      // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
+      if (recoveryCompletedTime >= todayStart && skippedEvents === 0) {
+        dynamicStrategies.push({
+          title: 'Pacing & Recovery Rebalanced',
+          badge: 'Deficit Resolved',
+          badgeColor: '#16a34a',
+          badgeBg: 'rgba(22, 163, 74, 0.12)',
+          text: 'You completed your 5-minute restorative recovery break. Spaced recovery clears cognitive saturation and primes working memory for encoding new concepts.'
+        });
+      } else if (isIdle) {
+        const idleMinsMatch = reasonStr.match(/(\d+)\s*minute/i) || reasonStr.match(/(\d+)m/i);
+        const idleMins = telem?.idleMinutes || (idleMinsMatch ? idleMinsMatch[1] : 5);
+        dynamicStrategies.push({
+          title: 'Inactivity & Executive Inertia Kickstart',
+          badge: 'Inactivity Alert',
+          badgeColor: '#d97706',
+          badgeBg: 'rgba(217, 119, 6, 0.12)',
+          text: `You have been idle for ${idleMins} minutes with no active timer. Cognitive hesitation or task friction detected. Lower the cognitive barrier: start with a gentle 15-minute focus session on an easy, low-friction task to rebuild flow.`
+        });
+      } else if (isMotivated && (staminaPct < 60 || skippedEvents >= 2)) {
+        dynamicStrategies.push({
+          title: 'Protective Pacing: High Drive vs Recovery Cadence',
+          badge: 'Retention Safeguard',
+          badgeColor: '#d97706',
+          badgeBg: 'rgba(217, 119, 6, 0.12)',
+          text: `You reported feeling energetic and driven, which provides excellent cognitive momentum for study! However, ${skippedEvents} BreakGate recovery intervals were skipped today (${staminaPct}% compliance). In cognitive psychology, studying without spaced recovery creates hidden cognitive saturation and weakens long-term retention. The AI Coach prescribes a steady 25m cadence with completed breaks so your physical endurance sustains your mental motivation.`
+        });
+      } else if (staminaPct < 60 || skippedEvents >= 2) {
+        dynamicStrategies.push({
+          title: 'Break Recovery Deficit Alert',
+          badge: 'Rest Needed',
+          badgeColor: '#dc2626',
+          badgeBg: 'rgba(239, 68, 68, 0.1)',
+          text: `You have skipped ${skippedEvents} of your recent BreakGate recovery intervals (${staminaPct}% compliance). Skipping recovery causes cognitive saturation and lowers memory retention. We strongly recommend taking a restorative 5-minute break on your next cycle.`
+        });
+      } else if (staminaPct >= 80 && totalEvents > 0) {
+        dynamicStrategies.push({
+          title: 'Pacing & Retrieval Consistency',
+          badge: 'High Compliance',
+          badgeColor: '#16a34a',
+          badgeBg: 'rgba(22, 163, 74, 0.12)',
+          text: `High consistency detected: You have completed ${completedEvents} of ${totalEvents} BreakGate retrieval challenges (${staminaPct}%). This spacing interval primes memory consolidation and shields against late-session fatigue.`
+        });
+      } else {
+        dynamicStrategies.push({
+          title: 'Pacing & BreakGate Cadence',
+          badge: 'Active Protocol',
+          badgeColor: '#27522d',
+          badgeBg: 'rgba(95, 143, 94, 0.12)',
+          text: 'Consistently reviewing 3 retrieval questions before taking a break activates the testing effect, enhancing long-term conceptual recall without mental overload.'
+        });
+      }
+
+      // Strategy Card 2: Cognitive Telemetry & Study Protocol
+      if (recoveryCompletedTime >= todayStart && !isStress) {
+        dynamicStrategies.push({
+          title: 'Flow State Maintenance',
+          badge: 'Optimal Flow',
+          badgeColor: '#27522d',
+          badgeBg: 'rgba(95, 143, 94, 0.12)',
+          text: 'Cognitive fatigue has been mitigated. Maintain your active focus cadence to maximize uninterrupted knowledge encoding.'
+        });
+      } else if (isIdle) {
+        dynamicStrategies.push({
+          title: 'Low-Friction Task Priming Protocol',
+          badge: 'Momentum Protocol',
+          badgeColor: '#27522d',
+          badgeBg: 'rgba(95, 143, 94, 0.12)',
+          text: 'Break your upcoming task into just one simple step. Commencing a short 15-minute block bypasses task hesitation, initiates the Zeigarnik effect, and naturally transitions you into deep flow.'
+        });
+      } else if (isStress) {
+        dynamicStrategies.push({
+          title: 'Cognitive De-escalation Protocol',
+          badge: 'Stress Mitigation',
+          badgeColor: '#dc2626',
+          badgeBg: 'rgba(239, 68, 68, 0.1)',
+          text: 'Elevated friction or rapid keystroke corrections detected. Step back from the screen for a moment, hydrate, and ease into your session with a light, simple task first.'
+        });
+      } else if (staminaPct < 60) {
+        dynamicStrategies.push({
+          title: 'Restorative Pacing Protocol',
+          badge: 'Low Energy Buffer',
+          badgeColor: '#d97706',
+          badgeBg: 'rgba(217, 119, 6, 0.12)',
+          text: 'Your current study resilience is below 60%. Stand up, hydrate, and relax your visual field. When resuming, prioritize a light review task rather than heavy exam questions.'
+        });
+      } else if (isMotivated && staminaPct >= 80) {
+        dynamicStrategies.push({
+          title: 'High-Yield Memory Reinforcement',
+          badge: 'Peak Flow',
+          badgeColor: '#16a34a',
+          badgeBg: 'rgba(22, 163, 74, 0.12)',
+          text: 'Cognitive resilience and motivation are peaked. Practice active verbalization: state the concept reasoning out loud before flipping flashcards to engage dual auditory-visual memory pathways.'
+        });
+      } else {
+        dynamicStrategies.push({
+          title: 'Flow State Maintenance',
+          badge: 'Optimal Flow',
+          badgeColor: '#27522d',
+          badgeBg: 'rgba(95, 143, 94, 0.12)',
+          text: 'Attention markers are stable. Keep external distractions out of reach and maintain your current Pomodoro cadence to maximize uninterrupted knowledge encoding.'
+        });
+      }
+
+      setAdaptiveStrategies(dynamicStrategies);
 
       setTelemetryDiagnostics({
         cognitiveState: cogState,
@@ -329,34 +639,56 @@ export default function CoachPage() {
 
     loadDiagnostics();
 
-    // Load insight from localStorage using namespaced key
-    const telemetryKey = `ifocus_telemetry_insight_${userName}`;
-    const storedInsight = localStorage.getItem(telemetryKey);
+    // Load active insight from localStorage across namespaced & global keys
+    let activeInsight = null;
+    try {
+      const stored = localStorage.getItem(`ifocus_telemetry_insight_${userName}`) || 
+                     localStorage.getItem('ifocus_telemetry_insight_anonymous') ||
+                     localStorage.getItem('ifocus_active_idle_alert') ||
+                     localStorage.getItem('ifocus_latest_telemetry');
+      if (stored) {
+        const data = JSON.parse(stored);
+        if (data && (data.reason || data.actionPlan)) {
+          let isRestActive = false;
+          try {
+            const rRaw = localStorage.getItem('ifocus_ai_rest_recovery');
+            if (rRaw) {
+              const rData = JSON.parse(rRaw);
+              if (rData && rData.active) isRestActive = true;
+            }
+          } catch (e) {}
 
-    if (storedInsight) {
-      try {
-        const data = JSON.parse(storedInsight);
-        setInsight(data);
-      } catch (e) {
-        console.error("Error parsing telemetry data", e);
-      }
-    } else {
-      try {
-        const telemRaw = localStorage.getItem('ifocus_latest_telemetry');
-        if (telemRaw) {
-          const t = JSON.parse(telemRaw);
-          const s = String(t.state || t.sentiment || '').toLowerCase();
-          if (s.includes('stress') || s.includes('distract') || t.errorRate > 25) {
-            setInsight({
-              reason: t.reason || "High correction rate & stress indicators logged in your recent study telemetry.",
-              actionPlan: "1. Take a 5-minute hydration & stretch break away from your screen.\n2. We've adjusted your next focus interval to a gentle 15-minute block.\n3. Tackle one small bite-sized subtask to rebuild calm momentum."
-            });
+          let rcTime = 0;
+          try {
+            rcTime = Number(localStorage.getItem('ifocus_recovery_completed')) || 0;
+          } catch (e) {}
+
+          let crTime = 0;
+          try {
+            crTime = Number(localStorage.getItem('ifocus_cognitive_reset')) || 0;
+          } catch (e) {}
+
+          const effectiveReset = Math.max(rcTime, crTime);
+          const insightTime = data.timestamp ? new Date(data.timestamp).getTime() : 0;
+
+          if (!isRestActive && (effectiveReset === 0 || (insightTime > 0 && insightTime > effectiveReset))) {
+            activeInsight = data;
           }
         }
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.error("Error parsing telemetry data", e);
     }
 
+    setInsight(activeInsight);
     setLoading(false);
+
+    const handleTelemetryEvent = (e) => {
+      loadDiagnostics();
+      if (e?.detail && (e.detail.reason || e.detail.actionPlan)) {
+        setInsight(e.detail);
+      }
+    };
 
     const handleJournalUpdate = () => {
       try {
@@ -365,13 +697,13 @@ export default function CoachPage() {
       } catch (e) {}
     };
 
-    window.addEventListener('ifocus_telemetry_updated', loadDiagnostics);
+    window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
     window.addEventListener('ifocus_breakgate_updated', loadDiagnostics);
     window.addEventListener('ifocus_timer_sync', loadDiagnostics);
     window.addEventListener('storage', handleJournalUpdate);
 
     return () => {
-      window.removeEventListener('ifocus_telemetry_updated', loadDiagnostics);
+      window.removeEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
       window.removeEventListener('ifocus_breakgate_updated', loadDiagnostics);
       window.removeEventListener('ifocus_timer_sync', loadDiagnostics);
       window.removeEventListener('storage', handleJournalUpdate);
@@ -379,6 +711,16 @@ export default function CoachPage() {
   }, [status, userName, loadDiagnostics]);
 
   const handleReturnHome = () => {
+    // If AI Rest Recovery is currently running, return directly to dashboard without resetting
+    if (isAiRestRunning) {
+      try {
+        router.push('/dashboard');
+      } catch (e) {
+        window.location.href = '/dashboard';
+      }
+      return;
+    }
+
     setApplyingHome(true);
 
     try {
@@ -394,7 +736,21 @@ export default function CoachPage() {
       const alertBody = `${insight?.actionPlan || ''} ${insight?.reason || ''}`.toLowerCase();
       const combined = `${rhythmTitle} ${cogTitle} ${alertBody}`.toLowerCase();
 
-      if (combined.includes('15m') || combined.includes('15 minute') || combined.includes('15-minute') || combined.includes('stress') || combined.includes('tension') || combined.includes('fatigue')) {
+      // Idle / Inactivity checks: When user is idle, they need to START a focus session (not take a rest break!)
+      const isIdleAlert = combined.includes('inactivity detected') || 
+                          combined.includes('idle for') || 
+                          combined.includes('hesitation') || 
+                          combined.includes('inactivity alert') ||
+                          (insight?.type === 'idle') ||
+                          (insight?.state === 'idle');
+
+      if (isIdleAlert) {
+        wMin = 15;
+        bMin = 5;
+        targetSessions = 2;
+        cadenceTitle = "Gentle Focus (Inactivity Kickstart)";
+        detectedState = "Inactivity Kickstart";
+      } else if (combined.includes('15m') || combined.includes('15 minute') || combined.includes('15-minute') || combined.includes('stress') || combined.includes('tension') || combined.includes('fatigue')) {
         wMin = 15;
         bMin = 5;
         targetSessions = 2;
@@ -420,6 +776,25 @@ export default function CoachPage() {
         }
       }
 
+      // Check if current strategy or telemetry recommends rest / recovery
+      // MUST NOT prescribe rest if the user was simply idle/inactive (they need to start focus, not rest!)
+      const hasRestStrategy = !isIdleAlert && Array.isArray(adaptiveStrategies) && adaptiveStrategies.some(s => 
+        s.badge === 'Rest Needed' || 
+        s.badge === 'Stress Mitigation' || 
+        s.badge === 'Low Energy Buffer' || 
+        String(s.title || '').toLowerCase().includes('deficit') ||
+        String(s.title || '').toLowerCase().includes('de-escalation') ||
+        String(s.text || '').toLowerCase().includes('step back from the screen') ||
+        String(s.text || '').toLowerCase().includes('restorative 5-minute break')
+      );
+
+      const isRestPrescribed = !isIdleAlert && (hasRestStrategy || 
+        detectedState === 'Stressed' || 
+        combined.includes('rest needed') || 
+        combined.includes('break recovery deficit') || 
+        (combined.includes('fatigue') && !combined.includes('idle')) || 
+        (insight?.actionPlan && (insight.actionPlan.toLowerCase().includes('hydration') || insight.actionPlan.toLowerCase().includes('take a 5-minute'))));
+
       // 2. Persist custom timer schedule so it actually applies to the dashboard
       const customTimer = {
         customWorkTime: { min: wMin, sec: 0 },
@@ -431,45 +806,92 @@ export default function CoachPage() {
       localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
 
       const aiDetails = {
-        title: cadenceTitle,
+        title: isRestPrescribed ? "Restorative Recovery Protocol" : cadenceTitle,
         state: detectedState,
-        rhythm: `${wMin}m Focus / ${bMin}m Rest`,
+        rhythm: isRestPrescribed ? "5m AI Rest Break" : `${wMin}m Focus / ${bMin}m Rest`,
         sessions: targetSessions,
-        message: insight?.actionPlan || telemetryDiagnostics?.recommendedRhythm?.subtext || "AI Coach recommended cadence applied."
+        message: insight?.actionPlan || telemetryDiagnostics?.recommendedRhythm?.subtext || "AI Coach recommended strategy applied."
       };
       localStorage.setItem('ifocus_ai_adjusted_active', 'true');
       localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiDetails));
 
-      const syncPayload = {
-        isRunning: false,
-        isFocus: true,
-        timeLeft: wMin * 60,
-        totalTime: wMin * 60,
-        targetEndTime: null,
-        timerPreset: 'Custom',
-        customWorkDuration: wMin * 60,
-        customBreakDuration: bMin * 60,
-        customSessions: targetSessions,
-        sessionCount: 1,
-        presencePaused: false,
-        lastPresenceElapsed: 0,
-        lastPresenceRemaining: wMin * 60,
-        breakGatePending: false
-      };
-      localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
-      window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+      if (isRestPrescribed) {
+        // Clear old recovery completion so user must complete this break to resolve
+        localStorage.removeItem('ifocus_recovery_completed');
+        localStorage.removeItem('ifocus_cognitive_reset');
 
-      // Clear the insight notification so it doesn't prompt again
-      const telemetryKey = `ifocus_telemetry_insight_${userName}`;
-      localStorage.removeItem(telemetryKey);
+        const restDurationSec = 5 * 60; // 5-minute restorative step-away break
+        const restPayload = {
+          active: true,
+          durationMins: 5,
+          startedAt: Date.now(),
+          targetEndTime: Date.now() + restDurationSec * 1000,
+          reason: "AI Coach prescribed a 5-minute restorative recovery break to prevent cognitive saturation and protect long-term retention."
+        };
+        localStorage.setItem('ifocus_ai_rest_recovery', JSON.stringify(restPayload));
+
+        const syncPayload = {
+          isRunning: true,
+          isFocus: false, // In Rest Break mode
+          timeLeft: restDurationSec,
+          totalTime: restDurationSec,
+          targetEndTime: Date.now() + restDurationSec * 1000,
+          timerPreset: 'Custom',
+          customWorkDuration: wMin * 60,
+          customBreakDuration: restDurationSec,
+          customSessions: targetSessions,
+          sessionCount: 1,
+          presencePaused: false,
+          lastPresenceElapsed: 0,
+          lastPresenceRemaining: restDurationSec,
+          breakGatePending: false,
+          isAiRestRecovery: true
+        };
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+
+        localStorage.setItem('ifocus_applied_toast', JSON.stringify({
+          title: "AI Rest Recovery Active",
+          message: "5-minute restorative recovery break started to protect focus and memory retention."
+        }));
+      } else {
+        localStorage.removeItem('ifocus_ai_rest_recovery');
+        localStorage.setItem('ifocus_cognitive_reset', String(Date.now()));
+
+        const syncPayload = {
+          isRunning: false,
+          isFocus: true,
+          timeLeft: wMin * 60,
+          totalTime: wMin * 60,
+          targetEndTime: null,
+          timerPreset: 'Custom',
+          customWorkDuration: wMin * 60,
+          customBreakDuration: bMin * 60,
+          customSessions: targetSessions,
+          sessionCount: 1,
+          presencePaused: false,
+          lastPresenceElapsed: 0,
+          lastPresenceRemaining: wMin * 60,
+          breakGatePending: false,
+          isAiRestRecovery: false
+        };
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
+
+        // Save notification toast for Dashboard
+        localStorage.setItem('ifocus_applied_toast', JSON.stringify({
+          title: cadenceTitle,
+          message: `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
+        }));
+      }
+
+      // Clear alert keys so the alert is fulfilled
+      localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
+      localStorage.removeItem('ifocus_telemetry_insight_anonymous');
       localStorage.removeItem('ifocus_latest_telemetry');
+      localStorage.removeItem('ifocus_active_idle_alert');
       setInsight(null);
-
-      // Save notification toast for Dashboard
-      localStorage.setItem('ifocus_applied_toast', JSON.stringify({
-        title: cadenceTitle,
-        message: `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
-      }));
+      window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
     } catch (e) {
       console.error("Error applying coach rhythm:", e);
     }
@@ -490,6 +912,17 @@ export default function CoachPage() {
     setInsight(sampleIntervention);
     const telemetryKey = `ifocus_telemetry_insight_${userName}`;
     localStorage.setItem(telemetryKey, JSON.stringify(sampleIntervention));
+  };
+
+  const getSynchronizedActionPlan = (planText) => {
+    if (!planText) return planText;
+    const rhythmTitle = String(telemetryDiagnostics?.recommendedRhythm?.title || '');
+    const match = rhythmTitle.match(/(\d+)m Work/i);
+    if (match && match[1]) {
+      const activeWorkMin = match[1];
+      return planText.replace(/start a gentle \d+m focus session/i, `start a gentle ${activeWorkMin}m focus session`);
+    }
+    return planText;
   };
 
   if (loading) return null;
@@ -519,7 +952,7 @@ export default function CoachPage() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
-          Start Focus Session
+          <span>{isAiRestRunning ? 'Return to Recovery Break' : 'Start Focus Session'}</span>
         </button>
       </div>
 
@@ -548,17 +981,17 @@ export default function CoachPage() {
             <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
               
               {/* Metric 1: Attention State */}
-              <div className="coach-metric-card coach-metric-primary" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem', gap: '8px' }}>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+              <div className="coach-metric-card coach-metric-primary" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.25rem', gap: '4px' }}>
+                  <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     Cognitive State
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', color: telemetryDiagnostics.cognitiveState.color, fontWeight: 700, whiteSpace: 'nowrap', background: `${telemetryDiagnostics.cognitiveState.dotColor}18`, padding: '2px 8px', borderRadius: '10px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: telemetryDiagnostics.cognitiveState.dotColor, boxShadow: `0 0 6px ${telemetryDiagnostics.cognitiveState.dotColor}` }} />
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.62rem', color: telemetryDiagnostics.cognitiveState.color, fontWeight: 700, whiteSpace: 'nowrap', background: `${telemetryDiagnostics.cognitiveState.dotColor}18`, padding: '1.5px 6px', borderRadius: '8px', flexShrink: 0 }}>
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: telemetryDiagnostics.cognitiveState.dotColor, boxShadow: `0 0 5px ${telemetryDiagnostics.cognitiveState.dotColor}` }} />
                     {telemetryDiagnostics.cognitiveState.status}
                   </span>
                 </div>
-                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: telemetryDiagnostics.cognitiveState.color, lineHeight: 1.25 }}>
+                <div style={{ fontSize: '1.02rem', fontWeight: 800, color: telemetryDiagnostics.cognitiveState.color, lineHeight: 1.25 }}>
                   {telemetryDiagnostics.cognitiveState.title}
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
@@ -566,10 +999,10 @@ export default function CoachPage() {
                 </div>
               </div>
 
-              {/* Metric 2: Focus Stamina */}
+              {/* Metric 2: Study Resilience */}
               <div className="coach-metric-card" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px' }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
-                  Study Stamina
+                  Study Resilience
                 </div>
                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: telemetryDiagnostics.studyStamina.color, lineHeight: 1.25 }}>
                   {telemetryDiagnostics.studyStamina.title}
@@ -621,26 +1054,55 @@ export default function CoachPage() {
                   </p>
                 </div>
 
-                {/* Action Plan (Fills the available vertical height gracefully) */}
+                {/* Action Plan */}
                 {insight.actionPlan && (
                   <div style={{ 
-                    flex: 1, 
-                    minHeight: 0, 
+                    flex: '0 0 auto', 
                     background: 'rgba(95, 143, 94, 0.06)', 
-                    padding: '1.15rem 1.25rem', 
+                    padding: '1.05rem 1.15rem', 
                     borderRadius: '12px', 
                     border: '1px solid rgba(95, 143, 94, 0.2)', 
                     display: 'flex', 
                     flexDirection: 'column' 
                   }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.78rem', color: '#27522d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                    <h4 style={{ margin: '0 0 0.45rem 0', fontSize: '0.78rem', color: '#27522d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
                       Recommended Action Plan
                     </h4>
-                    <div style={{ flex: 1, minHeight: 0, color: '#374151', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-line', overflowY: 'auto' }}>
-                      {insight.actionPlan}
+                    <div style={{ color: '#374151', fontSize: '0.88rem', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                      {getSynchronizedActionPlan(insight.actionPlan)}
                     </div>
                   </div>
                 )}
+
+                {/* 3-Step Guided Focus Reset Protocol */}
+                <div style={{
+                  padding: '0.85rem 1.05rem',
+                  background: 'rgba(59, 130, 246, 0.04)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(59, 130, 246, 0.16)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.4rem',
+                  flexShrink: 0
+                }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Guided Focus Reset Protocol
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.82rem', color: '#374151', lineHeight: '1.4' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
+                      <span>Disengage from the screen and take slow deep breaths</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
+                      <span>Hydrate and relax mental friction before resuming</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
+                      <span>Resume with a low-friction warm-up task to regain flow</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               /* Standard Adaptive Coaching Feed */
@@ -659,53 +1121,39 @@ export default function CoachPage() {
                   </span>
                 </div>
 
-                {/* Pacing & BreakGate Compliance Box (flex: 1 to fill card cleanly) */}
-                <div style={{ 
-                  flex: 1, 
-                  minHeight: 0, 
-                  padding: '1.15rem 1.35rem', 
-                  background: '#f8faf8', 
-                  borderRadius: '12px', 
-                  border: '1px solid rgba(95, 143, 94, 0.16)', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  justifyContent: 'center', 
-                  gap: '0.45rem' 
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#27522d', flexShrink: 0 }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#27522d' }}>
-                      Pacing & BreakGate Compliance
-                    </span>
+                {/* Dynamically Generated Adaptive Coaching Protocols based on BreakGate & Telemetry */}
+                {adaptiveStrategies.map((strat, idx) => (
+                  <div 
+                    key={idx}
+                    style={{ 
+                      flex: 1, 
+                      minHeight: 0, 
+                      padding: '1.1rem 1.35rem', 
+                      background: '#f8faf8', 
+                      borderRadius: '12px', 
+                      border: '1px solid rgba(95, 143, 94, 0.16)', 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      justifyContent: 'center', 
+                      gap: '0.45rem' 
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: strat.badgeColor || '#27522d', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: strat.badgeColor || '#27522d' }}>
+                          {strat.title}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: strat.badgeColor, background: strat.badgeBg, padding: '2px 8px', borderRadius: '6px' }}>
+                        {strat.badge}
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#4b5563', lineHeight: 1.65 }}>
+                      {strat.text}
+                    </p>
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: '#4b5563', lineHeight: 1.65 }}>
-                    Your dwell times on flashcards indicate healthy active recall. Continue using the 25-minute Pomodoro rhythm to maximize memory consolidation without mental overload.
-                  </p>
-                </div>
-
-                {/* High-Yield Memory Reinforcement Box (flex: 1 to fill card cleanly) */}
-                <div style={{ 
-                  flex: 1, 
-                  minHeight: 0, 
-                  padding: '1.15rem 1.35rem', 
-                  background: '#f8faf8', 
-                  borderRadius: '12px', 
-                  border: '1px solid rgba(95, 143, 94, 0.16)', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  justifyContent: 'center', 
-                  gap: '0.45rem' 
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#27522d', flexShrink: 0 }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#27522d' }}>
-                      High-Yield Memory Reinforcement
-                    </span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: '#4b5563', lineHeight: 1.65 }}>
-                    When self-testing on flashcards, practice active verbalization: state the reasoning out loud before flipping to activate dual auditory-visual memory pathways.
-                  </p>
-                </div>
+                ))}
 
               </div>
             )}
@@ -713,66 +1161,61 @@ export default function CoachPage() {
 
           {/* Action Footer for Card 1 */}
           <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
-            {insight ? (
-              <div style={{ display: 'flex', gap: '0.65rem' }}>
-                <button
-                  type="button"
-                  onClick={handleReturnHome}
-                  disabled={applyingHome}
-                  className="btn-primary"
-                  style={{
-                    padding: '0.65rem 1.25rem',
-                    fontSize: '0.86rem',
-                    fontWeight: 600,
-                    cursor: applyingHome ? 'wait' : 'pointer',
-                    margin: 0,
-                    flex: 1.2,
-                    opacity: applyingHome ? 0.75 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  {applyingHome ? (
-                    <span>Applying Cadence...</span>
-                  ) : (
-                    <span>Apply & Return to Dashboard</span>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
+            <div style={{ display: 'flex', gap: '0.65rem' }}>
+              <button
+                type="button"
+                onClick={handleReturnHome}
+                disabled={applyingHome}
+                className="btn-primary"
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  cursor: applyingHome ? 'wait' : 'pointer',
+                  margin: 0,
+                  flex: 1.2,
+                  opacity: applyingHome ? 0.75 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                {applyingHome ? (
+                  <span>Applying Strategy...</span>
+                ) : isAiRestRunning ? (
+                  <span>Return to Dashboard (Recovery Active)</span>
+                ) : (
+                  <span>Apply Strategy to Dashboard</span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAiRestRunning) {
+                    router.push('/dashboard');
+                    return;
+                  }
+                  if (insight) {
                     setInsight(null);
                     try {
                       localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
+                      localStorage.removeItem('ifocus_telemetry_insight_anonymous');
                       localStorage.removeItem('ifocus_latest_telemetry');
+                      localStorage.removeItem('ifocus_active_idle_alert');
+                      localStorage.setItem('ifocus_cognitive_reset', String(Date.now()));
                       loadDiagnostics();
                     } catch (e) {}
-                  }}
-                  className="btn-secondary"
-                  style={{ padding: '0.65rem 1rem', fontSize: '0.86rem', fontWeight: 600, cursor: 'pointer', margin: 0, flex: 0.8 }}
-                >
-                  Dismiss Alert
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Interactive Demo:</span>
-                <button
-                  type="button"
-                  onClick={handleSimulateIntervention}
-                  className="btn-secondary"
-                  style={{ fontSize: '0.8rem', padding: '0.45rem 0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  Simulate Focus Intervention
-                </button>
-              </div>
-            )}
+                  } else {
+                    router.push('/dashboard');
+                  }
+                }}
+                className="btn-secondary"
+                style={{ padding: '0.65rem 1rem', fontSize: '0.86rem', fontWeight: 600, cursor: 'pointer', margin: 0, flex: 0.8, textAlign: 'center' }}
+              >
+                {isAiRestRunning ? 'Back to Dashboard' : 'Dismiss'}
+              </button>
+            </div>
           </div>
         </div>
 
