@@ -71,3 +71,4 @@ export async function GET(request) {
     return NextResponse.json({ active: true, error: "Transient failure" }, { status: 200 });
   }
 }
+

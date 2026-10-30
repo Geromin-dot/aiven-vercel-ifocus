@@ -226,9 +226,10 @@ export default function ConcurrentSessionGuard() {
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
-          Log In on This Device
+          Log Out
         </button>
       </div>
     </div>
   );
 }
+

@@ -3736,8 +3736,11 @@ textarea:focus {
 
   /* 10. Mini Timer adjustment on mobile */
   #globalMiniTimerPill {
-    bottom: calc(75px + env(safe-area-inset-bottom)) !important;
-    right: 14px !important;
+    max-width: 250px !important;
+    height: 46px !important;
+    max-height: 46px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
   /* 11. Slide up keyframe animation for PWA install banner */

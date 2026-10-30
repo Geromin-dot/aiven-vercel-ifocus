@@ -605,7 +605,7 @@ export default function GlobalTimer() {
   // Trigger Active Presence Pause
   const triggerPresencePause = useCallback(() => {
     const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-    if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
+    if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin) {
       lastActivityRef.current = Date.now();
       return;
     }
@@ -627,13 +627,13 @@ export default function GlobalTimer() {
     commitStorageState(pausedState, true);
     setShowPresenceModal(true);
     playPresenceChime();
-  }, [commitStorageState, readStorageState, pathname, isAdmin, session?.user]);
+  }, [commitStorageState, readStorageState, pathname, isAdmin]);
 
   // Proactive Idle Coach Intervention Trigger
   const triggerIdleCoachIntervention = useCallback((isTest = false, explicitMinutes = null) => {
     const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-    // Strictly prevent firing if user is on public landing page, login, signup, admin, or unauthenticated
-    if (!isTest && (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user)) {
+    // Strictly prevent firing if user is on public landing page, login, signup, or admin
+    if (!isTest && (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin)) {
       lastActivityRef.current = Date.now();
       return;
     }
@@ -718,15 +718,15 @@ export default function GlobalTimer() {
   // Global Inactivity (AFK) Listeners across all user input methods
   useEffect(() => {
     const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname)) {
       lastActivityRef.current = Date.now();
       return;
     }
 
     const handleUserActivity = () => {
-      // Do not run idle checks on public routes or unauthenticated visitors
+      // Do not run idle checks on public routes or exempt paths
       const activePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname) || !session?.user) {
+      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname)) {
         lastActivityRef.current = Date.now();
         return;
       }
@@ -767,7 +767,7 @@ export default function GlobalTimer() {
     const handleVisibilityOrFocus = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
         const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-        if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+        if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname)) {
           lastActivityRef.current = Date.now();
           setShowPresenceModal(false);
           setShowIdleCoachModal(false);
@@ -841,14 +841,14 @@ export default function GlobalTimer() {
   // Idle AFK Coach Inactivity Watcher (When NO timer is running)
   useEffect(() => {
     const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname)) {
       lastActivityRef.current = Date.now();
       return;
     }
 
     const checkAfkInactivity = () => {
       const activePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname) || !session?.user) {
+      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname)) {
         lastActivityRef.current = Date.now();
         return;
       }
@@ -1243,8 +1243,8 @@ export default function GlobalTimer() {
 
         if (activePresenceEnabled && isIntervalReached) {
           const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-          if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
-            // Do not pause on exempt routes or if unauthenticated; advance check baseline so countdown never hangs
+          if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin) {
+            // Do not pause on exempt routes; advance check baseline so countdown never hangs
             current.lastPresenceRemaining = remainingSeconds;
             lastActivityRef.current = Date.now();
           } else {
@@ -1271,7 +1271,7 @@ export default function GlobalTimer() {
         // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
         if (!burnoutCheckedThisSessionRef.current) {
           const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-          if (!isExemptPath(livePath) && !isExemptPath(pathname) && !isAdmin && session?.user) {
+          if (!isExemptPath(livePath) && !isExemptPath(pathname) && !isAdmin) {
             let burnoutCheckEnabled = true;
             let burnoutCheckMinutes = 20;
             try {
@@ -1851,24 +1851,11 @@ export default function GlobalTimer() {
   };
 
   const isDashboard = pathname === "/dashboard";
-  const [dashboardScrolled, setDashboardScrolled] = useState(false);
 
-  useEffect(() => {
-    if (!isDashboard) {
-      setDashboardScrolled(false);
-      return;
-    }
-    const handleScroll = () => {
-      // Reveal floating pill on dashboard when scrolled past hero section (> 280px)
-      setDashboardScrolled(window.scrollY > 280);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [isDashboard]);
-
+  // Floating mini-timer strictly appears ONLY when navigating away from the dashboard
+  // (e.g. studying in /flashcards, reviewing in /analytics, /coach, or adjusting /settings)
   const showFloatingMiniTimer =
-    (!isDashboard || dashboardScrolled) &&
+    !isDashboard &&
     (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
 
   const isWarning = timerState.breakGatePending || timerState.presencePaused;
@@ -2028,13 +2015,20 @@ export default function GlobalTimer() {
             position: "fixed",
             left: miniTimerPos.x !== null ? `${miniTimerPos.x}px` : "auto",
             top: miniTimerPos.y !== null ? `${miniTimerPos.y}px` : "auto",
-            bottom: miniTimerPos.y === null ? "24px" : "auto",
-            right: miniTimerPos.x === null ? "28px" : "auto",
+            bottom: miniTimerPos.y === null ? "calc(75px + env(safe-area-inset-bottom, 24px))" : "auto",
+            right: miniTimerPos.x === null ? "16px" : "auto",
             zIndex: 9998,
             display: "flex",
             alignItems: "center",
-            gap: "0.75rem",
-            padding: "0.55rem 0.95rem 0.65rem 0.75rem",
+            gap: "0.65rem",
+            padding: "0 0.95rem 0 0.75rem",
+            height: "46px",
+            maxHeight: "46px",
+            maxWidth: "250px",
+            width: "fit-content",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
             background: "rgba(255, 255, 255, 0.96)",
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
@@ -2049,7 +2043,7 @@ export default function GlobalTimer() {
             userSelect: "none",
             touchAction: "none",
             animation: isDraggingMiniTimer ? "none" : isNavSliding ? "ifocusSlideInFromRight 0.55s cubic-bezier(0.16, 1, 0.3, 1) both" : pillAnimation,
-                        transition: isDraggingMiniTimer
+            transition: isDraggingMiniTimer
               ? "none"
               : "box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease",
           }}
