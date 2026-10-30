@@ -17,6 +17,20 @@ const getUserAudioVolumeFactor = () => {
   return 0.7; // default 70%
 };
 
+// Helper: Determine if a route is public, administrative, or exempt from AFK/idle/presence checks
+const isExemptPath = (path) => {
+  if (!path) return true;
+  const cleanPath = path.split("?")[0].split("#")[0].replace(/\/+$/, "") || "/";
+  return (
+    cleanPath === "/" ||
+    cleanPath === "/login" ||
+    cleanPath === "/signup" ||
+    cleanPath.startsWith("/admin") ||
+    cleanPath.startsWith("/showcase-preview") ||
+    cleanPath.startsWith("/api")
+  );
+};
+
 // High-Reliability Shared Web Audio Context & Mobile iOS Unlocker
 const getSharedAudioContext = () => {
   if (typeof window === "undefined") return null;
@@ -357,7 +371,7 @@ export default function GlobalTimer() {
       prevPathRef.current = pathname;
 
       const isTimerActive = timerState.isRunning || timerState.presencePaused || timerState.breakGatePending;
-      if (isTimerActive && pathname !== '/' && !pathname.startsWith('/admin')) {
+      if (isTimerActive && !isExemptPath(pathname)) {
         setIsNavSliding(true);
         playNavigationSlideSound();
         const t = setTimeout(() => {
@@ -367,6 +381,19 @@ export default function GlobalTimer() {
       }
     }
   }, [pathname, timerState.isRunning, timerState.presencePaused, timerState.breakGatePending]);
+
+  // When user is on landing page or exempt route, immediately dismiss all modals and refresh activity
+  useEffect(() => {
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+    if (isExemptPath(livePath) || isExemptPath(pathname)) {
+      setShowPresenceModal(false);
+      setShowIdleCoachModal(false);
+      setShowBreakGateModal(false);
+      setShowBurnoutModal(false);
+      setShowCycleCompleteModal(false);
+      lastActivityRef.current = Date.now();
+    }
+  }, [pathname]);
 
   // Draggable Floating Mini-Timer State & Drag Gestures
   const [miniTimerPos, setMiniTimerPos] = useState({ x: null, y: null });
@@ -567,6 +594,11 @@ export default function GlobalTimer() {
 
   // Trigger Active Presence Pause
   const triggerPresencePause = useCallback(() => {
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+    if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
+      lastActivityRef.current = Date.now();
+      return;
+    }
     const current = readStorageState() || stateRef.current;
     const remainingSeconds = current.targetEndTime
       ? Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000))
@@ -585,12 +617,14 @@ export default function GlobalTimer() {
     commitStorageState(pausedState, true);
     setShowPresenceModal(true);
     playPresenceChime();
-  }, [commitStorageState, readStorageState]);
+  }, [commitStorageState, readStorageState, pathname, isAdmin, session?.user]);
 
   // Proactive Idle Coach Intervention Trigger
   const triggerIdleCoachIntervention = useCallback((isTest = false, explicitMinutes = null) => {
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
     // Strictly prevent firing if user is on public landing page, login, signup, admin, or unauthenticated
-    if (!isTest && (pathname === '/' || pathname === '/login' || pathname === '/signup' || pathname?.startsWith('/admin') || !session?.user)) {
+    if (!isTest && (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user)) {
+      lastActivityRef.current = Date.now();
       return;
     }
 
@@ -641,7 +675,7 @@ export default function GlobalTimer() {
       localStorage.setItem("ifocus_active_idle_alert", JSON.stringify(insightData));
       window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
     } catch (e) {}
-  }, [session?.user]);
+  }, [session?.user, pathname, isAdmin]);
 
   // Proactive Task Stagnation & Burnout Check Trigger (While Focus Timer is Running)
   const triggerBurnoutCheck = useCallback((isTest = false, minutes = 20) => {
@@ -669,15 +703,20 @@ export default function GlobalTimer() {
       localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(insightData));
       window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: insightData }));
     } catch (e) {}
-  }, [session?.user]);
+  }, [session?.user, pathname, isAdmin]);
 
   // Global Inactivity (AFK) Listeners across all user input methods
   useEffect(() => {
-    if (isAdmin || pathname.startsWith("/admin") || pathname === "/" || pathname === "/login" || pathname === "/signup" || !session?.user) return;
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+      lastActivityRef.current = Date.now();
+      return;
+    }
 
     const handleUserActivity = () => {
       // Do not run idle checks on public routes or unauthenticated visitors
-      if (isAdmin || pathname === "/" || pathname === "/login" || pathname === "/signup" || pathname?.startsWith("/admin") || !session?.user) {
+      const activePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname) || !session?.user) {
         lastActivityRef.current = Date.now();
         return;
       }
@@ -717,6 +756,13 @@ export default function GlobalTimer() {
 
     const handleVisibilityOrFocus = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+        if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+          lastActivityRef.current = Date.now();
+          setShowPresenceModal(false);
+          setShowIdleCoachModal(false);
+          return;
+        }
         handleUserActivity();
         const current = readStorageState() || stateRef.current;
         // If presence paused while away or screen locked on mobile, re-prompt and re-chime
@@ -784,9 +830,19 @@ export default function GlobalTimer() {
 
   // Idle AFK Coach Inactivity Watcher (When NO timer is running)
   useEffect(() => {
-    if (isAdmin || pathname.startsWith("/admin") || pathname === "/login" || pathname === "/signup" || pathname === "/" || !session?.user) return;
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname) || !session?.user) {
+      lastActivityRef.current = Date.now();
+      return;
+    }
 
     const checkAfkInactivity = () => {
+      const activePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+      if (isAdmin || isExemptPath(activePath) || isExemptPath(pathname) || !session?.user) {
+        lastActivityRef.current = Date.now();
+        return;
+      }
+
       // 1. MUST NOT have an actively ticking timer
       const current = readStorageState() || stateRef.current;
       const isTimerRunning = Boolean(current?.isRunning);
@@ -874,7 +930,12 @@ export default function GlobalTimer() {
 
   // Initialize and listen to sync and test events
   useEffect(() => {
-    if (isAdmin || pathname.startsWith("/admin")) return;
+    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname)) {
+      setShowPresenceModal(false);
+      setShowIdleCoachModal(false);
+      return;
+    }
     const handleSync = (e) => {
       if (e?.detail) {
         setTimerState(e.detail);
@@ -882,7 +943,10 @@ export default function GlobalTimer() {
           lastActivityRef.current = Date.now();
         }
         if (e.detail.presencePaused) {
-          setShowPresenceModal(true);
+          const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+          if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+            setShowPresenceModal(true);
+          }
         } else if (!e.detail.presencePaused) {
           setShowPresenceModal(false);
         }
@@ -906,7 +970,12 @@ export default function GlobalTimer() {
         const saved = readStorageState();
         if (saved) {
           setTimerState(saved);
-          if (saved.presencePaused) setShowPresenceModal(true);
+          if (saved.presencePaused) {
+            const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+            if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+              setShowPresenceModal(true);
+            }
+          }
           if (saved.breakGatePending) {
             try {
               const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
@@ -954,7 +1023,12 @@ export default function GlobalTimer() {
         initial.timeLeft = remaining;
       }
       setTimerState(initial);
-      if (initial.presencePaused) setShowPresenceModal(true);
+      if (initial.presencePaused) {
+        const currentLive = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+        if (!isExemptPath(currentLive) && !isExemptPath(pathname) && session?.user && !isAdmin) {
+          setShowPresenceModal(true);
+        }
+      }
       if (initial.breakGatePending) {
         try {
           const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
@@ -1164,6 +1238,13 @@ export default function GlobalTimer() {
         const isIntervalReached = focusSecondsSinceLastCheck >= intervalSeconds;
 
         if (activePresenceEnabled && isIntervalReached) {
+          const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+          if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
+            // Never trigger presence check interruption while on landing page or exempt route
+            lastActivityRef.current = Date.now();
+            return;
+          }
+
           // Immediately pause timer! It CANNOT continue until user clicks confirm!
           const pausedState = {
             ...current,
@@ -1185,6 +1266,11 @@ export default function GlobalTimer() {
 
         // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
         if (!burnoutCheckedThisSessionRef.current) {
+          const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+          if (isExemptPath(livePath) || isExemptPath(pathname) || isAdmin || !session?.user) {
+            // Do not trigger burnout check on exempt routes
+            return;
+          }
           let burnoutCheckEnabled = true;
           let burnoutCheckMinutes = 20;
           try {
@@ -1813,7 +1899,8 @@ export default function GlobalTimer() {
     ? "ifocusPillPulseWarning 2s ease-in-out infinite"
     : "none";
 
-  if (pathname === "/" || pathname.startsWith("/admin") || isAdmin) {
+  const liveRenderPath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
+  if (isExemptPath(liveRenderPath) || isExemptPath(pathname) || isAdmin) {
     return null;
   }
 
@@ -2404,7 +2491,7 @@ export default function GlobalTimer() {
       )}
 
       {/* Global Idle AFK Coach Intervention Toast (iOS Spring Toast Style - 100% Emoji-Free) */}
-      {showIdleCoachModal && pathname !== '/' && pathname !== '/login' && pathname !== '/signup' && session?.user && (
+      {showIdleCoachModal && !isExemptPath(pathname) && session?.user && (
         <div className="ios-notification-toast" style={{ zIndex: 99999 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
