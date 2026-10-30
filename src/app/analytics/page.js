@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
         }
       } catch (e) { }
 
-      // Sync cloud telemetry & cognitive state
+      // Sync cloud telemetry, breakgate events & study sessions from database
       fetch('/api/user/telemetry')
         .then(res => res.ok ? res.json() : null)
         .then(data => {
@@ -65,7 +65,43 @@ export default function AnalyticsPage() {
             if (cloud.cognitiveReset) {
               localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
             }
+            if (cloud.breakGateEvents && Array.isArray(cloud.breakGateEvents)) {
+              localStorage.setItem('ifocus_breakgate_events', JSON.stringify(cloud.breakGateEvents));
+            }
             setForceUpdate(prev => prev + 1);
+          }
+        })
+        .catch(() => {});
+
+      // Hydrate study session history from PostgreSQL database for cross-device parity
+      fetch('/api/study-sessions')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.sessions && Array.isArray(data.sessions)) {
+            try {
+              const localHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+              const existingDates = new Set(localHistory.map(s => s.id || s.date));
+              let added = false;
+              data.sessions.forEach(remote => {
+                const remoteKey = remote.id || remote.createdAt;
+                if (!existingDates.has(remoteKey)) {
+                  localHistory.push({
+                    id: remote.id,
+                    date: remote.createdAt,
+                    duration: remote.duration,
+                    score: remote.score,
+                    deckTitle: remote.deck?.title || 'General Focus',
+                    synced: true
+                  });
+                  added = true;
+                }
+              });
+              if (added || localHistory.length === 0) {
+                localHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                localStorage.setItem('ifocus_session_history', JSON.stringify(localHistory));
+                setForceUpdate(prev => prev + 1);
+              }
+            } catch (err) {}
           }
         })
         .catch(() => {});

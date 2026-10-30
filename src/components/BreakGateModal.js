@@ -232,8 +232,19 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
           date: iso,
           timestamp: iso
         });
-        localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
+        const trimmed = events.slice(-50);
+        localStorage.setItem('ifocus_breakgate_events', JSON.stringify(trimmed));
         window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
+        fetch('/api/user/telemetry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telemetryState: {
+              breakGateEvents: trimmed,
+              updatedAt: iso
+            }
+          })
+        }).catch(() => {});
       } catch (e) {}
     }
   };
@@ -249,8 +260,19 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         date: iso,
         timestamp: iso
       });
-      localStorage.setItem('ifocus_breakgate_events', JSON.stringify(events.slice(-50)));
+      const trimmed = events.slice(-50);
+      localStorage.setItem('ifocus_breakgate_events', JSON.stringify(trimmed));
       window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            breakGateEvents: trimmed,
+            updatedAt: iso
+          }
+        })
+      }).catch(() => {});
     } catch (e) {}
     if (onSkip) onSkip();
   };

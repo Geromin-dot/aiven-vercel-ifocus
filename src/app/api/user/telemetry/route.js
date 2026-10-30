@@ -58,16 +58,41 @@ export async function POST(req) {
     const body = await req.json();
     const updateData = {};
 
-    if (body.telemetryState !== undefined) {
-      updateData.telemetryState = typeof body.telemetryState === 'string'
-        ? body.telemetryState
-        : JSON.stringify(body.telemetryState);
-    }
+    if (body.telemetryState !== undefined || body.timerPreferences !== undefined) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { telemetryState: true, timerPreferences: true }
+      });
 
-    if (body.timerPreferences !== undefined) {
-      updateData.timerPreferences = typeof body.timerPreferences === 'string'
-        ? body.timerPreferences
-        : JSON.stringify(body.timerPreferences);
+      if (body.telemetryState !== undefined) {
+        let existingTelemetry = {};
+        if (currentUser?.telemetryState) {
+          try {
+            existingTelemetry = JSON.parse(currentUser.telemetryState);
+          } catch (e) {}
+        }
+        const incoming = typeof body.telemetryState === 'string'
+          ? JSON.parse(body.telemetryState)
+          : body.telemetryState;
+
+        const merged = { ...existingTelemetry, ...incoming };
+        updateData.telemetryState = JSON.stringify(merged);
+      }
+
+      if (body.timerPreferences !== undefined) {
+        let existingPrefs = {};
+        if (currentUser?.timerPreferences) {
+          try {
+            existingPrefs = JSON.parse(currentUser.timerPreferences);
+          } catch (e) {}
+        }
+        const incoming = typeof body.timerPreferences === 'string'
+          ? JSON.parse(body.timerPreferences)
+          : body.timerPreferences;
+
+        const merged = { ...existingPrefs, ...incoming };
+        updateData.timerPreferences = JSON.stringify(merged);
+      }
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -93,3 +118,4 @@ export async function POST(req) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

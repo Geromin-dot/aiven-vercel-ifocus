@@ -179,6 +179,12 @@ export default function CoachPage() {
             if (cloud.cognitiveReset) {
               localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
             }
+            if (cloud.breakGateEvents && Array.isArray(cloud.breakGateEvents)) {
+              localStorage.setItem('ifocus_breakgate_events', JSON.stringify(cloud.breakGateEvents));
+            }
+            if (cloud.activeBreakGateDeck) {
+              localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(cloud.activeBreakGateDeck));
+            }
             if (cloud.activeIdleAlert) {
               localStorage.setItem('ifocus_active_idle_alert', JSON.stringify(cloud.activeIdleAlert));
             }
