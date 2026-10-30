@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -78,7 +79,9 @@ export const authOptions = {
     },
     async jwt({ token, user, trigger, session }) {
       if (user) {
+        const newSessionId = randomUUID();
         token.sub = user.id;
+        token.sessionId = newSessionId;
         token.name = user.name || user.username;
         token.username = user.username;
         token.picture = user.image;
@@ -86,6 +89,17 @@ export const authOptions = {
         token.role = user.role || "STUDENT";
         token.status = user.status || "ACTIVE";
         token.statusReason = user.statusReason || null;
+
+        // Record active session ID to PostgreSQL to enforce Option A (Single-device active session)
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { currentSessionId: newSessionId }
+          });
+          console.log(`[AUTH SESSION] New active session created for user ${user.id} (${newSessionId})`);
+        } catch (err) {
+          console.error("Failed saving currentSessionId to user:", err);
+        }
       }
       if (trigger === "update" && session?.user) {
         if (session.user.name !== undefined) token.name = session.user.name;
@@ -97,17 +111,41 @@ export const authOptions = {
         if (session.user.statusReason !== undefined) token.statusReason = session.user.statusReason;
       }
 
-      // Live verification: Ensure user exists in PostgreSQL (kills session if admin deleted the account)
+      // Live verification: Ensure user exists in PostgreSQL and check for concurrent login (Option A)
       if (token?.sub) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { id: true, status: true, statusReason: true, role: true }
+            select: { id: true, status: true, statusReason: true, role: true, currentSessionId: true }
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
             return null;
           }
+
+          // If session token exists in JWT and does not match the database active session, kick out!
+          if (token.sessionId && dbUser.currentSessionId && token.sessionId !== dbUser.currentSessionId) {
+            console.log(`[AUTH CONCURRENT] Older session invalidated for user ${token.sub}. DB session: ${dbUser.currentSessionId}, Token session: ${token.sessionId}`);
+            return {
+              ...token,
+              error: 'CONCURRENT_LOGIN'
+            };
+          }
+
+          // Bootstrap existing sessions if token had no sessionId yet
+          if (!token.sessionId) {
+            if (dbUser.currentSessionId) {
+              token.sessionId = dbUser.currentSessionId;
+            } else {
+              const newSessionId = randomUUID();
+              token.sessionId = newSessionId;
+              await prisma.user.update({
+                where: { id: token.sub },
+                data: { currentSessionId: newSessionId }
+              }).catch(() => {});
+            }
+          }
+
           token.status = dbUser.status;
           token.statusReason = dbUser.statusReason;
           token.role = dbUser.role;
@@ -122,8 +160,15 @@ export const authOptions = {
       if (!token || !token.sub) {
         return null;
       }
+      if (token.error === 'CONCURRENT_LOGIN') {
+        return {
+          ...session,
+          error: 'CONCURRENT_LOGIN'
+        };
+      }
       if (session.user) {
         session.user.id = token.sub;
+        session.user.sessionId = token.sessionId;
         if (token.name) session.user.name = token.name;
         if (token.username) session.user.username = token.username;
         if (token.picture) session.user.image = token.picture;

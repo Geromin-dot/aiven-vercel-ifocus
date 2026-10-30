@@ -51,6 +51,7 @@ model User {
   yearLevel     String?
   section       String?
   yearSection   String?
+  currentSessionId String?
   
   accounts      Account[]
   sessions      Session[]

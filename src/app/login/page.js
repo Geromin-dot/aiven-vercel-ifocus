@@ -86,6 +86,8 @@ function LoginContent() {
         active: true,
         reason: rsn ? decodeURIComponent(rsn) : "Academic Integrity Review - In-person clearance with College Dean required"
       });
+    } else if (err === "CONCURRENT_SESSION") {
+      setError("Session Expired: You were logged out because this account was accessed on another device.");
     }
   }, [searchParams]);
 

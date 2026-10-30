@@ -432,9 +432,15 @@ export default function CommandCenterPage() {
   };
 
   const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio, customTitle = "Coach has noticed something") => {
+    const isHesitant = reason.toLowerCase().includes('hesitation') || reason.toLowerCase().includes('fatigue');
+    const stateType = isHesitant ? 'Fatigued' : 'Stressed';
+    const nowIso = new Date().toISOString();
     const telemetryData = {
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
       reason: reason,
+      state: stateType,
+      sentiment: stateType,
+      type: 'friction',
       actionPlan: actionPlan || "We recommend pausing your current task. Take a 5-minute deep breathing break away from the screen before attempting to refocus.",
       metrics: {
         dwellTime: Math.round(dwell),
@@ -444,6 +450,20 @@ export default function CommandCenterPage() {
     };
     try {
       localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemetryData));
+      localStorage.setItem('ifocus_latest_telemetry', JSON.stringify({
+        state: stateType,
+        sentiment: stateType,
+        type: 'friction',
+        fatigueLevel: isHesitant ? 'Elevated' : 'High',
+        reason: reason,
+        backspaces: Math.round(bsRatio * 10),
+        errorRate: Math.round(bsRatio * 100),
+        dwell: Math.round(dwell),
+        flight: Math.round(flight),
+        source: 'keystroke_anomaly',
+        timestamp: nowIso
+      }));
+      window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemetryData }));
     } catch (e) {
       console.warn("Telemetry storage failed:", e);
     }

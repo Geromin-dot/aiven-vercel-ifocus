@@ -236,43 +236,44 @@ export default function CoachPage() {
         return;
       }
 
-      // 1. Telemetry / Cognitive State
-      let telem = null;
+      // 1. Telemetry / Cognitive State: Gather all candidates and pick newest
+      const telemCandidates = [];
       try {
         const raw = localStorage.getItem('ifocus_latest_telemetry');
-        if (raw) telem = JSON.parse(raw);
+        if (raw) telemCandidates.push(JSON.parse(raw));
       } catch (e) {}
 
-      if (!telem) {
-        try {
-          const insightRaw = localStorage.getItem(`ifocus_telemetry_insight_${userName}`);
-          if (insightRaw) telem = JSON.parse(insightRaw);
-        } catch (e) {}
-      }
+      try {
+        const insightRaw = localStorage.getItem(`ifocus_telemetry_insight_${userName}`);
+        if (insightRaw) telemCandidates.push(JSON.parse(insightRaw));
+      } catch (e) {}
 
-      if (!telem) {
-        try {
-          const anonRaw = localStorage.getItem('ifocus_telemetry_insight_anonymous');
-          if (anonRaw) telem = JSON.parse(anonRaw);
-        } catch (e) {}
-      }
+      try {
+        const anonRaw = localStorage.getItem('ifocus_telemetry_insight_anonymous');
+        if (anonRaw) telemCandidates.push(JSON.parse(anonRaw));
+      } catch (e) {}
 
-      if (!telem) {
-        try {
-          const idleRaw = localStorage.getItem('ifocus_active_idle_alert');
-          if (idleRaw) telem = JSON.parse(idleRaw);
-        } catch (e) {}
-      }
+      try {
+        const idleRaw = localStorage.getItem('ifocus_active_idle_alert');
+        if (idleRaw) telemCandidates.push(JSON.parse(idleRaw));
+      } catch (e) {}
 
-      if (!telem) {
-        try {
-          const journalRaw = localStorage.getItem(`ifocus_journal_history_${userName}`);
-          if (journalRaw) {
-            const list = JSON.parse(journalRaw);
-            if (Array.isArray(list) && list.length > 0) telem = list[0];
-          }
-        } catch (e) {}
-      }
+      try {
+        const journalRaw = localStorage.getItem(`ifocus_journal_history_${userName}`);
+        if (journalRaw) {
+          const list = JSON.parse(journalRaw);
+          if (Array.isArray(list) && list.length > 0) telemCandidates.push(list[0]);
+        }
+      } catch (e) {}
+
+      // Sort candidate telemetry by newest timestamp
+      telemCandidates.sort((a, b) => {
+        const tA = a?.timestamp ? new Date(a.timestamp).getTime() : (a?.date ? new Date(a.date).getTime() : 0);
+        const tB = b?.timestamp ? new Date(b.timestamp).getTime() : (b?.date ? new Date(b.date).getTime() : 0);
+        return tB - tA;
+      });
+
+      let telem = telemCandidates.length > 0 ? telemCandidates[0] : null;
 
       // Check if telemetry/reflection is from today and not invalidated by a newer recovery/reset
       if (telem) {
@@ -283,15 +284,31 @@ export default function CoachPage() {
       }
 
       const stateStr = String(telem?.state || telem?.sentiment || telem?.type || '').toLowerCase();
-      const reasonStr = String(telem?.reason || '').toLowerCase();
+      const reasonStr = String(telem?.reason || telem?.actionPlan || '').toLowerCase();
       const backspaces = Number(telem?.backspaces) || 0;
-      const errorRate = Number(telem?.errorRate) || 0;
+      const errorRate = Number(telem?.errorRate || telem?.metrics?.errorRate) || 0;
 
       const isIdle = stateStr.includes('idle') || stateStr.includes('inactivity') || reasonStr.includes('idle') || reasonStr.includes('inactivity');
-      const isStress = !isIdle && (stateStr.includes('stress') || reasonStr.includes('stress') || stateStr === 'friction' || backspaces >= 6 || errorRate > 30);
-      const isDistracted = !isIdle && (stateStr.includes('distract') || reasonStr.includes('distract') || errorRate > 15);
-      const isFatigued = !isIdle && (stateStr.includes('fatigue') || reasonStr.includes('fatigue') || stateStr === 'hesitant');
-      const isMotivated = !isIdle && (stateStr.includes('motivat') || stateStr.includes('energetic') || stateStr.includes('ready'));
+      const isStress = !isIdle && (
+        stateStr.includes('stress') ||
+        stateStr.includes('friction') ||
+        stateStr.includes('tension') ||
+        stateStr.includes('frustrat') ||
+        stateStr.includes('overwhelm') ||
+        reasonStr.includes('stress') ||
+        reasonStr.includes('friction') ||
+        reasonStr.includes('tension') ||
+        reasonStr.includes('frustrat') ||
+        reasonStr.includes('overwhelm') ||
+        reasonStr.includes('mashing') ||
+        reasonStr.includes('simultaneous keys') ||
+        reasonStr.includes('holding down a key') ||
+        backspaces >= 6 ||
+        errorRate > 30
+      );
+      const isDistracted = !isIdle && !isStress && (stateStr.includes('distract') || reasonStr.includes('distract') || errorRate > 15);
+      const isFatigued = !isIdle && !isStress && (stateStr.includes('fatigue') || reasonStr.includes('fatigue') || stateStr === 'hesitant' || reasonStr.includes('hesitation'));
+      const isMotivated = !isIdle && !isStress && (stateStr.includes('motivat') || stateStr.includes('energetic') || stateStr.includes('ready'));
 
       let cogState = {
         title: 'In the Zone',
@@ -325,12 +342,13 @@ export default function CoachPage() {
           subtext: 'Short 15m focus kickstart to break task inertia and rebuild momentum'
         };
       } else if (isStress) {
+        const isSmash = reasonStr.includes('simultaneous') || reasonStr.includes('mashing') || reasonStr.includes('holding') || reasonStr.includes('friction');
         cogState = {
-          title: 'High Tension / Stress',
+          title: isSmash ? 'Cognitive Friction / Frustration' : 'High Tension / Stress',
           status: 'Tension',
           color: '#dc2626',
           dotColor: '#dc2626',
-          subtext: backspaces > 0 ? `Keystroke friction & stress logged (${backspaces} corrections)` : 'Stress & tension sentiment logged'
+          subtext: telem?.reason ? telem.reason : (backspaces > 0 ? `Keystroke friction & stress logged (${backspaces} corrections)` : 'Stress & tension sentiment logged')
         };
         recRhythm = {
           title: '15m Work / 5m Gate',
@@ -434,20 +452,21 @@ export default function CoachPage() {
               totalEvents = unrecoveredEvents.length;
               completedEvents = unrecoveredEvents.filter(e => e.status === 'completed').length;
               skippedEvents = totalEvents - completedEvents;
-              staminaPct = Math.round((completedEvents / totalEvents) * 100);
+              // Proportional deduction: baseline 100%, -20% per skip, +5% per completed recovery
+              staminaPct = Math.max(0, Math.min(100, 100 - (skippedEvents * 20) + (completedEvents * 5)));
               const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
 
-              if (latest?.status === 'skipped' || staminaPct < 60) {
+              if (skippedEvents >= 3 || staminaPct < 60) {
                 stamina = {
                   title: `${staminaPct}% Resilience`,
                   color: '#dc2626',
-                  subtext: `Break challenges skipped (${completedEvents} of ${totalEvents} met today) - rest needed`
+                  subtext: `Break challenges skipped (${skippedEvents} unrecovered today) - rest needed`
                 };
-              } else if (staminaPct < 80) {
+              } else if (skippedEvents > 0 || staminaPct < 80) {
                 stamina = {
                   title: `${staminaPct}% Resilience`,
                   color: '#d97706',
-                  subtext: `Pacing lag detected (${completedEvents} of ${totalEvents} challenges completed today)`
+                  subtext: `Pacing lag detected (${skippedEvents} break challenge skipped today)`
                 };
               } else {
                 stamina = {
@@ -509,7 +528,7 @@ export default function CoachPage() {
       const dynamicStrategies = [];
 
       // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
-      if (recoveryCompletedTime >= todayStart && skippedEvents === 0) {
+      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !isStress) {
         dynamicStrategies.push({
           title: 'Pacing & Recovery Rebalanced',
           badge: 'Deficit Resolved',
@@ -534,6 +553,14 @@ export default function CoachPage() {
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
           text: `You reported feeling energetic and driven, which provides excellent cognitive momentum for study! However, ${skippedEvents} BreakGate recovery intervals were skipped today (${staminaPct}% compliance). In cognitive psychology, studying without spaced recovery creates hidden cognitive saturation and weakens long-term retention. The AI Coach prescribes a steady 25m cadence with completed breaks so your physical endurance sustains your mental motivation.`
+        });
+      } else if (skippedEvents === 1) {
+        dynamicStrategies.push({
+          title: 'Pacing Lag Advisory',
+          badge: 'Pacing Advisory',
+          badgeColor: '#d97706',
+          badgeBg: 'rgba(217, 119, 6, 0.12)',
+          text: 'You skipped 1 BreakGate recovery challenge. A single skip introduces subtle mental fatigue. Complete your next scheduled break to maintain peak cognitive endurance.'
         });
       } else if (staminaPct < 60 || skippedEvents >= 2) {
         dynamicStrategies.push({

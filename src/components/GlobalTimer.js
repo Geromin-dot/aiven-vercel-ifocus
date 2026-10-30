@@ -335,9 +335,19 @@ export default function GlobalTimer() {
     };
     window.addEventListener('ifocus_open_guide', handleGuideOpen);
 
+    const handleEmergencyStop = () => {
+      setTimerState((prev) => ({ ...prev, isRunning: false, targetEndTime: null }));
+      if (globalAudioRef.current) {
+        globalAudioRef.current.pause();
+      }
+      setMusicState((prev) => ({ ...prev, isPlaying: false }));
+    };
+    window.addEventListener('ifocus_emergency_stop', handleEmergencyStop);
+
     return () => {
       window.removeEventListener('ifocus_music_sync', handleMusicSync);
       window.removeEventListener('ifocus_open_guide', handleGuideOpen);
+      window.removeEventListener('ifocus_emergency_stop', handleEmergencyStop);
     };
   }, []);
 

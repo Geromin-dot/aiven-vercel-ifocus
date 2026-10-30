@@ -140,22 +140,23 @@ export default function AnalyticsPage() {
             if (unrecoveredEvents.length > 0) {
               const total = unrecoveredEvents.length;
               const completed = unrecoveredEvents.filter(e => e.status === 'completed').length;
-              const pct = Math.round((completed / total) * 100);
+              const skips = total - completed;
+              const pct = Math.max(0, Math.min(100, 100 - (skips * 20) + (completed * 5)));
               const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
 
-              if (latest?.status === 'skipped') {
-                gateComp = {
-                  label: `${pct}% Pacing Lag`,
-                  color: '#d97706',
-                  bg: 'rgba(217, 119, 6, 0.12)',
-                  subtext: `${completed} of ${total} challenges completed today`
-                };
-              } else if (pct < 60) {
+              if (skips >= 3 || pct < 60) {
                 gateComp = {
                   label: `${pct}% Low Compliance`,
                   color: '#dc2626',
                   bg: 'rgba(220, 38, 38, 0.12)',
-                  subtext: `${completed} of ${total} challenges completed today`
+                  subtext: `${skips} challenges skipped (${completed} of ${total} completed)`
+                };
+              } else if (skips > 0 || pct < 80) {
+                gateComp = {
+                  label: `${pct}% Pacing Lag`,
+                  color: '#d97706',
+                  bg: 'rgba(217, 119, 6, 0.12)',
+                  subtext: `${skips} challenge skipped (${completed} of ${total} completed)`
                 };
               } else {
                 gateComp = {
