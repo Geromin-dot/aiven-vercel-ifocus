@@ -77,6 +77,19 @@ export async function POST(req) {
 
     // Support batch sync (e.g. from localStorage history)
     if (Array.isArray(batch) && batch.length > 0) {
+      // Duplicate guard: prevent rapid duplicate submissions within 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10000);
+    const existingRecent = await prisma.studySession.findFirst({
+      where: {
+        userId,
+        duration: durSec,
+        createdAt: { gte: tenSecondsAgo }
+      }
+    });
+    if (existingRecent) {
+      return NextResponse.json({ success: true, session: existingRecent, deduplicated: true });
+    }
+
     const targetDeckId = await getOrCreateDeck(deckId);
       const createdList = [];
 

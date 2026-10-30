@@ -27,6 +27,31 @@ export default function AnalyticsPage() {
   const { data: session, status } = useSession();
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+  // Auto-sync existing client-side sessions to PostgreSQL database when authenticated
+  useEffect(() => {
+    if (status === 'authenticated') {
+      try {
+        const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+        const unSynced = history.filter(s => !s.synced);
+        if (unSynced.length > 0) {
+          fetch('/api/study-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch: unSynced })
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data?.success) {
+                const marked = history.map(s => ({ ...s, synced: true }));
+                localStorage.setItem('ifocus_session_history', JSON.stringify(marked));
+              }
+            })
+            .catch(() => { });
+        }
+      } catch (e) { }
+    }
+  }, [status]);
+
   // Historical Session Data from LocalStorage (Lightweight, 100% Client-side, Zero Backend Bandwidth)
   const [baseStats, setBaseStats] = useState({
     todayMinutes: 0,
@@ -291,42 +316,10 @@ export default function AnalyticsPage() {
     }
   }, [userName]);
 
-  const computeStreakFromHistory = (history) => {
-    if (!history || history.length === 0) return 0;
-    const dates = new Set(
-      history.map(s => {
-        const d = new Date(s.date);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      })
-    );
-    let streak = 0;
-    let checkDate = new Date();
-    
-    // If no sessions today, check starting from yesterday
-    const todayKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-    if (!dates.has(todayKey)) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-    
-    while (true) {
-      const key = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      if (dates.has(key)) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-    return streak;
-  };
-
-  const loadStats = useCallback((customHistory) => {
+  const loadStats = useCallback(() => {
     try {
-      let sessionHistory = customHistory;
-      if (!sessionHistory) {
-        const stored = localStorage.getItem('ifocus_session_history');
-        sessionHistory = stored ? JSON.parse(stored) : [];
-      }
+      const stored = localStorage.getItem('ifocus_session_history');
+      const sessionHistory = stored ? JSON.parse(stored) : [];
 
       const focusStatsRaw = localStorage.getItem('ifocus_stats');
       const focusStats = focusStatsRaw ? JSON.parse(focusStatsRaw) : {};
@@ -366,14 +359,13 @@ export default function AnalyticsPage() {
         }
       });
 
-      const recent = [...sessionHistory].reverse().slice(0, 6);
-      const computedStreak = computeStreakFromHistory(sessionHistory);
+      const recent = [...sessionHistory].reverse().slice(0, 4);
 
       setBaseStats({
         todayMinutes: todayMins,
         weekMinutes: weekMins,
         completedSessionsCount: validSessionsCount,
-        streak: focusStats.streak || computedStreak || (validSessionsCount > 0 ? 1 : 0),
+        streak: focusStats.streak || (validSessionsCount > 0 ? 1 : 0),
         todayIndex: adjustedTodayIdx,
         recentSessions: recent
       });
@@ -381,78 +373,6 @@ export default function AnalyticsPage() {
       console.error('Failed to parse focus stats:', e);
     }
   }, []);
-
-  // Auto-sync & hydrate study sessions between PostgreSQL database and client
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-
-    let isMounted = true;
-
-    const syncWithDatabase = async () => {
-      try {
-        // 1. Fetch cloud study sessions from PostgreSQL
-        const res = await fetch('/api/study-sessions');
-        if (!res.ok) return;
-        const data = await res.json();
-        const dbSessions = Array.isArray(data?.sessions) ? data.sessions : [];
-
-        // Convert DB sessions to client format
-        const formattedDbSessions = dbSessions.map(s => {
-          const rawSeconds = Number(s.duration) || 0;
-          const mins = rawSeconds > 180 ? Math.max(1, Math.round(rawSeconds / 60)) : Math.max(1, rawSeconds);
-          return {
-            id: s.id,
-            duration: mins,
-            date: s.createdAt,
-            deckName: s.deck?.title || 'General Focus',
-            type: 'pomodoro',
-            score: s.score || 100,
-            synced: true
-          };
-        });
-
-        // 2. Read local sessions
-        let localHistory = [];
-        try {
-          localHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-        } catch (e) {}
-
-        // Identify local sessions not yet in the DB
-        const unSynced = localHistory.filter(l => {
-          if (l.synced) return false;
-          const lTime = new Date(l.date).getTime();
-          return !formattedDbSessions.some(d => Math.abs(new Date(d.date).getTime() - lTime) < 10000);
-        });
-
-        // 3. If there are unsynced offline sessions, sync them to DB
-        if (unSynced.length > 0) {
-          fetch('/api/study-sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ batch: unSynced })
-          }).catch(() => {});
-        }
-
-        // 4. Combine DB sessions + unsynced local sessions
-        const combined = [...formattedDbSessions, ...unSynced].sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-
-        if (isMounted) {
-          localStorage.setItem('ifocus_session_history', JSON.stringify(combined));
-          loadStats(combined);
-        }
-      } catch (err) {
-        console.error('Failed to sync study sessions with cloud database:', err);
-      }
-    };
-
-    syncWithDatabase();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [status, loadStats]);
 
   useEffect(() => {
     loadStats();

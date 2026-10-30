@@ -625,35 +625,14 @@ export default function CoachPage() {
     }
   }, [userName]);
 
-  const loadJournal = useCallback(() => {
+  useEffect(() => {
     try {
-      const candidates = [
-        `ifocus_journal_history_${userName}`,
-        session?.user?.username ? `ifocus_journal_history_${session.user.username}` : null,
-        session?.user?.id ? `ifocus_journal_history_${session.user.id}` : null,
-        'ifocus_journal_history_richardx',
-        'ifocus_journal_history_conx',
-        'ifocus_journal_history'
-      ].filter(Boolean);
-
-      for (const k of candidates) {
-        const stored = localStorage.getItem(k);
-        if (stored) {
-          try {
-            const list = JSON.parse(stored);
-            if (Array.isArray(list) && list.length > 0) {
-              setJournalEntries(list);
-              return;
-            }
-          } catch (e) {}
-        }
+      const stored = localStorage.getItem(`ifocus_journal_history_${userName}`);
+      if (stored) {
+        setJournalEntries(JSON.parse(stored));
       }
     } catch (e) {}
-  }, [userName, session?.user?.username, session?.user?.id]);
-
-  useEffect(() => {
-    loadJournal();
-  }, [loadJournal]);
+  }, [userName]);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -712,7 +691,10 @@ export default function CoachPage() {
     };
 
     const handleJournalUpdate = () => {
-      loadJournal();
+      try {
+        const stored = localStorage.getItem(`ifocus_journal_history_${userName}`);
+        if (stored) setJournalEntries(JSON.parse(stored));
+      } catch (e) {}
     };
 
     window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
