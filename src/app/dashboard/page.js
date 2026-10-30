@@ -232,10 +232,23 @@ export default function CommandCenterPage() {
     const updateStats = () => {
       try {
         const s = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
+        const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+        
+        let focusMinutes = s.minutes || 0;
+        let sessionCount = s.sessions || 0;
+        let streak = s.streak || 1;
+
+        if (focusMinutes === 0 && history.length > 0) {
+          const todayStr = new Date().toDateString();
+          const todaySessions = history.filter(item => new Date(item.date).toDateString() === todayStr);
+          focusMinutes = todaySessions.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+          sessionCount = todaySessions.length;
+        }
+
         setDailyFocusStats({
-          minutes: s.minutes || 0,
-          sessions: s.sessions || 0,
-          streak: s.streak || 1
+          minutes: focusMinutes,
+          sessions: sessionCount,
+          streak: streak
         });
       } catch (e) {}
     };

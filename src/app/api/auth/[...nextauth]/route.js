@@ -96,9 +96,32 @@ export const authOptions = {
         if (session.user.status !== undefined) token.status = session.user.status;
         if (session.user.statusReason !== undefined) token.statusReason = session.user.statusReason;
       }
+
+      // Live verification: Ensure user exists in PostgreSQL (kills session if admin deleted the account)
+      if (token?.sub) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: { id: true, status: true, statusReason: true, role: true }
+          });
+          if (!dbUser) {
+            // User account was permanently purged by Admin! Invalidate JWT token immediately.
+            return null;
+          }
+          token.status = dbUser.status;
+          token.statusReason = dbUser.statusReason;
+          token.role = dbUser.role;
+        } catch (e) {
+          // If DB is temporarily unreachable, maintain cached token
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
+      if (!token || !token.sub) {
+        return null;
+      }
       if (session.user) {
         session.user.id = token.sub;
         if (token.name) session.user.name = token.name;

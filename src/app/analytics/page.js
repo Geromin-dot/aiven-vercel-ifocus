@@ -316,6 +316,35 @@ export default function AnalyticsPage() {
     }
   }, [userName]);
 
+  const computeStreakFromHistory = (history) => {
+    if (!history || history.length === 0) return 0;
+    const dates = new Set(
+      history.map(s => {
+        const d = new Date(s.date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })
+    );
+    let streak = 0;
+    let checkDate = new Date();
+    
+    // If no sessions today, check starting from yesterday
+    const todayKey = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+    if (!dates.has(todayKey)) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    
+    while (true) {
+      const key = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+      if (dates.has(key)) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return Math.max(1, streak);
+  };
+
   const loadStats = useCallback(() => {
     try {
       const stored = localStorage.getItem('ifocus_session_history');
@@ -360,12 +389,13 @@ export default function AnalyticsPage() {
       });
 
       const recent = [...sessionHistory].reverse().slice(0, 4);
+      const computedStreak = computeStreakFromHistory(sessionHistory);
 
       setBaseStats({
         todayMinutes: todayMins,
         weekMinutes: weekMins,
         completedSessionsCount: validSessionsCount,
-        streak: focusStats.streak || (validSessionsCount > 0 ? 1 : 0),
+        streak: computedStreak || focusStats.streak || (validSessionsCount > 0 ? 1 : 0),
         todayIndex: adjustedTodayIdx,
         recentSessions: recent
       });
@@ -373,6 +403,53 @@ export default function AnalyticsPage() {
       console.error('Failed to parse focus stats:', e);
     }
   }, []);
+
+  // Sync cloud study sessions from PostgreSQL database and hydrate accurately
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+
+    let isMounted = true;
+
+    fetch('/api/study-sessions')
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted || !Array.isArray(data?.sessions)) return;
+
+        // Convert DB duration (stored in SECONDS) directly to minutes (e.g. 60s -> 1m, 600s -> 10m)
+        const dbList = data.sessions.map(s => {
+          const rawSec = Number(s.duration) || 0;
+          const mins = Math.max(1, Math.round(rawSec / 60));
+          return {
+            id: s.id,
+            duration: mins,
+            date: s.createdAt,
+            deckName: s.deck?.title || 'General Focus',
+            type: 'pomodoro',
+            score: s.score || 100,
+            synced: true
+          };
+        });
+
+        if (dbList.length > 0) {
+          let local = [];
+          try {
+            local = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
+          } catch (e) {}
+
+          const unsynced = local.filter(l => !l.synced && !dbList.some(d => Math.abs(new Date(d.date).getTime() - new Date(l.date).getTime()) < 10000));
+          const combined = [...dbList, ...unsynced].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          localStorage.setItem('ifocus_session_history', JSON.stringify(combined));
+          window.dispatchEvent(new CustomEvent('ifocus_stats_updated'));
+          loadStats();
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [status, loadStats]);
 
   useEffect(() => {
     loadStats();
