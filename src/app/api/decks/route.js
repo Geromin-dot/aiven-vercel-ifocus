@@ -10,8 +10,14 @@ export async function GET(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    let userId = session.user.id;
+    if (!userId && session.user.email) {
+      const u = await prisma.user.findUnique({ where: { email: session.user.email } });
+      if (u) userId = u.id;
+    }
+
     const decks = await prisma.deck.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       include: {
         cards: true,
         sessions: {
@@ -60,12 +66,18 @@ export async function POST(req) {
       return NextResponse.json({ error: "No valid cards provided to create deck" }, { status: 400 });
     }
 
+    let userId = session.user.id;
+    if (!userId && session.user.email) {
+      const u = await prisma.user.findUnique({ where: { email: session.user.email } });
+      if (u) userId = u.id;
+    }
+
     // Create deck and its cards in a transaction
     const newDeck = await prisma.deck.create({
       data: {
         title: title.trim(),
         description: description ? description.trim() : null,
-        userId: session.user.id,
+        userId,
         cards: {
           create: sanitizedCards.map(c => ({
             front: c.front,

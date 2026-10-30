@@ -242,7 +242,11 @@ export default function CommandCenterPage() {
         if (focusMinutes === 0 && history.length > 0) {
           const todayStr = new Date().toDateString();
           const todaySessions = history.filter(item => new Date(item.date).toDateString() === todayStr);
-          focusMinutes = todaySessions.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+          focusMinutes = todaySessions.reduce((sum, item) => {
+            const rawDur = Number(item.duration) || 0;
+            const mins = rawDur > 180 ? Math.max(1, Math.round(rawDur / 60)) : rawDur;
+            return sum + mins;
+          }, 0);
           sessionCount = todaySessions.length;
         }
 
@@ -1474,6 +1478,7 @@ export default function CommandCenterPage() {
     } catch (e) {}
 
     setTimeLeft(customWorkDuration);
+    setSessionTotalTime(customWorkDuration);
     setSessionCount(1);
     const nextState = {
       isRunning: false,
@@ -2091,10 +2096,6 @@ export default function CommandCenterPage() {
     if (!isFocus && isAiRestRecovery) {
       return 5 * 60;
     }
-    if (sessionTotalTime && sessionTotalTime > 0) {
-      if (isFocus && sessionTotalTime >= 60) return sessionTotalTime;
-      if (!isFocus && sessionTotalTime >= 30) return sessionTotalTime;
-    }
     const workMin = parseInt(customWorkTime.min) || 0;
     const workSec = parseInt(customWorkTime.sec) || 0;
     const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
@@ -2102,11 +2103,18 @@ export default function CommandCenterPage() {
     const breakSec = parseInt(customBreakTime.sec) || 0;
     const customBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
 
+    if (timerPreset === 'Custom') {
+      return isFocus ? customWorkDuration : customBreakDuration;
+    }
+
+    if (sessionTotalTime && sessionTotalTime > 0) {
+      if (isFocus && sessionTotalTime >= 60) return sessionTotalTime;
+      if (!isFocus && sessionTotalTime >= 30) return sessionTotalTime;
+    }
+
     if (isFocus) {
-      if (timerPreset === 'Custom') return customWorkDuration;
       return (parseInt(timerPreset.split('/')[0]) || 25) * 60;
     } else {
-      if (timerPreset === 'Custom') return customBreakDuration;
       return (parseInt(timerPreset.split('/')[1]) || 5) * 60;
     }
   };

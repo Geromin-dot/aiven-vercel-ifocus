@@ -372,7 +372,8 @@ export default function AnalyticsPage() {
 
       sessionHistory.forEach(s => {
         const sDate = new Date(s.date);
-        const mins = Number(s.duration) || 0;
+        const rawDur = Number(s.duration) || 0;
+        const mins = rawDur > 180 ? Math.max(1, Math.round(rawDur / 60)) : rawDur;
 
         if (sDate.toDateString() === todayStr) {
           todayMins += mins;

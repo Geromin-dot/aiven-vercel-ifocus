@@ -11,7 +11,22 @@ export async function GET(req) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    let user = null;
+    if (session.user.id) {
+      user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    }
+    if (!user && session.user.email) {
+      user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    }
+    if (!user && session.user.username) {
+      user = await prisma.user.findUnique({ where: { username: session.user.username } });
+    }
+
+    if (!user) {
+      return NextResponse.json({ sessions: [], stats: { totalSessions: 0, totalSeconds: 0, avgScore: 0 } });
+    }
+
+    const userId = user.id;
     const studySessions = await prisma.studySession.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -52,7 +67,22 @@ export async function POST(req) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    let user = null;
+    if (session.user.id) {
+      user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    }
+    if (!user && session.user.email) {
+      user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    }
+    if (!user && session.user.username) {
+      user = await prisma.user.findUnique({ where: { username: session.user.username } });
+    }
+
+    if (!user) {
+      return NextResponse.json({ sessions: [], stats: { totalSessions: 0, totalSeconds: 0, avgScore: 0 } });
+    }
+
+    const userId = user.id;
     const body = await req.json();
     const { duration, score, deckId, batch } = body;
 

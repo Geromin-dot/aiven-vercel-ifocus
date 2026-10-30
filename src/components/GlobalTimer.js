@@ -930,12 +930,6 @@ export default function GlobalTimer() {
 
   // Initialize and listen to sync and test events
   useEffect(() => {
-    const livePath = (typeof window !== "undefined" ? window.location.pathname : pathname) || pathname;
-    if (isAdmin || isExemptPath(livePath) || isExemptPath(pathname)) {
-      setShowPresenceModal(false);
-      setShowIdleCoachModal(false);
-      return;
-    }
     const handleSync = (e) => {
       if (e?.detail) {
         setTimerState(e.detail);
