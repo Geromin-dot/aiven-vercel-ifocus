@@ -3734,9 +3734,9 @@ textarea:focus {
     padding: 0 !important;
   }
 
-  /* 10. Mini Timer adjustment on mobile: hide completely on mobile screens to prevent bottom nav clipping */
+  /* Keep the draggable timer visible above the mobile navigation. */
   #globalMiniTimerPill {
-    display: none !important;
+    max-width: calc(100vw - 24px) !important;
   }
 
   /* 11. Slide up keyframe animation for PWA install banner */

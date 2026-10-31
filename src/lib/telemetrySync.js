@@ -1,6 +1,8 @@
 // Unified Client-Side Bi-Directional Cloud Telemetry & State Reconciliation
 // Ensures 100% data parity across all devices (PC browser, mobile PWA, tablet) for the same user account.
 
+import { getTimerDeviceId, recoveryFromCheckpoint } from './timerState';
+
 let reconciliationPromise = null;
 let lastReconciliationAt = 0;
 const RECONCILIATION_COOLDOWN_MS = 10000;
@@ -86,11 +88,6 @@ async function reconcileCloudTelemetryInternal() {
       }
     } catch (e) {}
 
-    let localTimerState = null;
-    try {
-      const raw = localStorage.getItem("ifocus_timer_state");
-      if (raw) localTimerState = JSON.parse(raw);
-    } catch (e) {}
 
     let localCustomTimer = null;
     try {
@@ -267,24 +264,18 @@ async function reconcileCloudTelemetryInternal() {
       localStorage.setItem("ifocus_ai_adjusted_active", "true");
     }
 
-    // Reconcile Timer State / Checkpoint
-    let effectiveTimerState = localTimerState;
-    if (cloud.activeTimerState) {
-      const cloudTimer = cloud.activeTimerState;
-      const isCloudRunning = Boolean(cloudTimer.isRunning && cloudTimer.targetEndTime && cloudTimer.targetEndTime > Date.now());
-      const hasPresetDiff = cloudTimer.timerPreset && cloudTimer.timerPreset !== localTimerState?.timerPreset;
-      const isCloudNewer = (cloudTimer.updatedAt || 0) > (localTimerState?.updatedAt || 0);
-
-      if (!localTimerState || isCloudNewer || (!localTimerState.isRunning && (hasPresetDiff || isCloudRunning))) {
-        const remaining = isCloudRunning ? Math.max(0, Math.round((cloudTimer.targetEndTime - Date.now()) / 1000)) : cloudTimer.timeLeft;
-        effectiveTimerState = {
-          ...(localTimerState || {}),
-          ...cloudTimer,
-          timeLeft: remaining !== undefined ? remaining : cloudTimer.timeLeft,
-          isRunning: isCloudRunning
-        };
-        localStorage.setItem("ifocus_timer_state", JSON.stringify(effectiveTimerState));
-        window.dispatchEvent(new CustomEvent("ifocus_timer_sync", { detail: effectiveTimerState }));
+    // A cloud checkpoint is saved work, never a live countdown on another device.
+    // Re-read after the request: the user may have paused/continued while it was in flight.
+    const latestLocalTimer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+    const effectiveTimerState = latestLocalTimer;
+    const cloudTimer = cloud.activeTimerState;
+    const remoteDevice = cloudTimer?.deviceId && cloudTimer.deviceId !== getTimerDeviceId();
+    if (cloudTimer && (remoteDevice || !latestLocalTimer)) {
+      const recovery = recoveryFromCheckpoint(cloudTimer);
+      const resolved = cloud.resolvedTimerSessions || [];
+      if (recovery && !resolved.includes(recovery.id) && data.userId) {
+        localStorage.setItem(`ifocus_interrupted_session_${data.userId}`, JSON.stringify(recovery));
+        window.dispatchEvent(new CustomEvent('ifocus_interrupted_session'));
       }
     }
 
@@ -334,7 +325,6 @@ async function reconcileCloudTelemetryInternal() {
             insightData: effectiveInsight,
             activeIdleAlert: effectiveIdle,
             activeBreakGateDeck: effectiveDeck,
-            activeTimerState: effectiveTimerState,
             customTimer: effectiveCustomTimer,
             updatedAt: new Date().toISOString()
           },

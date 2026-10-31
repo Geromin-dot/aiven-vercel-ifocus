@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { prisma } from "../../../lib/prisma";
+import { createHash } from 'crypto';
 
 // GET /api/study-sessions - Fetch current user's study sessions & aggregates
 export async function GET(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || session.error) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
     }
 
@@ -63,7 +64,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || session.error) {
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });
     }
 
@@ -84,12 +85,15 @@ export async function POST(req) {
 
     const userId = user.id;
     const body = await req.json();
-    const { duration, score, deckId, batch } = body;
+    const { duration, score, deckId, batch, recoveryId } = body;
+    if (recoveryId !== undefined && (typeof recoveryId !== 'string' || !recoveryId || recoveryId.length > 200)) {
+      return NextResponse.json({ message: 'Invalid recovery reference' }, { status: 400 });
+    }
 
     // Helper: find or create default deck so deckId foreign key is always satisfied
     async function getOrCreateDeck(prefDeckId) {
       if (prefDeckId) {
-        const found = await prisma.deck.findUnique({ where: { id: prefDeckId } });
+        const found = await prisma.deck.findFirst({ where: { id: prefDeckId, userId } });
         if (found) return found.id;
       }
       let userDeck = await prisma.deck.findFirst({ where: { userId } });
@@ -153,6 +157,18 @@ export async function POST(req) {
     }
 
     const targetDeckId = await getOrCreateDeck(deckId);
+
+    const recoverySessionId = recoveryId
+      ? `recovery-${createHash('sha256').update(`${userId}:${recoveryId}`).digest('hex')}`
+      : null;
+    if (recoverySessionId) {
+      // A unique primary key makes retries and repeated clicks safe across devices.
+      const recovered = await prisma.studySession.upsert({
+        where: { id: recoverySessionId }, update: {},
+        create: { id: recoverySessionId, userId, deckId: targetDeckId, duration: durSec, score: 0 },
+      });
+      return NextResponse.json({ success: true, session: recovered });
+    }
 
     const newSession = await prisma.studySession.create({
       data: {

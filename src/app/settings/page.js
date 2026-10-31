@@ -146,7 +146,6 @@ export default function SettingsPage() {
   const [afkCoachMinutes, setAfkCoachMinutes] = useState(1);
   const [burnoutCheckEnabled, setBurnoutCheckEnabled] = useState(true);
   const [burnoutCheckMinutes, setBurnoutCheckMinutes] = useState(20);
-  const [timerIsRunning, setTimerIsRunning] = useState(false);
 
   // 2. Notifications & Sound Preferences State
   const [defaultAmbientTrack, setDefaultAmbientTrack] = useState('Chill Lofi');
@@ -186,25 +185,6 @@ export default function SettingsPage() {
   const [pendingNavigation, setPendingNavigation] = useState(null);
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const toastTimeoutRef = useRef(null);
-
-  useEffect(() => {
-    const readTimerStatus = () => {
-      try {
-        const raw = localStorage.getItem('ifocus_timer_state');
-        setTimerIsRunning(Boolean(raw && JSON.parse(raw)?.isRunning));
-      } catch (e) {
-        setTimerIsRunning(false);
-      }
-    };
-
-    readTimerStatus();
-    window.addEventListener('ifocus_timer_sync', readTimerStatus);
-    window.addEventListener('storage', readTimerStatus);
-    return () => {
-      window.removeEventListener('ifocus_timer_sync', readTimerStatus);
-      window.removeEventListener('storage', readTimerStatus);
-    };
-  }, []);
 
   // Toast / Alert Notification
   const [toast, setToast] = useState({ type: null, message: '' });
@@ -1370,7 +1350,6 @@ export default function SettingsPage() {
                   <input 
                     type="checkbox" 
                     checked={activePresenceEnabled} 
-                    disabled={timerIsRunning}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setActivePresenceEnabled(val);
@@ -1382,11 +1361,6 @@ export default function SettingsPage() {
 
               {activePresenceEnabled && (
                 <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
-                  {timerIsRunning && (
-                    <p style={{ margin: '0 0 0.45rem', fontSize: '0.76rem', color: '#b45309', fontWeight: 600 }}>
-                      Stop your timer before changing the Active Presence interval.
-                    </p>
-                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
                       Active Presence Check Interval
@@ -1411,7 +1385,6 @@ export default function SettingsPage() {
                       <button 
                         key={mins} 
                         type="button" 
-                        disabled={timerIsRunning}
                         className={`option-chip ${activePresenceInterval === mins ? 'selected' : ''}`}
                         onClick={() => {
                           setActivePresenceInterval(mins);
@@ -1540,7 +1513,6 @@ export default function SettingsPage() {
                   <input 
                     type="checkbox" 
                     checked={burnoutCheckEnabled} 
-                    disabled={timerIsRunning}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setBurnoutCheckEnabled(val);
@@ -1560,11 +1532,6 @@ export default function SettingsPage() {
 
               {burnoutCheckEnabled && (
                 <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
-                  {timerIsRunning && (
-                    <p style={{ margin: '0 0 0.45rem', fontSize: '0.76rem', color: '#b45309', fontWeight: 600 }}>
-                      Stop your timer before changing the Burnout Check interval.
-                    </p>
-                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
                       Burnout Check Interval (During Focus Session)
@@ -1589,7 +1556,6 @@ export default function SettingsPage() {
                       <button 
                         key={mins} 
                         type="button" 
-                        disabled={timerIsRunning}
                         className={`option-chip ${burnoutCheckMinutes === mins ? 'selected' : ''}`}
                         onClick={() => {
                           setBurnoutCheckMinutes(mins);

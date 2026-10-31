@@ -35,6 +35,11 @@ export default function ConcurrentSessionGuard() {
       return;
     }
 
+    if (session?.error === "CONCURRENT_LOGIN") {
+      triggerLogoutModal("CONCURRENT_LOGIN");
+      return;
+    }
+
     isCheckingRef.current = true;
     try {
       const res = await fetch("/api/auth/active-session", {

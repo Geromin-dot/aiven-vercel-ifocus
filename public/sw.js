@@ -87,42 +87,48 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
-// Background Active Presence Watchdog (fires even if page is backgrounded or screen locked)
+// Best-effort background delivery. Countdown correctness is persisted by the page,
+// because mobile operating systems may terminate a service worker at any time.
 let backgroundPresenceTimer = null;
+let finishBackgroundCheck = null;
+
+const cancelBackgroundCheck = () => {
+  if (backgroundPresenceTimer) clearTimeout(backgroundPresenceTimer);
+  backgroundPresenceTimer = null;
+  if (finishBackgroundCheck) finishBackgroundCheck();
+  finishBackgroundCheck = null;
+};
 
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SCHEDULE_BACKGROUND_PRESENCE_CHECK') {
-    if (backgroundPresenceTimer) clearTimeout(backgroundPresenceTimer);
-    const delay = Math.max(1000, Number(event.data.delayMs) || 300000);
-    const remainingSeconds = Math.max(0, Number(event.data.remainingSeconds) || 0);
-    const m = Math.floor(remainingSeconds / 60);
-    const s = remainingSeconds % 60;
-    const formatted = `${m}m ${s < 10 ? '0' : ''}${s}s`;
-
-    backgroundPresenceTimer = setTimeout(() => {
-      self.registration.getNotifications({ tag: 'ifocus-presence' }).then((existing) => {
-        if (existing.length > 0) return;
-        return self.registration.showNotification('iFocus Active Presence Check', {
-          body: `Timer: ${formatted} remaining. Are you still studying? Tap to continue or pause.`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-192x192.png',
-          tag: 'ifocus-presence',
-          renotify: false,
-          requireInteraction: true,
-          actions: [
-            { action: 'resume', title: 'I am still here' },
-            { action: 'pause', title: 'Stay Paused' }
-          ],
-          data: { url: '/dashboard' }
-        });
-      }).catch(() => {});
-    }, delay);
-  } else if (event.data?.type === 'CANCEL_BACKGROUND_PRESENCE_CHECK') {
-    if (backgroundPresenceTimer) {
-      clearTimeout(backgroundPresenceTimer);
-      backgroundPresenceTimer = null;
-    }
+  if (event.data?.type === 'CANCEL_BACKGROUND_PRESENCE_CHECK') {
+    cancelBackgroundCheck();
+    return;
   }
+  if (event.data?.type !== 'SCHEDULE_BACKGROUND_PRESENCE_CHECK') return;
+  cancelBackgroundCheck();
+  const { timerSessionId } = event.data;
+  const delay = Math.max(0, Number(event.data.delayMs) || 0);
+  const remaining = Math.max(0, Number(event.data.remainingSeconds) || 0);
+  const formatted = `${Math.floor(remaining / 60)}m ${String(remaining % 60).padStart(2, '0')}s`;
+  event.waitUntil(new Promise((resolve) => {
+    finishBackgroundCheck = resolve;
+    backgroundPresenceTimer = setTimeout(async () => {
+      try {
+        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        clients.forEach(client => client.postMessage({ type: 'IFOCUS_PRESENCE_DUE', timerSessionId }));
+        const existing = await self.registration.getNotifications({ tag: 'ifocus-presence' });
+        if (!existing.length) await self.registration.showNotification('iFocus Active Presence Check', {
+          body: `Timer paused at ${formatted}. Continue when you are ready.`,
+          icon: '/icons/icon-192x192.png', badge: '/icons/icon-192x192.png',
+          tag: 'ifocus-presence', renotify: false, requireInteraction: true,
+          actions: [{ action: 'resume', title: 'Continue session' }, { action: 'pause', title: 'Stay paused' }],
+          data: { url: '/dashboard', timerSessionId },
+        });
+      } catch (_) {
+        // Permission or OS suspension must never change recorded focus time.
+      } finally { resolve(); }
+    }, delay);
+  }));
 });
 
 // Notification Click Event (PWA & iOS WebKit support with action buttons)
@@ -133,11 +139,11 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
         if (clientList && clientList.length > 0) {
-          clientList.forEach((client) => client.postMessage({ type: 'IFOCUS_RESUME_PRESENCE' }));
+          clientList.forEach((client) => client.postMessage({ type: 'IFOCUS_RESUME_PRESENCE', timerSessionId: event.notification.data?.timerSessionId }));
           return clientList[0].focus();
         }
         if (self.clients.openWindow) {
-          return self.clients.openWindow('/dashboard?resumePresence=1');
+          return self.clients.openWindow(`/dashboard?resumePresence=1&timerSessionId=${encodeURIComponent(event.notification.data?.timerSessionId || '')}`);
         }
       })
     );
@@ -147,7 +153,7 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'pause') {
     event.waitUntil(
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-        clientList.forEach((client) => client.postMessage({ type: 'IFOCUS_PAUSE_PRESENCE' }));
+        clientList.forEach((client) => client.postMessage({ type: 'IFOCUS_PAUSE_PRESENCE', timerSessionId: event.notification.data?.timerSessionId }));
       })
     );
     return;

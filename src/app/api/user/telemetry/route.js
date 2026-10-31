@@ -6,7 +6,7 @@ import { authOptions } from '../../auth/[...nextauth]/route';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user?.id) {
+    if (!session || !session.user?.id || session.error) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -39,6 +39,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      userId: session.user.id,
       telemetryState: parsedTelemetry,
       timerPreferences: parsedTimerPrefs,
     });
@@ -51,7 +52,7 @@ export async function GET() {
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user?.id) {
+    if (!session || !session.user?.id || session.error) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -76,6 +77,16 @@ export async function POST(req) {
           : body.telemetryState;
 
         const merged = { ...existingTelemetry, ...incoming };
+        // Ignore delayed checkpoint requests that arrive after a newer pause/reset.
+        if (incoming.activeTimerState && existingTelemetry.activeTimerState &&
+            Number(incoming.activeTimerState.updatedAt || 0) < Number(existingTelemetry.activeTimerState.updatedAt || 0)) {
+          merged.activeTimerState = existingTelemetry.activeTimerState;
+        }
+        if (Array.isArray(incoming.resolvedTimerSessions)) {
+          merged.resolvedTimerSessions = [...new Set([
+            ...(existingTelemetry.resolvedTimerSessions || []), ...incoming.resolvedTimerSessions
+          ])].slice(-100);
+        }
 
         // Deep merge breakGateEvents array so no events are dropped between devices
         if (Array.isArray(incoming.breakGateEvents)) {

@@ -13,17 +13,18 @@ export default function PwaRegistrar() {
   useEffect(() => {
     // 1. Register Service Worker quietly in background
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
+      const register = () => {
         navigator.serviceWorker
-          .register("/sw.js")
+          .register("/sw.js", { updateViaCache: 'none' })
           .then((reg) => {
             console.log("PWA Service Worker registered with scope:", reg.scope);
-            reg.update().catch(() => {});
           })
           .catch((err) => {
             console.warn("PWA Service Worker registration failed:", err);
           });
-      });
+      };
+      if (document.readyState === 'complete') register();
+      else window.addEventListener('load', register, { once: true });
     }
 
     if (typeof window === "undefined") return;

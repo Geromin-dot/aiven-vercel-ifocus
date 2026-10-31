@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 
 const playAlertSound = () => {
   try {
@@ -982,10 +983,11 @@ export default function CommandCenterPage() {
     try {
       const saved = localStorage.getItem('ifocus_timer_state');
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = settlePresence(JSON.parse(saved), JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(parsed));
         if (parsed.timeLeft !== undefined) {
           if (parsed.isRunning && parsed.targetEndTime) {
-            const currentLeft = Math.max(0, Math.round((parsed.targetEndTime - Date.now()) / 1000));
+            const currentLeft = remainingTime(parsed);
             setTimeLeft(currentLeft);
             setIsActive(true);
           } else {
@@ -1263,8 +1265,8 @@ export default function CommandCenterPage() {
 
   const startTimerDirectly = () => {
     setShowNoBreakGateModal(false);
-    const nextIsActive = !isActive;
-    setIsActive(nextIsActive);
+    const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+    const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
     const total = getTotalTime();
 
     const workMin = parseInt(customWorkTime.min) || 0;
@@ -1275,12 +1277,12 @@ export default function CommandCenterPage() {
     const currentCustomBreakDuration = (breakMin * 60 + breakSec) || 5 * 60;
     const currentCustomSessions = Number(customSessions) || 1;
 
-    const nextState = {
-      isRunning: nextIsActive,
+    const baseState = current || {
+      isRunning: false,
       isFocus,
       timeLeft,
       totalTime: total,
-      targetEndTime: nextIsActive ? Date.now() + (timeLeft * 1000) : null,
+      targetEndTime: null,
       timerPreset,
       customWorkDuration: currentCustomWorkDuration,
       customBreakDuration: currentCustomBreakDuration,
@@ -1293,6 +1295,14 @@ export default function CommandCenterPage() {
       breakGatePending: false,
       updatedAt: Date.now()
     };
+    const nextState = {
+      ...toggleTimerState(baseState, preferences),
+      deviceId: getTimerDeviceId(),
+      userId: session?.user?.id,
+      timerSessionId: baseState.timerSessionId || crypto.randomUUID(),
+    };
+    setIsActive(nextState.isRunning);
+    setTimeLeft(nextState.timeLeft);
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));

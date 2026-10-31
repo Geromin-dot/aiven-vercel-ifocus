@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 import FeatureGuideModal from "./FeatureGuideModal";
 import { reconcileCloudTelemetry } from "../lib/telemetrySync";
+import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
+import InterruptedSessionRecovery from './InterruptedSessionRecovery';
 
 // Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
 const getUserAudioVolumeFactor = () => {
@@ -92,36 +94,10 @@ const getSavedPresenceIntervalSeconds = () => {
   }
 };
 
-const getSavedBurnoutSettings = () => {
-  try {
-    const raw = localStorage.getItem("ifocus_timer_preferences");
-    const prefs = raw ? JSON.parse(raw) : {};
-    return {
-      enabled: prefs.burnoutCheckEnabled !== undefined ? Boolean(prefs.burnoutCheckEnabled) : true,
-      minutes: Math.max(1, Number(prefs.burnoutCheckMinutes || 20)),
-    };
-  } catch (e) {
-    return { enabled: true, minutes: 20 };
-  }
-};
-
-const getSavedPresenceEnabled = () => {
-  try {
-    const prefs = JSON.parse(localStorage.getItem("ifocus_timer_preferences") || "{}");
-    return prefs.activePresenceEnabled !== undefined ? Boolean(prefs.activePresenceEnabled) : true;
-  } catch (e) {
-    return true;
-  }
-};
-
 const getPresenceIntervalSeconds = (timerState = null) => {
-  const sessionInterval = Number(timerState?.activePresenceIntervalSeconds);
-  return sessionInterval >= 60 ? sessionInterval : getSavedPresenceIntervalSeconds();
-};
-
-const getPresenceCheckpoint = (elapsedSeconds, intervalSeconds = getSavedPresenceIntervalSeconds()) => {
-  const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
-  return Math.floor(elapsed / intervalSeconds) * intervalSeconds;
+  try {
+    return presenceInterval(timerState, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+  } catch { return getSavedPresenceIntervalSeconds(); }
 };
 
 const PRESENCE_NOTIFICATION_ACTIONS = [
@@ -139,16 +115,8 @@ const sendSystemNotification = async (title, body, tag = "ifocus-presence", acti
   if (tag === "ifocus-presence" && now - lastPresenceNotificationAt < PRESENCE_NOTIFICATION_DEDUPE_MS) return;
 
   try {
-    if (Notification.permission === "default") {
-      try {
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") return;
-      } catch (err) {
-        return;
-      }
-    } else if (Notification.permission !== "granted") {
-      return;
-    }
+    // Permission must be requested by the Start button's user gesture.
+    if (Notification.permission !== 'granted') return;
 
     const options = {
       body,
@@ -168,7 +136,7 @@ const sendSystemNotification = async (title, body, tag = "ifocus-presence", acti
     // 1. Primary path for iOS PWA and modern Service Workers:
     if ("serviceWorker" in navigator) {
       try {
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await navigator.serviceWorker.getRegistration();
         if (registration && typeof registration.showNotification === "function") {
           const existing = typeof registration.getNotifications === "function"
             ? await registration.getNotifications({ tag })
@@ -269,67 +237,6 @@ const playCompletionAlarm = () => {
   }
 };
 
-
-// Web Audio API Synthesis for High-End Navigation Slide Chime
-const playNavigationSlideSound = () => {
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-
-    if (!window.__ifocusAudioCtx || window.__ifocusAudioCtx.state === "closed") {
-      window.__ifocusAudioCtx = new AudioCtx();
-    }
-    const ctx = window.__ifocusAudioCtx;
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
-    const now = ctx.currentTime;
-
-    // 1. Subtle high-speed whoosh / air sweep
-    const sweepOsc = ctx.createOscillator();
-    const sweepGain = ctx.createGain();
-    sweepOsc.type = "sine";
-    sweepOsc.frequency.setValueAtTime(380, now);
-    sweepOsc.frequency.exponentialRampToValueAtTime(980, now + 0.12);
-    sweepGain.gain.setValueAtTime(0.0001, now);
-    sweepGain.gain.linearRampToValueAtTime(0.04, now + 0.03);
-    sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-    sweepOsc.connect(sweepGain);
-    sweepGain.connect(ctx.destination);
-    sweepOsc.start(now);
-    sweepOsc.stop(now + 0.18);
-
-    // 2. Crystal clear high bell chime (D6 / A6 harmonic)
-    const bellOsc = ctx.createOscillator();
-    const bellGain = ctx.createGain();
-    bellOsc.type = "sine";
-    bellOsc.frequency.setValueAtTime(1174.66, now + 0.05); // D6
-    bellOsc.frequency.exponentialRampToValueAtTime(1760, now + 0.22); // A6
-    bellGain.gain.setValueAtTime(0.0001, now + 0.05);
-    bellGain.gain.linearRampToValueAtTime(0.065, now + 0.08);
-    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
-    bellOsc.connect(bellGain);
-    bellGain.connect(ctx.destination);
-    bellOsc.start(now + 0.05);
-    bellOsc.stop(now + 0.38);
-
-    // 3. Warm pleasant undertone (D5)
-    const warmOsc = ctx.createOscillator();
-    const warmGain = ctx.createGain();
-    warmOsc.type = "triangle";
-    warmOsc.frequency.setValueAtTime(587.33, now + 0.05); // D5
-    warmGain.gain.setValueAtTime(0.0001, now + 0.05);
-    warmGain.gain.linearRampToValueAtTime(0.035, now + 0.08);
-    warmGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.30);
-    warmOsc.connect(warmGain);
-    warmGain.connect(ctx.destination);
-    warmOsc.start(now + 0.05);
-    warmOsc.stop(now + 0.32);
-  } catch (e) {
-    console.warn("Navigation slide sound error:", e);
-  }
-};
 
 export default function GlobalTimer() {
   const pathname = usePathname();
@@ -510,7 +417,6 @@ export default function GlobalTimer() {
       const isTimerActive = timerState.isRunning || timerState.presencePaused || timerState.breakGatePending;
       if (isTimerActive && !isExemptPath(pathname)) {
         setIsNavSliding(true);
-        playNavigationSlideSound();
         const t = setTimeout(() => {
           setIsNavSliding(false);
         }, 550);
@@ -535,7 +441,6 @@ export default function GlobalTimer() {
   // Draggable Floating Mini-Timer State & Drag Gestures
   const [miniTimerPos, setMiniTimerPos] = useState({ x: null, y: null });
   const [isDraggingMiniTimer, setIsDraggingMiniTimer] = useState(false);
-  const [isMobileScreen, setIsMobileScreen] = useState(false);
   const miniTimerRef = useRef(null);
   const dragInfoRef = useRef({ isDragging: false, startX: 0, startY: 0, initialLeft: 0, initialTop: 0, moved: false });
 
@@ -543,7 +448,10 @@ export default function GlobalTimer() {
   useEffect(() => {
     const checkMobile = () => {
       if (typeof window !== "undefined") {
-        setIsMobileScreen(window.innerWidth <= 768);
+        setMiniTimerPos(position => position.x === null ? position : ({
+          x: Math.max(12, Math.min(position.x, window.innerWidth - (miniTimerRef.current?.offsetWidth || 250) - 12)),
+          y: Math.max(12, Math.min(position.y, window.innerHeight - 70)),
+        }));
       }
     };
     checkMobile();
@@ -558,7 +466,7 @@ export default function GlobalTimer() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          const maxX = Math.max(10, (typeof window !== "undefined" ? window.innerWidth : 1200) - 240);
+          const maxX = Math.max(12, (typeof window !== "undefined" ? window.innerWidth : 1200) - 262);
           const maxY = Math.max(10, (typeof window !== "undefined" ? window.innerHeight : 800) - 70);
           setMiniTimerPos({
             x: Math.min(Math.max(12, parsed.x), maxX),
@@ -569,104 +477,34 @@ export default function GlobalTimer() {
     } catch (e) {}
   }, []);
 
-  const handleMiniTimerMouseDown = (e) => {
-    if (e.button !== 0) return;
-    const el = miniTimerRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    dragInfoRef.current = {
-      isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialLeft: rect.left,
-      initialTop: rect.top,
-      moved: false,
-    };
+  const handleMiniTimerPointerDown = (event) => {
+    if (event.button !== 0 || event.target.closest('button')) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragInfoRef.current = { isDragging: true, startX: event.clientX, startY: event.clientY,
+      initialLeft: rect.left, initialTop: rect.top, moved: false };
     setIsDraggingMiniTimer(true);
-
-    const onMouseMove = (moveEvent) => {
-      if (!dragInfoRef.current.isDragging) return;
-      const dx = moveEvent.clientX - dragInfoRef.current.startX;
-      const dy = moveEvent.clientY - dragInfoRef.current.startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-        dragInfoRef.current.moved = true;
-      }
-      const elWidth = el.offsetWidth || 230;
-      const elHeight = el.offsetHeight || 56;
-      const newX = Math.min(Math.max(12, dragInfoRef.current.initialLeft + dx), window.innerWidth - elWidth - 12);
-      const newY = Math.min(Math.max(12, dragInfoRef.current.initialTop + dy), window.innerHeight - elHeight - 12);
-
-      setMiniTimerPos({ x: newX, y: newY });
-    };
-
-    const onMouseUp = () => {
-      dragInfoRef.current.isDragging = false;
-      setIsDraggingMiniTimer(false);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-
-      if (miniTimerRef.current) {
-        const r = miniTimerRef.current.getBoundingClientRect();
-        try {
-          localStorage.setItem("ifocus_mini_timer_pos", JSON.stringify({ x: r.left, y: r.top }));
-        } catch (err) {}
-      }
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
   };
 
-  const handleMiniTimerTouchStart = (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    const touch = e.touches[0];
-    const el = miniTimerRef.current;
-    if (!el) return;
+  const handleMiniTimerPointerMove = (event) => {
+    const drag = dragInfoRef.current;
+    if (!drag.isDragging) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMiniTimerPos({
+      x: Math.max(12, Math.min(drag.initialLeft + dx, window.innerWidth - rect.width - 12)),
+      y: Math.max(12, Math.min(drag.initialTop + dy, window.innerHeight - rect.height - 12)),
+    });
+  };
 
-    const rect = el.getBoundingClientRect();
-    dragInfoRef.current = {
-      isDragging: true,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      initialLeft: rect.left,
-      initialTop: rect.top,
-      moved: false,
-    };
-    setIsDraggingMiniTimer(true);
-
-    const onTouchMove = (moveEvent) => {
-      if (!dragInfoRef.current.isDragging || !moveEvent.touches || moveEvent.touches.length !== 1) return;
-      const t = moveEvent.touches[0];
-      const dx = t.clientX - dragInfoRef.current.startX;
-      const dy = t.clientY - dragInfoRef.current.startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-        dragInfoRef.current.moved = true;
-      }
-      const elWidth = el.offsetWidth || 230;
-      const elHeight = el.offsetHeight || 56;
-      const newX = Math.min(Math.max(12, dragInfoRef.current.initialLeft + dx), window.innerWidth - elWidth - 12);
-      const newY = Math.min(Math.max(12, dragInfoRef.current.initialTop + dy), window.innerHeight - elHeight - 12);
-
-      setMiniTimerPos({ x: newX, y: newY });
-    };
-
-    const onTouchEnd = () => {
-      dragInfoRef.current.isDragging = false;
-      setIsDraggingMiniTimer(false);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-
-      if (miniTimerRef.current) {
-        const r = miniTimerRef.current.getBoundingClientRect();
-        try {
-          localStorage.setItem("ifocus_mini_timer_pos", JSON.stringify({ x: r.left, y: r.top }));
-        } catch (err) {}
-      }
-    };
-
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd);
+  const handleMiniTimerPointerUp = (event) => {
+    dragInfoRef.current.isDragging = false;
+    setIsDraggingMiniTimer(false);
+    const rect = event.currentTarget.getBoundingClientRect();
+    localStorage.setItem('ifocus_mini_timer_pos', JSON.stringify({ x: rect.left, y: rect.top }));
   };
 
   const handleMiniTimerClick = () => {
@@ -705,19 +543,20 @@ export default function GlobalTimer() {
   // Write updated timer state to localStorage and broadcast sync event
   const commitStorageState = useCallback((nextState, dispatchSync = true) => {
     try {
+      const previous = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+      const newFocusBlock = nextState.isFocus && nextState.timeLeft === nextState.totalTime &&
+        (!previous?.isFocus || previous.timeLeft !== nextState.timeLeft);
       const normalizedState = {
         ...nextState,
-        updatedAt: Number(nextState.updatedAt) || Date.now(),
+        updatedAt: Date.now(),
+        deviceId: getTimerDeviceId(),
+        timerSessionId: newFocusBlock ? crypto.randomUUID() : (nextState.timerSessionId || crypto.randomUUID()),
         ...(nextState.isRunning && nextState.isFocus && !nextState.activePresenceIntervalSeconds
-          ? {
-              activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
-              activePresenceEnabledAtStart: getSavedPresenceEnabled(),
-              burnoutCheckEnabledAtStart: getSavedBurnoutSettings().enabled,
-              burnoutCheckMinutesAtStart: getSavedBurnoutSettings().minutes,
-            }
+          ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
           : {})
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(normalizedState));
+      stateRef.current = normalizedState;
       setTimerState(normalizedState);
       if (dispatchSync) {
         window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: normalizedState }));
@@ -728,6 +567,45 @@ export default function GlobalTimer() {
   }, []);
 
   // Cycle Completion & Rhythm Reset Handlers
+  useEffect(() => {
+    if (!session?.user?.id || session.error || isAdmin) return;
+    const pushCheckpoint = (event) => {
+      if (isExemptPath(getEffectivePath())) return;
+      const current = event?.detail || readStorageState();
+      if (!current || (current.userId && current.userId !== session.user.id)) return;
+      if (event?.type === 'ifocus_timer_sync' && !current.timerSessionId && !current.isRunning) return;
+      const now = Date.now();
+      if ((event?.type === 'pagehide' || event?.type === 'ifocus_timer_checkpoint') &&
+          now - lastTimerCheckpointSyncRef.current < 1000) return;
+      const checkpoint = {
+        ...current, timeLeft: remainingTime(current, now), updatedAt: now,
+        deviceId: getTimerDeviceId(), userId: session.user.id,
+        authSessionId: session.user.sessionId,
+        timerSessionId: current.timerSessionId || crypto.randomUUID(),
+      };
+      if (event?.detail) Object.assign(event.detail, checkpoint);
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(checkpoint));
+      lastTimerCheckpointSyncRef.current = now;
+      fetch('/api/user/telemetry', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+        body: JSON.stringify({ telemetryState: { activeTimerState: checkpoint } }),
+      }).catch(() => {});
+    };
+    const interval = setInterval(() => {
+      const current = readStorageState();
+      if (current?.isRunning && Date.now() - lastTimerCheckpointSyncRef.current >= 60000) pushCheckpoint();
+    }, 10000);
+    window.addEventListener('ifocus_timer_sync', pushCheckpoint);
+    window.addEventListener('ifocus_timer_checkpoint', pushCheckpoint);
+    window.addEventListener('pagehide', pushCheckpoint);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ifocus_timer_sync', pushCheckpoint);
+      window.removeEventListener('ifocus_timer_checkpoint', pushCheckpoint);
+      window.removeEventListener('pagehide', pushCheckpoint);
+    };
+  }, [session?.user?.id, session?.user?.sessionId, session?.error, isAdmin, getEffectivePath, readStorageState]);
+
   const handleReturnToDefaultPreset = useCallback(() => {
     setShowCycleCompleteModal(false);
     const defaultState = {
@@ -762,9 +640,8 @@ export default function GlobalTimer() {
       return;
     }
     const current = readStorageState() || stateRef.current;
-    const remainingSeconds = current.targetEndTime
-      ? Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000))
-      : (current.timeLeft !== undefined ? current.timeLeft : 25 * 60);
+    if (!current.isRunning || current.presencePaused) return;
+    const remainingSeconds = remainingTime(current);
     const totalTime = current.totalTime || 25 * 60;
     const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
 
@@ -774,7 +651,7 @@ export default function GlobalTimer() {
       targetEndTime: null,
       timeLeft: remainingSeconds,
       presencePaused: true,
-      lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds),
+      lastPresenceCheckElapsed: elapsedSeconds,
       lastPresenceRemaining: remainingSeconds,
       lastPresenceElapsed: elapsedSeconds,
     };
@@ -954,132 +831,36 @@ export default function GlobalTimer() {
     };
 
     const handleVisibilityOrFocus = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: "CANCEL_BACKGROUND_PRESENCE_CHECK"
-          });
-        }
-        const livePath = getEffectivePath();
-        if (isAdmin || isExemptPath(livePath)) {
-          lastActivityRef.current = Date.now();
-          setShowPresenceModal(false);
-          setShowIdleCoachModal(false);
-          return;
-        }
-        handleUserActivity();
-        const current = readStorageState() || stateRef.current;
-        // If presence paused while away or screen locked on mobile, re-prompt and re-chime
-        if (current?.presencePaused) {
-          setShowPresenceModal(true);
-          playPresenceChime();
-          return;
-        }
-
-        // Active Presence Catch-Up on Mobile Screen Unlock or Tab Switch:
-        if (current?.isRunning && current?.isFocus && current?.targetEndTime) {
-          let activePresenceEnabled = true;
-          let activePresenceInterval = 5;
-          try {
-            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-            if (rawPrefs) {
-              const prefs = JSON.parse(rawPrefs);
-              if (prefs.activePresenceEnabled !== undefined) activePresenceEnabled = Boolean(prefs.activePresenceEnabled);
-              if (prefs.activePresenceInterval) activePresenceInterval = Number(prefs.activePresenceInterval);
-            }
-          } catch (e) {}
-
-          const intervalSeconds = getPresenceIntervalSeconds(current);
-          const totalTime = current.totalTime || 25 * 60;
-          const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
-          const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
-          const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0;
-          const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
-          const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
-
-          if (activePresenceEnabled && focusSecondsSinceLastCheck >= intervalSeconds) {
-            const checkpointElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
-            const checkpointRemaining = Math.max(0, totalTime - checkpointElapsed);
-            const pausedState = {
-              ...current,
-              isRunning: false,
-              targetEndTime: null,
-              timeLeft: checkpointRemaining,
-              presencePaused: true,
-              lastPresenceCheckElapsed: checkpointElapsed,
-              lastPresenceRemaining: checkpointRemaining,
-              lastPresenceElapsed: checkpointElapsed,
-            };
-            commitStorageState(pausedState, true);
-            setShowPresenceModal(true);
-            playPresenceChime();
-            triggerVibration([250, 100, 250]);
-            sendSystemNotification(
-              "iFocus Active Presence Check",
-              `Timer: ${formatNotificationTime(checkpointRemaining)} remaining. Are you still studying? Tap to continue or pause.`,
-              "ifocus-presence",
-              PRESENCE_NOTIFICATION_ACTIONS
-            );
-          }
-        }
-      } else if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        const current = readStorageState() || stateRef.current;
-        if (current?.isRunning && current?.isFocus && current?.targetEndTime) {
-          const activePresenceEnabled = current.activePresenceEnabledAtStart !== undefined
-            ? Boolean(current.activePresenceEnabledAtStart)
-            : getSavedPresenceEnabled();
-
-          if (activePresenceEnabled) {
-            const intervalSeconds = getPresenceIntervalSeconds(current);
-            const totalTime = current.totalTime || 25 * 60;
-            const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
-            const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
-            const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0;
-            const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
-            const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
-            const secondsUntilCheck = Math.max(5, intervalSeconds - focusSecondsSinceLastCheck);
-
-            if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({
-                type: "SCHEDULE_BACKGROUND_PRESENCE_CHECK",
-                delayMs: secondsUntilCheck * 1000,
-                remainingSeconds: Math.max(0, remainingSeconds - secondsUntilCheck)
-              });
-            }
-
-            // Save one exact handoff checkpoint when backgrounding so another
-            // device can recover the session without a live sync stream.
-            const checkpointNow = Date.now();
-            if (navigator.onLine && checkpointNow - lastTimerCheckpointSyncRef.current >= 60000) {
-              lastTimerCheckpointSyncRef.current = checkpointNow;
-              const checkpointElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
-              const checkpointRemaining = Math.max(0, totalTime - checkpointElapsed);
-              const checkpointState = {
-                ...current,
-                isRunning: false,
-                targetEndTime: null,
-                timeLeft: checkpointRemaining,
-                presencePaused: true,
-                lastPresenceCheckElapsed: checkpointElapsed,
-                lastPresenceRemaining: checkpointRemaining,
-                lastPresenceElapsed: checkpointElapsed,
-                updatedAt: checkpointNow,
-                activePresenceIntervalSeconds: intervalSeconds,
-              };
-              try {
-                localStorage.setItem("ifocus_timer_state", JSON.stringify(checkpointState));
-              } catch (err) {}
-              fetch("/api/user/telemetry", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  telemetryState: {
-                    activeTimerState: checkpointState,
-                    updatedAt: new Date(checkpointNow).toISOString()
-                  }
-                })
-              }).catch(() => {});
-            }
+      const current = readStorageState() || stateRef.current;
+      const prefs = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+      if (isAdmin || isExemptPath(getEffectivePath())) return;
+      const settled = settlePresence(current, prefs);
+      if (settled !== current) {
+        commitStorageState(settled, true);
+        if (document.visibilityState === 'visible') playPresenceChime();
+        sendSystemNotification('iFocus Active Presence Check',
+          `Timer paused at ${formatNotificationTime(settled.timeLeft)}. Continue when you are ready.`,
+          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS);
+      }
+      if (document.visibilityState === 'visible') {
+        navigator.serviceWorker?.controller?.postMessage({ type: 'CANCEL_BACKGROUND_PRESENCE_CHECK' });
+        if (settled.presencePaused) setShowPresenceModal(true);
+        else handleUserActivity();
+      } else {
+        // One snapshot on exit; no cloud countdown polling.
+        const checkpoint = { ...settled, timeLeft: remainingTime(settled), updatedAt: Date.now() };
+        commitStorageState(checkpoint, false);
+        window.dispatchEvent(new CustomEvent('ifocus_timer_checkpoint', { detail: checkpoint }));
+        if (settled.isRunning && settled.isFocus && prefs.activePresenceEnabled !== false) {
+          const total = settled.totalTime || 1500;
+          const dueElapsed = (settled.lastPresenceCheckElapsed || 0) + getPresenceIntervalSeconds(settled);
+          const untilCheck = Math.max(0, dueElapsed - (total - checkpoint.timeLeft));
+          if (dueElapsed < total) {
+            navigator.serviceWorker?.controller?.postMessage({
+              type: 'SCHEDULE_BACKGROUND_PRESENCE_CHECK', delayMs: untilCheck * 1000,
+              remainingSeconds: Math.max(0, total - dueElapsed),
+              timerSessionId: settled.timerSessionId,
+            });
           }
         }
       }
@@ -1246,19 +1027,14 @@ export default function GlobalTimer() {
       if (e?.detail) {
         const syncedState = {
           ...e.detail,
-          updatedAt: Number(e.detail.updatedAt) || Date.now(),
+          updatedAt: Date.now(),
+          deviceId: getTimerDeviceId(),
           ...(e.detail.isRunning && e.detail.isFocus && !e.detail.activePresenceIntervalSeconds
-            ? {
-                activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
-                activePresenceEnabledAtStart: getSavedPresenceEnabled(),
-                burnoutCheckEnabledAtStart: getSavedBurnoutSettings().enabled,
-                burnoutCheckMinutesAtStart: getSavedBurnoutSettings().minutes,
-              }
+            ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
             : {})
         };
-        try {
-          localStorage.setItem("ifocus_timer_state", JSON.stringify(syncedState));
-        } catch (err) {}
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(syncedState));
+        stateRef.current = syncedState;
         setTimerState(syncedState);
         if (syncedState.isRunning) {
           lastActivityRef.current = Date.now();
@@ -1318,7 +1094,9 @@ export default function GlobalTimer() {
     };
 
     // Initial load from storage
-    const initial = readStorageState();
+    const savedInitial = readStorageState();
+    const initial = savedInitial && settlePresence(savedInitial, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+    if (initial && initial !== savedInitial) commitStorageState(initial, false);
     if (initial) {
       let maxS = 4;
       if (initial.timerPreset === "Custom") {
@@ -1340,7 +1118,7 @@ export default function GlobalTimer() {
         }
       }
       if (initial.isRunning && initial.targetEndTime) {
-        const remaining = Math.max(0, Math.round((initial.targetEndTime - Date.now()) / 1000));
+        const remaining = remainingTime(initial);
         initial.timeLeft = remaining;
       }
       setTimerState(initial);
@@ -1506,13 +1284,34 @@ export default function GlobalTimer() {
 
   // Bi-Directional Cloud Telemetry & Preference Reconciliation on mount (PC to iPhone PWA parity)
   useEffect(() => {
-    if (!session?.user?.id) return;
-    reconcileCloudTelemetry().catch(() => {});
-  }, [session?.user?.id]);
+    if (!session?.user?.id || session.error) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const current = readStorageState();
+      if (current?.authSessionId && current.authSessionId !== session.user.sessionId) {
+        const recovery = recoveryFromCheckpoint(current);
+        if (recovery && current.userId === session.user.id) {
+          localStorage.setItem(`ifocus_interrupted_session_${session.user.id}`, JSON.stringify(recovery));
+          window.dispatchEvent(new CustomEvent('ifocus_interrupted_session'));
+        }
+        // A new login must not advance a countdown left by an earlier login.
+        commitStorageState({ ...current, isRunning: false, isFocus: true,
+          timeLeft: current.customWorkDuration || current.totalTime || 1500,
+          totalTime: current.customWorkDuration || current.totalTime || 1500,
+          targetEndTime: null, presencePaused: false, breakGatePending: false,
+          lastPresenceCheckElapsed: 0, lastPresenceElapsed: 0,
+          timerSessionId: crypto.randomUUID(), authSessionId: session.user.sessionId,
+        }, false);
+      }
+      reconcileCloudTelemetry().catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, [session?.user?.id, session?.user?.sessionId, session?.error, readStorageState, commitStorageState]);
 
   // Main Global Timer Loop (Runs continuously across all routes in background)
   useEffect(() => {
-    if (isAdmin || pathname.startsWith("/admin")) return;
+    if (!session?.user?.id || session.error || isAdmin || isExemptPath(getEffectivePath())) return;
     const interval = setInterval(() => {
       const current = readStorageState() || stateRef.current;
       if (!current.isRunning || !current.targetEndTime) {
@@ -1520,78 +1319,41 @@ export default function GlobalTimer() {
       }
 
       const now = Date.now();
-      const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - now) / 1000));
+      const remainingSeconds = remainingTime(current, now);
       const totalTime = current.totalTime || 25 * 60;
       const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
 
-      // --- 1. ACTIVE PRESENCE CHECK ---
+      // Always settle the first missed presence deadline before completing a block.
+      const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+      const settled = settlePresence(current, preferences, now);
+      if (settled !== current) {
+        commitStorageState(settled, true);
+        playPresenceChime();
+        triggerVibration([300, 150, 300]);
+        sendSystemNotification('iFocus Active Presence Check',
+          `Timer paused at ${formatNotificationTime(settled.timeLeft)}. Continue when you are ready.`,
+          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS);
+        return;
+      }
       if (current.isFocus) {
-        const activePresenceEnabled = current.activePresenceEnabledAtStart !== undefined
-          ? Boolean(current.activePresenceEnabledAtStart)
-          : (() => {
-              try {
-                const prefs = JSON.parse(localStorage.getItem("ifocus_timer_preferences") || "{}");
-                return prefs.activePresenceEnabled !== undefined ? Boolean(prefs.activePresenceEnabled) : true;
-              } catch (e) {
-                return true;
-              }
-            })();
-        const intervalSeconds = getPresenceIntervalSeconds(current);
-
-        // Track focus seconds elapsed since the last confirmed presence check
-        const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number"
-          ? current.lastPresenceCheckElapsed
-          : 0;
-
-        // Reset baseline if lastCheckElapsed is ahead of elapsedSeconds (e.g. new session started or reset)
-        const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
-        const nextCheckpointElapsed = validLastCheck + intervalSeconds;
-        const isIntervalReached = elapsedSeconds >= nextCheckpointElapsed;
-
-        if (activePresenceEnabled && isIntervalReached) {
-          const livePath = getEffectivePath();
-          if (isExemptPath(livePath) || isAdmin) {
-            // Do not pause on exempt routes; advance check baseline so countdown never hangs
-            current.lastPresenceCheckElapsed = nextCheckpointElapsed;
-            current.lastPresenceRemaining = remainingSeconds;
-            lastActivityRef.current = Date.now();
-          } else {
-            // Freeze at the exact checkpoint, even if this tick is late.
-            const checkpointRemaining = Math.max(0, totalTime - nextCheckpointElapsed);
-            const pausedState = {
-              ...current,
-              isRunning: false,
-              targetEndTime: null,
-              timeLeft: checkpointRemaining,
-              presencePaused: true,
-              lastPresenceCheckElapsed: nextCheckpointElapsed,
-              lastPresenceRemaining: checkpointRemaining,
-              lastPresenceElapsed: nextCheckpointElapsed,
-            };
-            commitStorageState(pausedState, true);
-            setShowPresenceModal(true);
-            playPresenceChime();
-            triggerVibration([300, 150, 300, 150, 400]);
-            sendSystemNotification(
-              "iFocus Active Presence Check",
-              `Timer: ${formatNotificationTime(checkpointRemaining)} remaining. Are you still studying? Tap to continue or pause.`,
-              "ifocus-presence",
-              PRESENCE_NOTIFICATION_ACTIONS
-            );
-            lastActivityRef.current = Date.now();
-            return;
-          }
-        }
-
         // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
         if (!burnoutCheckedThisSessionRef.current) {
           const livePath = getEffectivePath();
           if (!isExemptPath(livePath) && !isAdmin) {
-            const savedBurnout = getSavedBurnoutSettings();
-            const burnoutCheckEnabled = current.burnoutCheckEnabledAtStart !== undefined
-              ? Boolean(current.burnoutCheckEnabledAtStart)
-              : savedBurnout.enabled;
-            const burnoutCheckMinutes = current.burnoutCheckMinutesAtStart || savedBurnout.minutes;
+            let burnoutCheckEnabled = true;
+            let burnoutCheckMinutes = 20;
+            try {
+              const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
+              if (rawPrefs) {
+                const prefs = JSON.parse(rawPrefs);
+                if (prefs.burnoutCheckEnabled !== undefined) {
+                  burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
+                }
+                if (prefs.burnoutCheckMinutes) {
+                  burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
+                }
+              }
+            } catch (e) {}
 
             const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
             const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
@@ -1966,12 +1728,13 @@ export default function GlobalTimer() {
       const updatedState = {
         ...current,
         timeLeft: remainingSeconds,
-        updatedAt: Date.now(),
         lastPresenceCheckElapsed: typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0,
         lastPresenceRemaining: remainingSeconds,
       };
       
       // Update both React state and localStorage on tick for 100% continuous persistence
+      updatedState.updatedAt = now;
+      stateRef.current = updatedState;
       setTimerState(updatedState);
       try {
         localStorage.setItem("ifocus_timer_state", JSON.stringify(updatedState));
@@ -1991,7 +1754,7 @@ export default function GlobalTimer() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [readStorageState, commitStorageState, getEffectivePath, isAdmin]);
+  }, [readStorageState, commitStorageState, getEffectivePath, isAdmin, session?.user?.id, session?.error]);
 
   // Handle Active Presence Confirmation
   const handleConfirmPresence = () => {
@@ -2001,53 +1764,39 @@ export default function GlobalTimer() {
       return; // Do NOT touch or resume timer if this was just a preview test!
     }
     lastActivityRef.current = Date.now();
-    const current = readStorageState() || timerState;
-    const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
-    const total = current.totalTime || 25 * 60;
-    const currentElapsed = Math.max(0, total - remaining);
-    const presenceIntervalSeconds = getPresenceIntervalSeconds(current);
-
-    const resumedState = {
-      ...current,
-      isRunning: true,
-      presencePaused: false,
-      timeLeft: remaining,
-      targetEndTime: Date.now() + remaining * 1000,
-      lastPresenceRemaining: remaining,
-      lastPresenceCheckElapsed: getPresenceCheckpoint(currentElapsed, presenceIntervalSeconds),
-      lastPresenceElapsed: currentElapsed,
-    };
-    commitStorageState(resumedState, true);
+    const current = readStorageState() || stateRef.current;
+    const settled = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+    commitStorageState(confirmPresence(settled), true);
+    navigator.serviceWorker?.controller?.postMessage({ type: 'CANCEL_BACKGROUND_PRESENCE_CHECK' });
+    navigator.serviceWorker?.getRegistration().then(reg => reg?.getNotifications({ tag: 'ifocus-presence' }))
+      .then(notifications => notifications?.forEach(notification => notification.close())).catch(() => {});
   };
 
   const handleKeepPaused = () => {
     setShowPresenceModal(false);
     if (isTestPresenceModal) {
       setIsTestPresenceModal(false);
-      return; // Do NOT pause the real timer if this was just a preview test!
+      return;
     }
-    const current = readStorageState() || timerState;
-    const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
-    const total = current.totalTime || 25 * 60;
-    const currentElapsed = Math.max(0, total - remaining);
-    const presenceIntervalSeconds = getPresenceIntervalSeconds(current);
-    const pausedState = {
-      ...current,
-      isRunning: false,
-      presencePaused: false,
-      targetEndTime: null,
-      timeLeft: remaining,
-      lastPresenceCheckElapsed: getPresenceCheckpoint(currentElapsed, presenceIntervalSeconds),
-      lastPresenceRemaining: remaining,
-      lastPresenceElapsed: currentElapsed,
-    };
-    commitStorageState(pausedState, true);
+    const current = readStorageState() || stateRef.current;
+    const settled = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+    commitStorageState(confirmPresence(settled, Date.now(), false), true);
+    navigator.serviceWorker?.controller?.postMessage({ type: 'CANCEL_BACKGROUND_PRESENCE_CHECK' });
+    navigator.serviceWorker?.getRegistration().then(reg => reg?.getNotifications({ tag: 'ifocus-presence' }))
+      .then(notifications => notifications?.forEach(notification => notification.close())).catch(() => {});
   };
 
   // Handle Service Worker Notification Action Messages (e.g., "I am still here")
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     const handleSwMessage = (e) => {
+      const current = readStorageState();
+      if (e.data?.timerSessionId && e.data.timerSessionId !== current?.timerSessionId) return;
+      if (e.data?.type === 'IFOCUS_PRESENCE_DUE') {
+        const settled = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+        if (settled !== current) commitStorageState(settled, true);
+        return;
+      }
       if (e.data?.type === "IFOCUS_RESUME_PRESENCE") {
         handleConfirmPresence();
       } else if (e.data?.type === "IFOCUS_PAUSE_PRESENCE") {
@@ -2060,8 +1809,10 @@ export default function GlobalTimer() {
     try {
       const url = new URL(window.location.href);
       if (url.searchParams.get("resumePresence") === "1") {
-        handleConfirmPresence();
+        const timerId = url.searchParams.get('timerSessionId');
+        if (timerId && timerId === readStorageState()?.timerSessionId) handleConfirmPresence();
         url.searchParams.delete("resumePresence");
+        url.searchParams.delete('timerSessionId');
         window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
       }
     } catch (e) {}
@@ -2185,26 +1936,16 @@ export default function GlobalTimer() {
   const toggleMiniTimerPlay = (e) => {
     e.stopPropagation();
     const current = readStorageState() || timerState;
-    if (current.isRunning) {
-      // Pause
-      const paused = {
-        ...current,
-        isRunning: false,
-        targetEndTime: null,
-      };
-      commitStorageState(paused, true);
-    } else {
-      // Resume
-      const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
-      const resumed = {
-        ...current,
-        isRunning: true,
-        presencePaused: false,
-        timeLeft: remaining,
-        targetEndTime: Date.now() + remaining * 1000,
-      };
-      commitStorageState(resumed, true);
+    const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+    if (current.breakGatePending) {
+      setShowBreakGateModal(true);
+      return;
     }
+    if (current.presencePaused) {
+      setShowPresenceModal(true);
+      return;
+    }
+    commitStorageState(toggleTimerState(current, preferences), true);
   };
 
   const formatTime = (seconds) => {
@@ -2215,9 +1956,7 @@ export default function GlobalTimer() {
 
   const isDashboard = pathname === "/dashboard" || pathname?.startsWith("/dashboard");
 
-  // Floating mini-timer strictly appears ONLY on desktop/tablet viewports (> 768px)
-  // when navigating away from the dashboard. On mobile screens (<= 768px), navigation
-  // to the timer is cleanly provided by the elevated center Timer button on the bottom nav bar.
+  // Show the movable timer on both mobile and desktop away from the dashboard.
   const showFloatingMiniTimer =
     !isDashboard &&
     (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
@@ -2259,6 +1998,7 @@ export default function GlobalTimer() {
 
   return (
     <>
+      <InterruptedSessionRecovery userId={session?.user?.id} />
       {/* Floating Mini-Timer Pill (Movable, Frosted White & Glowing Live Forest Green Design) */}
       <style>{`
         
@@ -2372,8 +2112,10 @@ export default function GlobalTimer() {
         <div
           ref={miniTimerRef}
           id="globalMiniTimerPill"
-          onMouseDown={handleMiniTimerMouseDown}
-          onTouchStart={handleMiniTimerTouchStart}
+          onPointerDown={handleMiniTimerPointerDown}
+          onPointerMove={handleMiniTimerPointerMove}
+          onPointerUp={handleMiniTimerPointerUp}
+          onPointerCancel={handleMiniTimerPointerUp}
           onClick={handleMiniTimerClick}
           style={{
             position: "fixed",
