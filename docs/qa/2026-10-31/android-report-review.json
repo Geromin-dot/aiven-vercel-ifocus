@@ -1,0 +1,64 @@
+{
+  "scope": "Current app in Chromium at desktop, narrow phone, iPhone-sized and landscape viewports. Install lifecycle events simulated; not a physical-device installation test.",
+  "checks": [
+    {
+      "name": "Guide all 12 steps fit 320px, 390px, landscape and desktop",
+      "status": "PASS",
+      "details": {
+        "stepViews": 48,
+        "viewports": 4,
+        "allImagesLoaded": true
+      }
+    },
+    {
+      "name": "Image enlargement closes to guide, Escape closes guide",
+      "status": "PASS",
+      "details": {
+        "escapeLevels": 2
+      }
+    },
+    {
+      "name": "Task Add stays inside narrow card and header Sign Out is compact",
+      "status": "PASS",
+      "details": {
+        "taskCreated": true,
+        "signOutWidth": 36
+      }
+    },
+    {
+      "name": "Hello and Ty are rejected by API without inventing state",
+      "status": "PASS",
+      "details": {
+        "rejectedInputs": 2
+      }
+    },
+    {
+      "name": "Avatar close and actions fit short phone and landscape screens",
+      "status": "PASS",
+      "details": {
+        "viewports": 2,
+        "footerVisible": true,
+        "bodyScrolls": true
+      }
+    },
+    {
+      "name": "Install help can reopen after dismissal and appinstalled hides banner",
+      "status": "PASS",
+      "details": {
+        "dismissalReopen": true,
+        "installAcceptedHides": true,
+        "appInstalledHides": true
+      }
+    },
+    {
+      "name": "Installed standalone app never shows install prompt",
+      "status": "PASS",
+      "details": {
+        "simulatedIosStandalone": true,
+        "bannerVisible": false
+      }
+    }
+  ],
+  "errors": [],
+  "cleaned": true
+}

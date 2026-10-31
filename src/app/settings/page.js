@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import TimerNotificationSettings from '@/components/TimerNotificationSettings';
+import { PwaInstallControl } from '@/components/PwaRegistrar';
 import { isTimerSessionOngoing } from '@/lib/timerState';
 
 const checkIntervalsAreLocked = () => {
@@ -138,6 +140,21 @@ export default function SettingsPage() {
   const [tempAvatarUrl, setTempAvatarUrl] = useState('');
   const [customDirectUrl, setCustomDirectUrl] = useState('');
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (!isAvatarModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement;
+    document.body.style.overflow = 'hidden';
+    document.querySelector('[aria-label="Close profile picture chooser"]')?.focus();
+    const closeOnEscape = event => { if (event.key === 'Escape') setIsAvatarModalOpen(false); };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+      previousFocus?.focus();
+    };
+  }, [isAvatarModalOpen]);
 
   // Profile Save State
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -1383,6 +1400,7 @@ export default function SettingsPage() {
               </div>
 
               <TimerNotificationSettings />
+              <PwaInstallControl />
 
               {/* Active Presence Check Setting */}
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
@@ -1780,6 +1798,7 @@ export default function SettingsPage() {
           {activeSection === 'notifications' && (
             <form onSubmit={handleSaveNotifications} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <TimerNotificationSettings />
+              <PwaInstallControl />
               <div className="settings-input-group">
                 <label className="settings-label" style={{ fontSize: '0.85rem' }}>Default Ambient Soundscape</label>
                 <select 
@@ -2112,17 +2131,19 @@ export default function SettingsPage() {
       </div>
 
       {/* ================= AVATAR CUSTOMIZER MODAL ================= */}
-      {isAvatarModalOpen && (
+      {isAvatarModalOpen && createPortal(
         <div className="avatar-modal-overlay" onClick={() => setIsAvatarModalOpen(false)}>
-          <div className="avatar-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="avatar-modal-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" onClick={(e) => e.stopPropagation()}>
             <div className="settings-card-header" style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--glass-border)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>Choose Profile Picture</h3>
+                <h3 id="avatar-picker-title" style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' }}>Choose Profile Picture</h3>
                 <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                   Select a character, roll a random avatar, or enter a custom image URL.
                 </p>
               </div>
-              <button 
+              <button
+                type="button"
+                aria-label="Close profile picture chooser"
                 onClick={() => setIsAvatarModalOpen(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '0.25rem' }}
               >
@@ -2130,13 +2151,13 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div className="avatar-modal-body" style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               
               {/* Preview Box */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem', background: '#f8faf7', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
-                  src={tempAvatarUrl || avatarUrl} 
+                  src={tempAvatarUrl || avatarUrl || getDicebearUrl(AVATAR_PRESETS[0].style, AVATAR_PRESETS[0].seed, AVATAR_PRESETS[0].bg)}
                   alt="Avatar Preview" 
                   style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2.5px solid white', boxShadow: '0 3px 10px rgba(0,0,0,0.1)', objectFit: 'cover' }}
                 />
@@ -2206,7 +2227,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', padding: '0.75rem 1.25rem', borderTop: '1px solid var(--glass-border)', background: '#fafbfa' }}>
+            <div className="avatar-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', padding: '0.75rem 1.25rem', borderTop: '1px solid var(--glass-border)', background: '#fafbfa' }}>
               <button 
                 type="button" 
                 className="btn-secondary" 
@@ -2227,7 +2248,7 @@ export default function SettingsPage() {
             </div>
 
           </div>
-        </div>
+        </div>, document.body
       )}
 
     </div>

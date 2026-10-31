@@ -11,83 +11,54 @@ export default function PwaRegistrar() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // 1. Register Service Worker quietly in background
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      const register = () => {
-        navigator.serviceWorker
-          .register("/sw.js", { updateViaCache: 'none' })
-          .then((reg) => {
-            console.log("PWA Service Worker registered with scope:", reg.scope);
-          })
-          .catch((err) => {
-            console.warn("PWA Service Worker registration failed:", err);
-          });
-      };
-      if (document.readyState === 'complete') register();
-      else window.addEventListener('load', register, { once: true });
-    }
-
-    if (typeof window === "undefined") return;
-
-    // 2. Check if already running in standalone mode (installed app)
-    const isInStandaloneMode =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-
-    setIsStandalone(isInStandaloneMode);
-    if (isInStandaloneMode) return;
-
-    // 3. Strictly verify if client is a MOBILE device (phone/tablet)
-    // Desktop computers & laptops must NEVER see this install banner
-    const ua = (window.navigator.userAgent || "").toLowerCase();
-    const isTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
-    const isMobileUa = /android|iphone|ipad|ipod|mobile/i.test(ua);
-    const isSmallScreen = window.innerWidth <= 768;
-    const isMobileDevice = isMobileUa || (isSmallScreen && isTouch);
-
-    setIsMobile(isMobileDevice);
-
-    // If it's a computer/desktop, completely halt banner logic
-    if (!isMobileDevice) {
-      return;
-    }
-
-    // Check if user previously dismissed banner
-    try {
-      const dismissedAt = localStorage.getItem("ifocus_pwa_dismissed");
-      if (dismissedAt && Date.now() - parseInt(dismissedAt, 10) < 7 * 24 * 60 * 60 * 1000) {
-        return;
-      }
-    } catch (e) {}
-
-    // 4. Detect iOS device
-    const isIosDevice = /iphone|ipad|ipod/.test(ua);
-    setIsIos(isIosDevice);
-
-    if (isIosDevice) {
-      const timer = setTimeout(() => {
-        setShowInstallBanner(true);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-
-    // 5. Capture Android/Chromium beforeinstallprompt
-    const handleBeforeInstall = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
+    const register = () => navigator.serviceWorker?.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register, { once: true });
+    const displayMode = window.matchMedia('(display-mode: standalone)');
+    const standalone = () => displayMode.matches || navigator.standalone === true;
+    const ua = navigator.userAgent.toLowerCase();
+    const ios = /iphone|ipad|ipod/.test(ua) || (/macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const mobile = ios || /android|mobile/.test(ua);
+    const initialFrame = requestAnimationFrame(() => { setIsMobile(mobile); setIsIos(ios); setIsStandalone(standalone()); });
+    const dismissed = () => { try { return Date.now() - Number(localStorage.getItem('ifocus_pwa_dismissed')) < 7 * 86400000; } catch { return false; } };
+    const updateMode = () => { setIsStandalone(standalone()); if (standalone()) { setShowInstallBanner(false); setDeferredPrompt(null); } };
+    const beforeInstall = event => {
+      if (!mobile) return;
+      event.preventDefault();
+      if (standalone()) return;
+      setDeferredPrompt(event);
+      if (!dismissed()) setShowInstallBanner(true);
+    };
+    const installed = () => {
+      setShowInstallBanner(false); setDeferredPrompt(null);
+      try { localStorage.removeItem('ifocus_pwa_dismissed'); } catch {}
+    };
+    const requestHelp = () => {
+      if (!mobile || standalone()) return;
+      try { localStorage.removeItem('ifocus_pwa_dismissed'); } catch {}
       setShowInstallBanner(true);
     };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
-
+    const timer = ios && !standalone() && !dismissed() ? setTimeout(() => setShowInstallBanner(true), 3000) : null;
+    window.addEventListener('beforeinstallprompt', beforeInstall);
+    window.addEventListener('appinstalled', installed);
+    window.addEventListener('ifocus_request_install', requestHelp);
+    window.addEventListener('pageshow', updateMode);
+    displayMode.addEventListener('change', updateMode);
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+      clearTimeout(timer);
+      cancelAnimationFrame(initialFrame);
+      window.removeEventListener('load', register);
+      window.removeEventListener('beforeinstallprompt', beforeInstall);
+      window.removeEventListener('appinstalled', installed);
+      window.removeEventListener('ifocus_request_install', requestHelp);
+      window.removeEventListener('pageshow', updateMode);
+      displayMode.removeEventListener('change', updateMode);
     };
   }, []);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
+      await deferredPrompt.prompt();
       const choiceResult = await deferredPrompt.userChoice;
       if (choiceResult.outcome === "accepted") {
         setShowInstallBanner(false);
@@ -180,7 +151,7 @@ export default function PwaRegistrar() {
                 Add to your iPhone Home Screen: Tap <span style={{ color: "#27522d", fontWeight: 600 }}>Share</span> below, then select <span style={{ color: "#27522d", fontWeight: 600 }}>&ldquo;Add to Home Screen&rdquo;</span>.
               </>
             ) : (
-              "Install as an app on your phone for quick full-screen access without opening a browser."
+              deferredPrompt ? "Install iFocus for quick access from your Home Screen." : "In Chrome, open the browser menu and choose Install app or Add to Home screen. If you opened this link in Messenger, open it in Chrome first."
             )}
           </p>
 
@@ -207,4 +178,16 @@ export default function PwaRegistrar() {
       </div>
     </div>
   );
+}
+
+export function PwaInstallControl() {
+  const [mode, setMode] = useState(null);
+  useEffect(() => {
+    const media = matchMedia('(display-mode: standalone)');
+    const update = () => setMode(media.matches || navigator.standalone === true ? 'installed' : /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent) ? 'browser' : null);
+    update(); media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  if (!mode) return null;
+  return <button type="button" className="btn-secondary" disabled={mode === 'installed'} onClick={() => dispatchEvent(new CustomEvent('ifocus_request_install'))}>{mode === 'installed' ? 'Opened as installed app' : 'Install iFocus / Installation help'}</button>;
 }

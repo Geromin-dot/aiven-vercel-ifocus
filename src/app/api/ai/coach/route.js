@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { callGemini } from '@/lib/gemini';
+import { reflectionInputError } from '@/lib/reflectionInput';
 
 function generateCognitiveFallback(rawText, tasks = []) {
   const text = (rawText || '').toLowerCase();
@@ -137,7 +138,9 @@ export async function POST(request) {
   }
 
   const { text, tasks } = body;
-  const userText = (text && typeof text === 'string') ? text.trim() : "I want to focus on my study plan.";
+  const userText = (text && typeof text === 'string') ? text.trim() : '';
+  const inputError = reflectionInputError(userText);
+  if (inputError) return NextResponse.json({ error: inputError }, { status: 422 });
 
   try {
     const taskListStr = tasks && tasks.length > 0 
@@ -147,6 +150,8 @@ export async function POST(request) {
     const prompt = `
 You are an empathetic, insightful human study coach & cognitive performance mentor.
 Analyze the student's reflection or question: "${userText}"
+
+If the input is only a greeting, random letters, or has no understandable reflection or study request, do not invent an emotional state or a plan. Return only {"needsContext":true}. Do not treat typing speed or a greeting as evidence of motivation.
 
 Current Tasks from Student:
 ${taskListStr}
@@ -198,6 +203,9 @@ Reply STRICTLY in valid JSON format:
       }
     });
 
+    if (parsed?.needsContext === true) {
+      return NextResponse.json({ error: 'Please describe how you feel or what you want to study so the coach has enough context.' }, { status: 422 });
+    }
     if (parsed && typeof parsed === 'object' && parsed.actionPlan) {
       const parsedSessions = parseInt(parsed.targetSessions, 10);
       const safeSessions = (!isNaN(parsedSessions) && parsedSessions >= 1 && parsedSessions <= 5)

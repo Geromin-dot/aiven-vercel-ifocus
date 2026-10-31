@@ -1226,7 +1226,7 @@ export default function CoachPage() {
 
           {/* Action Footer for Card 1 */}
           <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: '0.65rem' }}>
+            <div className="coach-strategy-actions" style={{ display: 'flex', gap: '0.65rem' }}>
               <button
                 type="button"
                 onClick={handleReturnHome}

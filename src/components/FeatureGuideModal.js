@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import styles from './FeatureGuideModal.module.css';
 
 const TUTORIAL_TOPICS = [
   {
@@ -15,15 +17,15 @@ const TUTORIAL_TOPICS = [
     steps: [
       {
         title: 'Choose Presets & Focus Cycles',
-        description: 'Pick quick presets like 25/5 (Pomodoro), 50/10 (Deep Work), or click Custom to dial in your own focus and break minutes. Toggle between Ongoing focus and Break rest periods anytime.',
+        description: 'Choose a focus and break preset, or open Custom to set the duration and number of cycles. Use Start to run the timer and Stop to pause it.',
         tip: 'Use Custom mode to set precise sprint durations for fast review or exam cramming.',
-        image: '/images/tutorials/crop_pomodoro_dial.png'
+        image: '/images/tutorials/current/timer.webp'
       },
       {
         title: 'Ambient Audio & Soundscapes',
-        description: 'Click the dynamic soundscape pill above the timer to choose audio tracks like Chill Lofi, Study Music, or Rain Ambient. Ambient audio blocks room distractions and trains your brain to enter a steady flow state.',
-        tip: 'You can test or mute volume in Settings > Notifications & Sound.',
-        image: '/images/tutorials/crop_pomodoro.png'
+        description: 'Tap the soundscape control above the timer to choose music or ambient sounds. Adjust the volume and use the playback button to pause or resume audio.',
+        tip: 'Start playback with a tap. Browser and phone background policies can affect audio.',
+        image: '/images/tutorials/current/audio.webp'
       }
     ]
   },
@@ -38,15 +40,15 @@ const TUTORIAL_TOPICS = [
     steps: [
       {
         title: 'Earn Your Break Through Active Recall',
-        description: 'BreakGate eliminates distraction by locking your rest countdown behind a flashcard challenge. When your focus cycle ends, BreakGate pops up with questions from your active deck. Answer correctly to unlock your break!',
-        tip: 'This mechanism uses positive friction to stop social media rabbit holes during rest periods.',
-        image: '/images/tutorials/crop_breakgate.png'
+        description: 'When a focus block ends with a deck active, BreakGate opens a short multiple-choice review. Answer the questions to continue to your break, or use Skip to Break if you need to skip the review.',
+        tip: 'Choose a deck before starting so the challenge uses your study material.',
+        image: '/images/tutorials/current/breakgate.webp'
       },
       {
         title: 'Arming a Deck & Session Prompts',
-        description: 'Open any deck in Flashcards and check "BreakGate Active". Your dashboard will display a green badge showing the active deck. If you start a timer without an active deck, iFocus will confirm whether you want to proceed without break gates or choose a deck.',
-        tip: 'You can change the number of questions presented during BreakGate in Settings.',
-        image: '/images/tutorials/crop_no_breakgate.png'
+        description: 'Open a saved deck in Flashcards and enable BreakGate Active. The Dashboard shows the active deck. Starting without a deck lets you choose one or proceed without BreakGate.',
+        tip: 'Open the timer’s Custom settings to choose the BreakGate question count.',
+        image: '/images/tutorials/current/deck.webp'
       }
     ]
   },
@@ -64,13 +66,13 @@ const TUTORIAL_TOPICS = [
         title: 'Interactive Study Mode & Mastery',
         description: 'Flip cards by clicking or pressing the Spacebar. Toggle "Definition First" to test your recall in reverse. Mark cards as Mastered (or press M) to build your retention progress bar.',
         tip: 'Click Shuffle anytime to randomize card order and avoid positional memory bias.',
-        image: '/images/tutorials/crop_flashcard_card.png'
+        image: '/images/tutorials/current/review.webp'
       },
       {
         title: 'Smart Hints, Controls & Practice Exams',
-        description: 'Check "Show Hints" (or press H) to display keyword clues directly on tough cards without flipping. Check "BreakGate Active" to arm the deck, or click "Take Exam" in the top bar to generate timed 4-choice quizzes.',
+        description: 'Use Show Hints to reveal a keyword clue. Enable BreakGate Active to use this deck during breaks, or choose Take Exam for multiple-choice practice.',
         tip: 'After completing an exam, you can immediately arm that deck for BreakGate with one click.',
-        image: '/images/tutorials/crop_flashcard_controls.png'
+        image: '/images/tutorials/current/controls.webp'
       }
     ]
   },
@@ -85,22 +87,22 @@ const TUTORIAL_TOPICS = [
     ),
     steps: [
       {
-        title: 'Anti-Ghosting Presence Verification',
-        description: 'To keep your focus statistics honest and accurate, iFocus periodically pauses the timer if you step away from your desk (AFK) or when your set check interval is reached.',
+        title: 'Periodic Presence Check',
+        description: 'During a focus session, the timer pauses at your configured presence interval. Choose Continue Session when you are ready, or leave it paused until you return.',
         tip: 'Click "Continue Session" to resume immediately. The timer will not waste time while you are away.',
-        image: '/images/tutorials/crop_active_presence.png'
+        image: '/images/tutorials/current/presence.webp'
       },
       {
         title: 'Customizing Intervals & Safe Testing',
-        description: 'Go to Settings > Focus Preferences to adjust check intervals (1 min test, 3 min, 5 min, 10 min, 15 min). Use the "Test Presence Popup" button to safely preview the modal without pausing your active session.',
+        description: 'Open Settings > Focus Preferences to choose the Active Presence interval and preview the presence popup. Presence and burnout intervals are locked while a timer session is ongoing.',
         tip: 'The test popup has a blue Test badge and will never interrupt your running timer.',
-        image: '/images/tutorials/crop_active_presence.png'
+        image: '/images/tutorials/current/presence-settings.webp'
       }
     ]
   },
   {
     id: 'reflection',
-    label: 'AI Coach & Friction',
+    label: 'AI Coach',
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
@@ -109,15 +111,15 @@ const TUTORIAL_TOPICS = [
     steps: [
       {
         title: 'Quick Reflection & Keystroke Telemetry',
-        description: 'Type how you feel in the Quick Reflection box on the dashboard. Built-in telemetry monitors flight time, dwell time, and backspace friction to automatically assess your mental flow state in real time.',
+        description: 'Write a short reflection about how you feel or what you want to study. Submit & Analyze uses that context to suggest a study rhythm and task plan.',
         tip: 'Click "Submit & Analyze" to receive immediate coach recommendations and task reprioritization.',
-        image: '/images/tutorials/crop_reflection.png'
+        image: '/images/tutorials/current/reflection.webp'
       },
       {
         title: 'Personalized AI Coach Mentorship',
-        description: 'Navigate to the AI Coach tab to get customized study strategies, mnemonic memory aids, and psychological reframing routines tailored to your current friction levels.',
+        description: 'Open AI Coach to review your cognitive-state summary, recommended rhythm, and action plan. Apply a strategy to update the Dashboard, and revisit earlier reflections in the journal.',
         tip: 'The AI Coach adapts your daily plan when you are stressed or struggling with high-friction tasks.',
-        image: '/images/tutorials/crop_coach_plan.png'
+        image: '/images/tutorials/current/coach.webp'
       }
     ]
   },
@@ -134,15 +136,15 @@ const TUTORIAL_TOPICS = [
     steps: [
       {
         title: 'Mastery Rates & Study Streaks',
-        description: 'The Analytics tab shows your daily study minutes, completed focus sessions, BreakGate pass rates, and active streaks so you can track your cognitive growth over days and weeks.',
-        tip: 'Consistent 25-minute sessions compound into deep long-term retention and higher exam confidence.',
-        image: '/images/tutorials/crop_analytics_cards.png'
+        description: 'Analytics shows recorded focus time, your study streak, mastered-card counts, and recent saved sessions. Daily focus uses hours and minutes.',
+        tip: 'Mastery reflects your marked cards and practice activity; it is not a measured exam outcome.',
+        image: '/images/tutorials/current/analytics.webp'
       },
       {
         title: 'Weekly Pacing & Focus Chart',
-        description: 'Review historical timeline of every focus block, BreakGate challenge result, and presence audit to identify your peak productive hours during the day.',
-        tip: 'Check your weekly graphs to spot energy dips and plan heavier subjects during your peak focus windows.',
-        image: '/images/tutorials/crop_analytics_chart.png'
+        description: 'Compare recorded focus time across the week and switch the chart scale between minutes and hours. The adjacent panel summarizes BreakGate pacing and rest information.',
+        tip: 'Chart totals can use rounded decimal hours; daily totals show hours and minutes.',
+        image: '/images/tutorials/current/chart.webp'
       }
     ]
   }
@@ -152,527 +154,82 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
   const [activeTopicId, setActiveTopicId] = useState(initialTopic);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
-
-  // Sync initial topic when modal opens
+  const dialogRef = useRef(null);
+  const navRef = useRef(null);
+  const imageButtonRef = useRef(null);
+  const zoomCloseRef = useRef(null);
   useEffect(() => {
-    if (initialTopic) {
-      setActiveTopicId(initialTopic);
-      setCurrentStepIndex(0);
-    }
-  }, [initialTopic, isOpen]);
-
-  // Keyboard navigation: Left/Right arrows for steps, Escape to close zoom or modal
+    if (isOpen) { setActiveTopicId(initialTopic); setCurrentStepIndex(0); setIsZoomed(false); }
+  }, [isOpen, initialTopic]);
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        if (isZoomed) {
-          setIsZoomed(false);
-        } else {
-          onClose();
-        }
-      } else if (e.key === 'ArrowRight' && !isZoomed) {
-        const topic = TUTORIAL_TOPICS.find(t => t.id === activeTopicId);
-        if (topic && currentStepIndex < topic.steps.length - 1) {
-          setCurrentStepIndex(i => i + 1);
-        }
-      } else if (e.key === 'ArrowLeft' && !isZoomed) {
-        if (currentStepIndex > 0) {
-          setCurrentStepIndex(i => i - 1);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, activeTopicId, currentStepIndex, isZoomed, onClose]);
-
+    const dialog = dialogRef.current;
+    dialog.showModal();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { dialog.close(); document.body.style.overflow = overflow; };
+  }, [isOpen]);
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeTopicId, isOpen]);
+  useEffect(() => { if (isZoomed) zoomCloseRef.current?.focus(); }, [isZoomed]);
   if (!isOpen) return null;
-
-  const activeTopic = TUTORIAL_TOPICS.find(t => t.id === activeTopicId) || TUTORIAL_TOPICS[0];
-  const step = activeTopic.steps[currentStepIndex] || activeTopic.steps[0];
-  const isFirstStep = currentStepIndex === 0;
-  const isLastStep = currentStepIndex === activeTopic.steps.length - 1;
-
-  const handleNext = () => {
-    if (!isLastStep) {
-      setCurrentStepIndex(i => i + 1);
-    } else {
-      const topicIdx = TUTORIAL_TOPICS.findIndex(t => t.id === activeTopicId);
-      if (topicIdx < TUTORIAL_TOPICS.length - 1) {
-        setActiveTopicId(TUTORIAL_TOPICS[topicIdx + 1].id);
-        setCurrentStepIndex(0);
-      } else {
-        onClose();
-      }
-    }
+  const topicIndex = Math.max(0, TUTORIAL_TOPICS.findIndex(t => t.id === activeTopicId));
+  const topic = TUTORIAL_TOPICS[topicIndex];
+  const step = topic.steps[currentStepIndex] || topic.steps[0];
+  const first = currentStepIndex === 0 && topicIndex === 0;
+  const last = currentStepIndex === topic.steps.length - 1 && topicIndex === TUTORIAL_TOPICS.length - 1;
+  const selectTopic = id => { setActiveTopicId(id); setCurrentStepIndex(0); };
+  const next = () => {
+    if (currentStepIndex < topic.steps.length - 1) setCurrentStepIndex(i => i + 1);
+    else if (!last) selectTopic(TUTORIAL_TOPICS[topicIndex + 1].id);
+    else onClose();
   };
-
-  const handlePrev = () => {
-    if (!isFirstStep) {
-      setCurrentStepIndex(i => i - 1);
-    }
+  const previous = () => {
+    if (currentStepIndex > 0) setCurrentStepIndex(i => i - 1);
+    else if (!first) { setActiveTopicId(TUTORIAL_TOPICS[topicIndex - 1].id); setCurrentStepIndex(TUTORIAL_TOPICS[topicIndex - 1].steps.length - 1); }
   };
-
-  return (
-    <>
-      <div 
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 99999,
-          background: 'rgba(15, 23, 42, 0.75)',
-          backdropFilter: 'blur(10px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1.25rem',
-          animation: 'fadeIn 0.2s ease-out'
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
-        {/* Modal Main Frame - Spacious, High-Clarity View */}
-        <div 
-          style={{
-            width: '100%',
-            maxWidth: '880px',
-            height: 'min(780px, 94vh)',
-            background: '#ffffff',
-            borderRadius: '24px',
-            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
-            border: '1px solid rgba(226, 232, 240, 0.9)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}
-        >
-          {/* Header Bar */}
-          <div 
-            style={{
-              padding: '1rem 1.6rem',
-              borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(248, 250, 252, 0.95)',
-              flexShrink: 0
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div 
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '11px',
-                  background: 'rgba(46, 125, 50, 0.12)',
-                  color: '#2e7d32',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" strokeWidth="2.8" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <h2 style={{ fontSize: '1.18rem', fontWeight: 700, margin: 0, color: '#163824', lineHeight: 1.2 }}>
-                  iFocus Feature Guide & Tutorials
-                </h2>
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Visual walkthroughs with screenshots to help you master every tool
-                </span>
-              </div>
-            </div>
-
-            <button 
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#64748b',
-                cursor: 'pointer',
-                padding: '0.45rem',
-                borderRadius: '9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background 0.15s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.06)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-              title="Close Guide"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-
-          {/* Feature Category Navigation - 2x3 Symmetric Grid */}
-          <div 
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '0.45rem',
-              padding: '0.7rem 1.6rem',
-              background: '#f8fafc',
-              borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-              flexShrink: 0
-            }}
-          >
-            {TUTORIAL_TOPICS.map((topic) => {
-              const isSelected = topic.id === activeTopicId;
-              return (
-                <button
-                  key={topic.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveTopicId(topic.id);
-                    setCurrentStepIndex(0);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.45rem',
-                    padding: '0.45rem 0.6rem',
-                    borderRadius: '10px',
-                    fontSize: '0.82rem',
-                    fontWeight: isSelected ? 700 : 500,
-                    color: isSelected ? '#1e3f23' : '#475569',
-                    background: isSelected ? 'rgba(46, 125, 50, 0.15)' : '#ffffff',
-                    border: isSelected ? '1.5px solid #2e7d32' : '1px solid rgba(226, 232, 240, 0.9)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    boxShadow: isSelected ? '0 2px 6px rgba(46, 125, 50, 0.15)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = '#f1f5f9';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = '#ffffff';
-                  }}
-                >
-                  <span style={{ color: isSelected ? '#2e7d32' : '#64748b', display: 'flex', alignItems: 'center' }}>
-                    {topic.icon}
-                  </span>
-                  <span>{topic.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Modal Body - Stable, Comfortable Layout with High-Resolution Visuals */}
-          <div 
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '1rem 1.6rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem'
-            }}
-          >
-            {/* Step Counter Tag & Keyboard Hint */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <span 
-                style={{
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.6px',
-                  color: '#2e7d32',
-                  background: 'rgba(46, 125, 50, 0.1)',
-                  padding: '0.2rem 0.65rem',
-                  borderRadius: '9999px'
-                }}
-              >
-                Step {currentStepIndex + 1} of {activeTopic.steps.length}
-              </span>
-
-              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                Press Left/Right arrows to flip
-              </span>
-            </div>
-
-            {/* Title & Description with stable min-height */}
-            <div style={{ minHeight: '56px', flexShrink: 0 }}>
-              <h3 style={{ fontSize: '1.22rem', fontWeight: 700, margin: '0 0 0.25rem 0', color: '#163824', lineHeight: 1.25 }}>
-                {step.title}
-              </h3>
-              <p style={{ fontSize: '0.88rem', color: '#475569', margin: 0, lineHeight: 1.5 }}>
-                {step.description}
-              </p>
-            </div>
-
-            {/* High-Definition Cropped Feature Picture Container with Click-to-Zoom */}
-            <div 
-              onClick={() => setIsZoomed(true)}
-              title="Click to view full image in high resolution"
-              style={{
-                height: '275px',
-                width: '100%',
-                flexShrink: 0,
-                borderRadius: '16px',
-                overflow: 'hidden',
-                background: '#f8fafc',
-                border: '1.5px solid rgba(0, 0, 0, 0.09)',
-                boxShadow: '0 4px 18px -4px rgba(0, 0, 0, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                cursor: 'zoom-in',
-                padding: '0.5rem'
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={step.image} 
-                alt={step.title}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  display: 'block',
-                  filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.06))'
-                }}
-              />
-
-              {/* Zoom pill badge */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  bottom: '10px',
-                  right: '12px',
-                  background: 'rgba(15, 23, 42, 0.78)',
-                  backdropFilter: 'blur(4px)',
-                  color: '#ffffff',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '9999px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  pointerEvents: 'none',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  <line x1="11" y1="8" x2="11" y2="14"></line>
-                  <line x1="8" y1="11" x2="14" y2="11"></line>
-                </svg>
-                <span>Click to enlarge</span>
-              </div>
-            </div>
-
-            {/* Pro Tip Callout */}
-            <div 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.65rem',
-                padding: '0.65rem 1rem',
-                background: 'rgba(46, 125, 50, 0.06)',
-                border: '1px solid rgba(46, 125, 50, 0.18)',
-                borderRadius: '12px',
-                flexShrink: 0
-              }}
-            >
-              <div style={{ color: '#2e7d32', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.84rem', color: '#163824', lineHeight: 1.45 }}>
-                <strong>Tip:</strong> {step.tip}
-              </p>
-            </div>
-          </div>
-
-          {/* Footer Navigation - Spacious, Balanced 3-Zone Layout */}
-          <div 
-            style={{
-              padding: '0.95rem 1.6rem',
-              borderTop: '1px solid rgba(0, 0, 0, 0.08)',
-              display: 'grid',
-              gridTemplateColumns: '120px 1fr 120px',
-              alignItems: 'center',
-              background: 'rgba(248, 250, 252, 0.95)',
-              flexShrink: 0
-            }}
-          >
-            {/* Left: Previous Button */}
-            <div style={{ justifySelf: 'start' }}>
-              <button
-                type="button"
-                onClick={handlePrev}
-                disabled={isFirstStep}
-                style={{
-                  width: '105px',
-                  padding: '0.55rem 0.9rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  borderRadius: '9999px',
-                  background: '#ffffff',
-                  color: isFirstStep ? '#94a3b8' : '#334155',
-                  border: '1.5px solid rgba(0, 0, 0, 0.1)',
-                  cursor: isFirstStep ? 'not-allowed' : 'pointer',
-                  opacity: isFirstStep ? 0.5 : 1,
-                  boxShadow: isFirstStep ? 'none' : '0 2px 6px rgba(0,0,0,0.05)',
-                  transition: 'all 0.15s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.35rem'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isFirstStep) e.currentTarget.style.background = '#f1f5f9';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isFirstStep) e.currentTarget.style.background = '#ffffff';
-                }}
-              >
-                ← Previous
-              </button>
-            </div>
-
-            {/* Center: Step Progress Indicators */}
-            <div 
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center', 
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-            >
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                {activeTopic.steps.map((_, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setCurrentStepIndex(idx)}
-                    title={`Go to Step ${idx + 1}`}
-                    style={{
-                      width: currentStepIndex === idx ? '26px' : '9px',
-                      height: '8px',
-                      borderRadius: '9999px',
-                      background: currentStepIndex === idx ? '#2e7d32' : 'rgba(0, 0, 0, 0.2)',
-                      cursor: 'pointer',
-                      border: 'none',
-                      padding: 0,
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}
-                  />
-                ))}
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
-                {currentStepIndex + 1} / {activeTopic.steps.length}
-              </span>
-            </div>
-
-            {/* Right: Next / Got It Button */}
-            <div style={{ justifySelf: 'end' }}>
-              <button
-                type="button"
-                onClick={handleNext}
-                style={{
-                  width: '115px',
-                  padding: '0.55rem 1rem',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  borderRadius: '9999px',
-                  background: '#27522d',
-                  color: '#ffffff',
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 3px 10px rgba(39, 82, 45, 0.3)',
-                  transition: 'all 0.15s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.35rem'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#1e3f23';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#27522d';
-                  e.currentTarget.style.transform = 'none';
-                }}
-              >
-                {isLastStep ? 'Got it!' : 'Next Step →'}
-              </button>
-            </div>
-          </div>
+  const closeZoom = () => { setIsZoomed(false); requestAnimationFrame(() => imageButtonRef.current?.focus()); };
+  const picture = className => <picture className={className}>
+    <source media="(max-width: 600px)" srcSet={step.image.replace('.webp', '-mobile.webp')} />
+    {/* Actual captures of the application; keep their original proportions. */}
+    <img src={step.image} alt={step.title + ' in iFocus'} />
+  </picture>;
+  return createPortal(
+    <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="feature-guide-title"
+      onCancel={e => { e.preventDefault(); if (isZoomed) closeZoom(); else onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={e => {
+        if (isZoomed) return;
+        if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); previous(); }
+      }}>
+      <div className={styles.frame} inert={isZoomed ? true : undefined}>
+        <header className={styles.header}>
+          <div><h2 id="feature-guide-title">iFocus Feature Guide</h2><p>Explore the tools, one step at a time.</p></div>
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
+        </header>
+        <nav ref={navRef} className={styles.topics} aria-label="Guide topics">
+          {TUTORIAL_TOPICS.map(t => <button type="button" key={t.id} aria-pressed={t.id === topic.id} onClick={() => selectTopic(t.id)}>{t.icon}<span>{t.label}</span></button>)}
+        </nav>
+        <div className={styles.body} key={step.title}>
+          <div className={styles.stepLine}><span>{topic.label} · Step {currentStepIndex + 1} of {topic.steps.length}</span><span className={styles.keyboardHint}>← → to navigate</span></div>
+          <h3>{step.title}</h3><p className={styles.description}>{step.description}</p>
+          <button ref={imageButtonRef} type="button" className={styles.screenshot} onClick={() => setIsZoomed(true)} aria-label={'Enlarge screenshot for ' + step.title}>
+            {picture(styles.picture)}<span className={styles.enlarge}>Tap to enlarge</span>
+          </button>
+          <p className={styles.tip}><strong>Tip</strong> {step.tip}</p>
         </div>
+        <footer className={styles.footer}>
+          <button type="button" onClick={previous} disabled={first}>← Previous</button>
+          <span className={styles.progress} aria-label={'Topic ' + (topicIndex + 1) + ' of ' + TUTORIAL_TOPICS.length}>{topicIndex + 1} / {TUTORIAL_TOPICS.length}</span>
+          <button type="button" className={styles.next} onClick={next}>{last ? 'Done' : 'Next →'}</button>
+        </footer>
       </div>
-
-      {/* Full-Screen Lightbox Zoom Mode */}
-      {isZoomed && (
-        <div 
-          onClick={() => setIsZoomed(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 100000,
-            background: 'rgba(0, 0, 0, 0.88)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem',
-            animation: 'fadeIn 0.15s ease-out',
-            cursor: 'zoom-out'
-          }}
-        >
-          <div 
-            style={{
-              position: 'relative',
-              maxWidth: '92vw',
-              maxHeight: '88vh',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center'
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={step.image} 
-              alt={step.title}
-              style={{
-                maxWidth: '92vw',
-                maxHeight: '84vh',
-                objectFit: 'contain',
-                borderRadius: '16px',
-                boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
-                border: '2px solid rgba(255, 255, 255, 0.15)'
-              }}
-            />
-            <div style={{ marginTop: '0.75rem', color: '#ffffff', fontSize: '0.85rem', opacity: 0.85 }}>
-              Click anywhere or press Esc to exit zoom
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      {isZoomed && <div className={styles.zoom}>
+        <div className={styles.zoomHeader}><span>{step.title}</span><button ref={zoomCloseRef} type="button" className={styles.close} onClick={closeZoom} aria-label="Close enlarged screenshot">×</button></div>
+        <div className={styles.zoomImage}>{picture(styles.picture)}</div><p>Scroll to see details. Close to return to the guide.</p>
+      </div>}
+    </dialog>, document.body
   );
 }

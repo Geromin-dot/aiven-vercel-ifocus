@@ -1,0 +1,105 @@
+{
+  "captures": [
+    "scratch/tutorial-captures/timer.png",
+    "scratch/tutorial-captures/reflection.png",
+    "scratch/tutorial-captures/audio.png",
+    "scratch/tutorial-captures/presence.png",
+    "scratch/tutorial-captures/controls.png",
+    "scratch/tutorial-captures/review.png",
+    "scratch/tutorial-captures/deck.png",
+    "scratch/tutorial-captures/presence-settings.png",
+    "scratch/tutorial-captures/analytics.png",
+    "scratch/tutorial-captures/chart.png",
+    "scratch/tutorial-captures/coach.png",
+    "scratch/tutorial-captures/breakgate.png",
+    "scratch/tutorial-captures/timer-mobile.png",
+    "scratch/tutorial-captures/reflection-mobile.png",
+    "scratch/tutorial-captures/audio-mobile.png",
+    "scratch/tutorial-captures/presence-mobile.png",
+    "scratch/tutorial-captures/controls-mobile.png",
+    "scratch/tutorial-captures/review-mobile.png",
+    "scratch/tutorial-captures/deck-mobile.png",
+    "scratch/tutorial-captures/presence-settings-mobile.png",
+    "scratch/tutorial-captures/analytics-mobile.png",
+    "scratch/tutorial-captures/chart-mobile.png",
+    "scratch/tutorial-captures/coach-mobile.png",
+    "scratch/tutorial-captures/breakgate-mobile.png"
+  ],
+  "checks": [
+    {
+      "name": "Unauthenticated app routes redirect to login",
+      "status": "PASS",
+      "details": {
+        "routes": 6
+      }
+    },
+    {
+      "name": "Authenticated page loads",
+      "status": "PASS",
+      "details": {
+        "width": 1440
+      }
+    },
+    {
+      "name": "Greeting and typo input ask for context",
+      "status": "PASS",
+      "details": {
+        "inputs": 2,
+        "noAdaptation": true
+      }
+    },
+    {
+      "name": "Avatar actions remain reachable",
+      "status": "PASS",
+      "details": {
+        "actions": 2
+      }
+    },
+    {
+      "name": "Authenticated page loads-mobile",
+      "status": "PASS",
+      "details": {
+        "width": 390
+      }
+    },
+    {
+      "name": "Greeting and typo input ask for context-mobile",
+      "status": "PASS",
+      "details": {
+        "inputs": 2,
+        "noAdaptation": true
+      }
+    },
+    {
+      "name": "Avatar actions remain reachable-mobile",
+      "status": "PASS",
+      "details": {
+        "actions": 2
+      }
+    }
+  ],
+  "errors": [],
+  "crops": [
+    {
+      "source": "scratch/tutorial-captures/timer-full.png",
+      "target": "scratch/tutorial-captures/timer.png",
+      "clip": {
+        "x": 665.328125,
+        "y": 374.84375,
+        "width": 359.328125,
+        "height": 492.1875
+      }
+    },
+    {
+      "source": "scratch/tutorial-captures/timer-full-mobile.png",
+      "target": "scratch/tutorial-captures/timer-mobile.png",
+      "clip": {
+        "x": 14.390625,
+        "y": 657.234375,
+        "width": 361.21875,
+        "height": 356.609375
+      }
+    }
+  ],
+  "cleaned": true
+}

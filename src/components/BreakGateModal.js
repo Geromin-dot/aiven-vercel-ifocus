@@ -318,14 +318,14 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         flexDirection: 'column',
         gap: '0.85rem',
         animation: 'flashcardFadeIn 0.25s ease',
-        maxHeight: '94vh',
+        maxHeight: 'calc(100dvh - 32px)',
         overflowY: 'auto'
       }}>
 
         {/* Modal Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="breakgate-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+            <div className="breakgate-deck-heading" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
               <span style={{
                 background: 'rgba(46, 125, 50, 0.12)',
                 color: '#2e7d32',
@@ -354,6 +354,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
 
           <button 
             onClick={handleSkip}
+            className="breakgate-skip-button"
             style={{
               background: 'transparent',
               border: 'none',

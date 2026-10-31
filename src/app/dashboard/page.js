@@ -10,6 +10,7 @@ import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
+import { reflectionInputError } from '@/lib/reflectionInput';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
@@ -59,6 +60,7 @@ export default function CommandCenterPage() {
   // AI Coach State
   const [reflectionInput, setReflectionInput] = useState('');
   const [aiFeedback, setAiFeedback] = useState(null);
+  const [reflectionError, setReflectionError] = useState('');
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
 
   // Past Entries State (LocalStorage)
@@ -1896,7 +1898,9 @@ export default function CommandCenterPage() {
   // AI Coach Logic
   const submitReflection = async () => {
     const text = reflectionInput.trim();
-    if (!text) return;
+    const inputError = reflectionInputError(text);
+    setReflectionError(inputError);
+    if (inputError) return;
     setIsSubmittingReflection(true);
     setAiFeedback(null);
 
@@ -2085,7 +2089,7 @@ export default function CommandCenterPage() {
         saveHistory([newEntry, ...pastEntries]);
 
       } else {
-        setAiFeedback({ title: "Error", message: `Failed to generate AI response. ${data.error || ''}` });
+        setReflectionError(data.error || 'Could not analyze this reflection. Please try again.');
       }
 
     } catch (err) {
@@ -2295,8 +2299,8 @@ export default function CommandCenterPage() {
           </div>
         </div>
 
-        {/* Quick Add Bar (Placed ON TOP of Categories!) */}
-        <div style={{
+        {/* Quick Add Bar */}
+        <div className="task-quick-add" style={{
           display: 'flex',
           alignItems: 'center',
           gap: '0.4rem',
@@ -2456,6 +2460,7 @@ export default function CommandCenterPage() {
           <button 
             type="button" 
             onClick={addTodo} 
+            className="task-add-button"
             style={{
               background: '#4e8253',
               color: '#ffffff',
@@ -3297,7 +3302,9 @@ export default function CommandCenterPage() {
             }}
             onKeyDown={handleTelemetryKeyDown}
             onKeyUp={handleTelemetryKeyUp}
-            placeholder="Type how you feel or pick a starter above..."
+            aria-describedby={reflectionError ? "reflection-input-error" : undefined}
+              aria-invalid={Boolean(reflectionError)}
+              placeholder="Type how you feel or pick a starter above..."
             disabled={isSubmittingReflection}
             style={{ 
               flex: 1,
@@ -3313,6 +3320,7 @@ export default function CommandCenterPage() {
               boxSizing: 'border-box'
             }}
           ></textarea>
+          {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
           
           {/* Submit Button */}
           <button 

@@ -1,4 +1,32 @@
 @import "tailwindcss";
+
+/* Dialogs must fit the visible phone viewport and sit above the app navigation. */
+body > .avatar-modal-overlay { z-index: 100010; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.avatar-modal-overlay .avatar-modal-card { display: flex; flex-direction: column; padding: 0; width: min(100%, 520px); max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: hidden; }
+.avatar-modal-card .settings-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-shrink: 0; }
+.avatar-modal-card .settings-card-header > div { min-width: 0; }
+.avatar-modal-card .settings-card-header > button { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; }
+.avatar-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.avatar-modal-actions { flex-shrink: 0; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.avatar-modal-actions button { min-height: 44px; margin: 0 !important; display: flex; align-items: center; justify-content: center; padding: 10px 14px !important; line-height: 1.4; }
+.reflection-input-error { color: #a13c25; font-size: .84rem; line-height: 1.5; margin: 8px 0; }
+.coach-strategy-actions > button { flex: 1 1 0 !important; min-width: 0; min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
+.breakgate-header { gap: 12px; flex-wrap: wrap; }
+.breakgate-header > div { flex: 1 1 240px; min-width: 0; }
+.breakgate-deck-heading { flex-wrap: wrap; }
+.breakgate-deck-heading > span { overflow-wrap: anywhere; }
+.breakgate-header .breakgate-skip-button { flex: 0 0 auto; min-height: 40px; padding: 8px 12px; border: 1px solid #d8e2d5 !important; border-radius: 10px; background: #f6f9f3 !important; color: #3e5d41 !important; font-weight: 600 !important; text-decoration: none !important; white-space: nowrap; }
+@media (max-width: 768px) {
+  .mobile-header-signout-btn { width: 36px; height: 36px; padding: 0 !important; justify-content: center; flex-shrink: 0; }
+  .mobile-header-signout-btn span { display: none; }
+  .task-quick-add { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; gap: 8px !important; padding: 8px !important; }
+  .task-quick-add > input { grid-column: 1 / -1; width: 100%; min-width: 0 !important; height: 40px !important; }
+  .task-quick-add > div { min-width: 0; }
+  .task-quick-add > div > button, .task-quick-add .task-add-button { height: 40px !important; }
+  .coach-strategy-actions { flex-direction: column; }
+  .coach-strategy-actions > button { width: 100%; }
+  .avatar-modal-actions > button { flex: 1; }
+}
 :root {
     --bg-color: #f7f6f3;
     --bg-surface: #ffffff;

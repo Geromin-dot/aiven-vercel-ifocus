@@ -96,14 +96,14 @@ export default function LandingPage() {
       name: "Home Dashboard",
       route: "/dashboard",
       badge: "Command Center",
-      image: "/showcase/dashboard.png?v=v3",
+      image: "/showcase/current/dashboard.webp",
       title: "Focus Timer, Tasks List & AI Reflection",
       description: "The core study workspace uniting task prioritization, customizable Pomodoro intervals with focus soundscapes, and real-time reflection telemetry.",
       features: [
         { title: "Prioritized Tasks List", desc: "Organize tasks with High, Medium, and Low tags. Filter by All, Active, and Done with cloud synchronization." },
         { title: "Circular Focus Timer", desc: "Choose from 50:00, 25/5, 15/3, 90/20 presets or custom durations, with Ongoing and Break modes." },
         { title: "Chill Lofi Soundscapes", desc: "Integrated focus audio player built directly into the timer so you never have to switch tabs." },
-        { title: "Quick Reflection & Telemetry", desc: "Type your session reflection. Keystroke telemetry measures dwell time, flight time, and error rate to diagnose cognitive state." },
+        { title: "Quick Reflection & Telemetry", desc: "Type your session reflection. Reflection and typing signals inform study suggestions and a recommended rhythm." },
         { title: "Daily Mindset Quotes", desc: "Rotating wisdom from Steve Jobs, James Clear, Cal Newport, and other thinkers on every session." },
         { title: "One-Click BreakGate Arming", desc: "Automatically gates your Pomodoro rest period with active recall questions from your deck." }
       ]
@@ -113,7 +113,7 @@ export default function LandingPage() {
       name: "Flashcard Studio",
       route: "/flashcards",
       badge: "Deck Collections",
-      image: "/showcase/flashcards.png?v=v3",
+      image: "/showcase/current/flashcards.webp",
       title: "AI Deck Generation & Practice Exams",
       description: "Create, study, and test yourself on custom flashcard decks generated directly from your lecture notes or PDF textbooks.",
       features: [
@@ -130,7 +130,7 @@ export default function LandingPage() {
       name: "Study Analytics",
       route: "/analytics",
       badge: "Real-time Metrics",
-      image: "/showcase/analytics.png?v=v3",
+      image: "/showcase/current/analytics.webp",
       title: "Focus Consistency & Weekly Activity",
       description: "Visualize your actual study habits with clean metrics logged automatically after every completed Pomodoro block.",
       features: [
@@ -138,7 +138,7 @@ export default function LandingPage() {
         { title: "Weekly Activity Bar Chart", desc: "Interactive Chart.js chart displaying focus intervals from Monday to Sunday in 10-minute blocks." },
         { title: "BreakGate Compliance", desc: "Monitor your focus-to-rest ratio (5:1 optimal) and cognitive fatigue recovery status." },
         { title: "Active Recall Retention", desc: "Track percentage of mastered concepts versus total cards across all study decks." },
-        { title: "Recent Session History", desc: "View timestamps and durations of completed Pomodoro sessions with zero backend lag." },
+        { title: "Recent Session History", desc: "View timestamps and durations after your focus sessions are saved and synchronized." },
         { title: "Study Streak Consistency", desc: "Monitor daily study milestones and momentum badges earned across completed focus cycles." }
       ]
     },
@@ -147,14 +147,14 @@ export default function LandingPage() {
       name: "AI Study Coach",
       route: "/coach",
       badge: "Adaptive Diagnostics",
-      image: "/showcase/coach.png?v=v3",
+      image: "/showcase/current/coach.webp",
       title: "Cognitive State & Personalized Advice",
       description: "Intelligent coaching engine that evaluates your study pacing, dwell times, and fatigue to adapt your study plan in real time.",
       features: [
         { title: "Cognitive State Telemetry", desc: "Detects flow states ('In the Zone') or cognitive friction based on interaction dwell times." },
         { title: "Study Resilience Diagnostics", desc: "Calculates study resilience percentage and checks BreakGate cycle compliance." },
         { title: "Recommended Rhythm", desc: "Recommends optimal work/rest intervals (e.g. 25m Work / 5m Gate) based on observed fatigue." },
-        { title: "Consult Your Study Coach", desc: "Interactive Q&A for memory mnemonics, anti-procrastination tips, and complex concept breakdowns." },
+        { title: "Consult Your Study Coach", desc: "Submit a study reflection and review the recommended action plan and saved journal entries." },
         { title: "Simulate Focus Intervention", desc: "Test active coaching suggestions when pacing slows down during prolonged study sessions." },
         { title: "Adaptive Study Adjustments", desc: "Real-time advice on reordering your to-do list based on emotional friction and fatigue." }
       ]
@@ -779,7 +779,7 @@ export default function LandingPage() {
                 gap: '6px'
               }}>
                 <span className="live-dot" style={{ width: '6px', height: '6px' }}></span>
-                Live Command Center
+                Dashboard Preview
               </div>
             </div>
 
@@ -787,7 +787,7 @@ export default function LandingPage() {
             <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/showcase/dashboard.png?v=v3"
+                src="/showcase/current/dashboard.webp"
                 alt="iFocus Actual Dashboard Command Center"
                 style={{
                   width: '100%',
