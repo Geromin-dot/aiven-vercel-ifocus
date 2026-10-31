@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
+import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 
 const playAlertSound = () => {
   try {
@@ -786,10 +787,55 @@ export default function CommandCenterPage() {
     setPastEntries(newHistory);
     try {
       localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(newHistory));
+      localStorage.setItem('ifocus_journal_history', JSON.stringify(newHistory));
+      window.dispatchEvent(new CustomEvent('ifocus_journal_updated', { detail: newHistory }));
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            journalHistory: newHistory,
+            updatedAt: new Date().toISOString()
+          }
+        })
+      }).catch(() => {});
     } catch (e) {
       console.warn("LocalStorage failed:", e);
     }
   };
+
+  // Bi-Directional Cloud Telemetry & Checkpoint Reconciliation on Mount
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    reconcileCloudTelemetry().then((res) => {
+      if (res?.mergedJournal && Array.isArray(res.mergedJournal) && res.mergedJournal.length > 0) {
+        setPastEntries(res.mergedJournal);
+      }
+      if (res?.effectiveTimerState) {
+        const ts = res.effectiveTimerState;
+        if (ts.timerPreset) setTimerPreset(ts.timerPreset);
+        if (typeof ts.timeLeft === 'number') setTimeLeft(ts.timeLeft);
+        if (typeof ts.totalTime === 'number' && ts.totalTime > 0) setSessionTotalTime(ts.totalTime);
+        if (ts.isRunning !== undefined) setIsActive(ts.isRunning);
+      }
+    }).catch(() => {});
+  }, [status]);
+
+  // Real-time listener for Journal updates across devices
+  useEffect(() => {
+    const handleJournalUpdate = (e) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setPastEntries(e.detail);
+      } else {
+        try {
+          const stored = localStorage.getItem(`ifocus_journal_history_${userName}`) || localStorage.getItem('ifocus_journal_history');
+          if (stored) setPastEntries(JSON.parse(stored));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
+    return () => window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
+  }, [userName]);
 
   // Audio Track Source Map
   const getTrackSrc = (name) => {
@@ -1130,6 +1176,7 @@ export default function CommandCenterPage() {
     const handleWindowFocusSync = () => {
       checkActiveDeck();
       handleSync();
+      reconcileCloudTelemetry().catch(() => {});
     };
 
     const handleCycleCompleted = (e) => {
@@ -1255,12 +1302,25 @@ export default function CommandCenterPage() {
       lastPresenceElapsed: 0,
       lastPresenceRemaining: timeLeft,
       lastPresenceCheckElapsed: 0,
-      breakGatePending: false
+      breakGatePending: false,
+      updatedAt: Date.now()
     };
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
     } catch (e) {}
+
+    // Cloud session checkpoint
+    fetch('/api/user/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telemetryState: {
+          activeTimerState: nextState,
+          updatedAt: new Date().toISOString()
+        }
+      })
+    }).catch(() => {});
   };
 
   const toggleTimer = () => {
@@ -1332,13 +1392,26 @@ export default function CommandCenterPage() {
       lastPresenceElapsed: 0,
       lastPresenceRemaining: newTime,
       lastPresenceCheckElapsed: 0,
-      breakGatePending: false
+      breakGatePending: false,
+      updatedAt: Date.now()
     };
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
       window.dispatchEvent(new CustomEvent('ifocus_stats_updated'));
     } catch (e) {}
+
+    // Cloud reset sync
+    fetch('/api/user/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telemetryState: {
+          activeTimerState: nextState,
+          updatedAt: new Date().toISOString()
+        }
+      })
+    }).catch(() => {});
   };
 
   const resetTimer = () => {
@@ -1465,12 +1538,29 @@ export default function CommandCenterPage() {
         lastPresenceElapsed: 0,
         lastPresenceRemaining: newTime,
         lastPresenceCheckElapsed: 0,
-        breakGatePending: false
+        breakGatePending: false,
+        updatedAt: Date.now()
       };
       try {
         localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
         window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
       } catch (e) {}
+
+      // Cloud timer checkpoint
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            activeTimerState: nextState,
+            updatedAt: new Date().toISOString()
+          },
+          timerPreferences: {
+            focusDuration: focusTime,
+            timerPreset: preset
+          }
+        })
+      }).catch(() => {});
     }
   };
 
@@ -1546,12 +1636,37 @@ export default function CommandCenterPage() {
       lastPresenceElapsed: 0,
       lastPresenceRemaining: customWorkDuration,
       lastPresenceCheckElapsed: 0,
-      breakGatePending: false
+      breakGatePending: false,
+      updatedAt: Date.now()
     };
     try {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(nextState));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
     } catch (e) {}
+
+    // Cloud custom schedule checkpoint
+    fetch('/api/user/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telemetryState: {
+          activeTimerState: nextState,
+          customTimer: {
+            customWorkTime,
+            customBreakTime,
+            customSessions: validatedSessions,
+            customWorkDuration,
+            customBreakDuration,
+            customBreakGateQuestions: customQuestionCount
+          },
+          updatedAt: new Date().toISOString()
+        },
+        timerPreferences: {
+          focusDuration: Math.round(customWorkDuration / 60),
+          breakGateQuestionCount: customQuestionCount
+        }
+      })
+    }).catch(() => {});
   };
 
   const saveCustomSettings = () => {
@@ -3440,15 +3555,15 @@ export default function CommandCenterPage() {
               borderRadius: '20px',
               border: '1px solid rgba(0, 0, 0, 0.08)',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              maxWidth: '480px', 
+              maxWidth: '430px', 
               width: '100%', 
-              maxHeight: 'min(86vh, 600px)',
+              maxHeight: 'min(80vh, 520px)',
               overflowY: 'auto',
               WebkitOverflowScrolling: 'touch',
-              padding: '1.25rem 1.25rem 1.35rem',
+              padding: '1.1rem 1.15rem 1.25rem',
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '0.85rem',
+              gap: '0.75rem',
               position: 'relative',
               animation: 'slideDown 0.25s ease'
             }}
@@ -3563,17 +3678,20 @@ export default function CommandCenterPage() {
               background: '#fafcfa',
               borderLeft: '4px solid #2e7d32',
               borderRadius: '0 12px 12px 0',
-              padding: '0.85rem 1rem',
-              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+              padding: '0.75rem 0.9rem',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)',
+              maxHeight: '170px',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch'
             }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.25rem' }}>
                 Strategy & Mentorship Guidance
               </div>
               <p style={{
                 margin: 0,
                 color: '#334155',
-                fontSize: '0.85rem',
-                lineHeight: 1.55,
+                fontSize: '0.82rem',
+                lineHeight: 1.5,
                 fontWeight: 500
               }}>
                 {aiFeedback.message}
@@ -3587,8 +3705,8 @@ export default function CommandCenterPage() {
               className="btn-primary" 
               style={{ 
                 width: '100%', 
-                padding: '0.75rem 1.2rem',
-                fontSize: '0.9rem',
+                padding: '0.65rem 1rem',
+                fontSize: '0.86rem',
                 fontWeight: 600,
                 borderRadius: '12px',
                 cursor: 'pointer',
@@ -3597,7 +3715,8 @@ export default function CommandCenterPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                marginTop: '0.2rem'
+                marginTop: '0.15rem',
+                flexShrink: 0
               }}
             >
               <span>Continue to Focus Session</span>

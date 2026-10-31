@@ -159,9 +159,17 @@ export default function CoachPage() {
   const loadDiagnostics = useCallback(async () => {
     try {
       // 0. Bi-Directional Cloud Telemetry Sync: Merge and reconcile database with local state
+      let reconciled = null;
       try {
-        await reconcileCloudTelemetry();
+        reconciled = await reconcileCloudTelemetry();
       } catch (err) {}
+
+      if (reconciled?.mergedJournal && Array.isArray(reconciled.mergedJournal)) {
+        setJournalEntries(reconciled.mergedJournal);
+      }
+      if (reconciled?.effectiveInsight) {
+        setInsight(reconciled.effectiveInsight);
+      }
 
       // 0. Check Active AI Rest Recovery status
       let restRunning = false;
@@ -733,12 +741,14 @@ export default function CoachPage() {
     window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
     window.addEventListener('ifocus_breakgate_updated', loadDiagnostics);
     window.addEventListener('ifocus_timer_sync', loadDiagnostics);
+    window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
     window.addEventListener('storage', handleJournalUpdate);
 
     return () => {
       window.removeEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
       window.removeEventListener('ifocus_breakgate_updated', loadDiagnostics);
       window.removeEventListener('ifocus_timer_sync', loadDiagnostics);
+      window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
       window.removeEventListener('storage', handleJournalUpdate);
     };
   }, [status, userName, loadDiagnostics]);
@@ -926,7 +936,7 @@ export default function CoachPage() {
       setInsight(null);
       window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
 
-      // Sync dismissal to cloud database
+      // Sync strategy and timer checkpoint to cloud database for full cross-device parity
       fetch('/api/user/telemetry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -935,7 +945,14 @@ export default function CoachPage() {
             latestTelemetry: null,
             activeIdleAlert: null,
             cognitiveReset: Date.now(),
+            activeTimerState: isRestPrescribed ? syncPayload : { ...syncPayload, timerPreset: 'Custom' },
+            customTimer: customTimer,
+            aiAdjustedTimer: true,
+            aiAdjustedDetails: aiDetails,
             updatedAt: new Date().toISOString()
+          },
+          timerPreferences: {
+            focusDuration: wMin
           }
         })
       }).catch(() => {});

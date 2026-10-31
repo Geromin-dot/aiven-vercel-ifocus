@@ -91,6 +91,32 @@ export async function POST(req) {
             .slice(-50);
         }
 
+        // Deep merge journalHistory array so reflection entries are never lost between devices
+        if (Array.isArray(incoming.journalHistory)) {
+          const existingJournal = Array.isArray(existingTelemetry.journalHistory) ? existingTelemetry.journalHistory : [];
+          const journalMap = new Map();
+          [...existingJournal, ...incoming.journalHistory].forEach(entry => {
+            if (!entry) return;
+            const key = entry.id || entry.date || entry.timestamp || (entry.text ? entry.text.slice(0, 40) : null);
+            if (key) journalMap.set(key, entry);
+          });
+          merged.journalHistory = Array.from(journalMap.values())
+            .sort((a, b) => new Date(b.date || b.timestamp || 0).getTime() - new Date(a.date || a.timestamp || 0).getTime())
+            .slice(0, 50);
+        }
+
+        // Preserve highest recoveryCompleted and cognitiveReset timestamps
+        if (incoming.recoveryCompleted) {
+          const ex = Number(existingTelemetry.recoveryCompleted || 0);
+          const inc = Number(incoming.recoveryCompleted || 0);
+          merged.recoveryCompleted = Math.max(ex, inc);
+        }
+        if (incoming.cognitiveReset) {
+          const ex = Number(existingTelemetry.cognitiveReset || 0);
+          const inc = Number(incoming.cognitiveReset || 0);
+          merged.cognitiveReset = Math.max(ex, inc);
+        }
+
         updateData.telemetryState = JSON.stringify(merged);
       }
 
