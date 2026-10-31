@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
+import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
+import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
   try {
@@ -238,20 +240,12 @@ export default function CommandCenterPage() {
         const s = JSON.parse(localStorage.getItem('ifocus_focus_stats') || '{}');
         const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
         
-        let focusMinutes = s.minutes || 0;
-        let sessionCount = s.sessions || 0;
-        let streak = s.streak || 1;
-
-        if (focusMinutes === 0 && history.length > 0) {
-          const todayStr = new Date().toDateString();
-          const todaySessions = history.filter(item => new Date(item.date).toDateString() === todayStr);
-          focusMinutes = todaySessions.reduce((sum, item) => {
-            const rawDur = Number(item.duration) || 0;
-            const mins = rawDur > 180 ? Math.max(1, Math.round(rawDur / 60)) : rawDur;
-            return sum + mins;
-          }, 0);
-          sessionCount = todaySessions.length;
-        }
+        const todayStr = new Date().toDateString();
+        const todaySessions = history.filter(item => new Date(item.date).toDateString() === todayStr);
+        // Match Analytics: derive today's total from the same history on every update.
+        const focusMinutes = todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
+        const sessionCount = todaySessions.length;
+        const streak = s.streak || 1;
 
         setDailyFocusStats({
           minutes: focusMinutes,
@@ -287,6 +281,7 @@ export default function CommandCenterPage() {
           return {
             id: s.id,
             duration: mins,
+            durationSeconds: rawSec,
             date: s.createdAt,
             deckName: s.deck?.title || 'General Focus',
             type: 'pomodoro',
@@ -306,7 +301,7 @@ export default function CommandCenterPage() {
           localStorage.setItem('ifocus_session_history', JSON.stringify(combined));
 
           const todaySessions = combined.filter(item => new Date(item.date).toDateString() === todayStr);
-          const todayMins = todaySessions.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+          const todayMins = todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
           const todayCount = todaySessions.length;
 
           const dates = new Set(combined.map(s => {
@@ -3175,9 +3170,7 @@ export default function CommandCenterPage() {
                 Focus
               </div>
               <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-accent)', marginTop: '2px' }}>
-                {dailyFocusStats.minutes >= 60 
-                  ? `${Math.floor(dailyFocusStats.minutes / 60)}h ${dailyFocusStats.minutes % 60}m` 
-                  : `${dailyFocusStats.minutes}m`}
+                {formatFocusMinutes(dailyFocusStats.minutes)}
               </div>
             </div>
             <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(0, 0, 0, 0.06)', borderRight: '1px solid rgba(0, 0, 0, 0.06)' }}>
@@ -3547,7 +3540,8 @@ export default function CommandCenterPage() {
             animation: 'fadeIn 0.2s ease-out'
           }}
         >
-          <div 
+          <div className={coachStyles.adaptationModal}
+            role="dialog" aria-modal="true" aria-label="AI Coach adaptation"
             style={{ 
               background: '#ffffff',
               borderRadius: '20px',
@@ -3672,7 +3666,7 @@ export default function CommandCenterPage() {
             </div>
 
             {/* Coach Action Plan Box */}
-            <div style={{
+            <div className={coachStyles.adaptationGuidance} style={{
               background: '#fafcfa',
               borderLeft: '4px solid #2e7d32',
               borderRadius: '0 12px 12px 0',

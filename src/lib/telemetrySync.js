@@ -2,6 +2,7 @@
 // Ensures 100% data parity across all devices (PC browser, mobile PWA, tablet) for the same user account.
 
 import { getTimerDeviceId, recoveryFromCheckpoint } from './timerState';
+import { applyResolvedSessions } from './recoveryState';
 
 let reconciliationPromise = null;
 let lastReconciliationAt = 0;
@@ -269,10 +270,12 @@ async function reconcileCloudTelemetryInternal() {
     const latestLocalTimer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
     const effectiveTimerState = latestLocalTimer;
     const cloudTimer = cloud.activeTimerState;
+    const resolvedSessions = applyResolvedSessions(data.userId, cloud.resolvedTimerSessions);
+    window.dispatchEvent(new CustomEvent('ifocus_recovery_resolved'));
     const remoteDevice = cloudTimer?.deviceId && cloudTimer.deviceId !== getTimerDeviceId();
     if (cloudTimer && (remoteDevice || !latestLocalTimer)) {
       const recovery = recoveryFromCheckpoint(cloudTimer);
-      const resolved = cloud.resolvedTimerSessions || [];
+      const resolved = resolvedSessions;
       if (recovery && !resolved.includes(recovery.id) && data.userId) {
         localStorage.setItem(`ifocus_interrupted_session_${data.userId}`, JSON.stringify(recovery));
         window.dispatchEvent(new CustomEvent('ifocus_interrupted_session'));

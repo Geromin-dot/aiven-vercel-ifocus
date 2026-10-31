@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
   const { data: session, status } = useSession();
@@ -362,7 +363,7 @@ export default function CoachPage() {
           status: 'Tension',
           color: '#dc2626',
           dotColor: '#dc2626',
-          subtext: telem?.reason ? telem.reason : (backspaces > 0 ? `Keystroke friction & stress logged (${backspaces} corrections)` : 'Stress & tension sentiment logged')
+          subtext: isSmash ? 'Signs of input friction. Take a short reset before continuing.' : 'Stress noted in your reflection. Try a gentler focus pace.'
         };
         recRhythm = {
           title: '15m Work / 5m Gate',
@@ -1025,7 +1026,7 @@ export default function CoachPage() {
         
         {/* Card 1 (Left 50%): Cognitive Telemetry Diagnostics & Coach Intervention */}
         <div 
-          className="coach-card coach-card-telemetry"
+          className={`coach-card coach-card-telemetry ${coachStyles.telemetryCard}`}
           style={{ 
             background: '#ffffff', 
             padding: '1.35rem 1.45rem', 
@@ -1039,7 +1040,7 @@ export default function CoachPage() {
             overflow: 'hidden' 
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
+          <div className={coachStyles.telemetryContent} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
             
             {/* Top Telemetry Diagnostic Metrics Row */}
             <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
@@ -1094,7 +1095,7 @@ export default function CoachPage() {
             {/* Coach Section below the Metrics */}
             {insight ? (
               /* Active Telemetry Intervention */
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: '1 0 auto', gap: '0.85rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0 }}>
                   <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(217, 119, 6, 0.15)', color: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -1170,7 +1171,7 @@ export default function CoachPage() {
               </div>
             ) : (
               /* Standard Adaptive Coaching Feed */
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: '1 0 auto', gap: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.65rem', borderBottom: '1px solid rgba(0,0,0,0.05)', flexShrink: 0 }}>
                   <div>
                     <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>

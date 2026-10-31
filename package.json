@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test:timer": "node --test scripts/timer-state.test.mjs scripts/timer-sync.test.mjs scripts/timer-notifications.test.mjs scripts/timer-notification-delivery.test.mjs scripts/presence-push.test.mjs",
+    "test:timer": "node --test scripts/timer-state.test.mjs scripts/timer-sync.test.mjs scripts/timer-notifications.test.mjs scripts/timer-notification-delivery.test.mjs scripts/presence-push.test.mjs scripts/study-stats.test.mjs",
     "push:keys": "node scripts/generate-push-keys.mjs",
     "push:setup-db": "prisma db execute --schema prisma/schema.prisma --file prisma/push-notifications.sql",
     "postinstall": "prisma generate"

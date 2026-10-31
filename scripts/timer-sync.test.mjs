@@ -4,8 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const timerSource = await readFile(new URL('../src/lib/timerState.js', import.meta.url), 'utf8');
 const timerUrl = `data:text/javascript;base64,${Buffer.from(timerSource).toString('base64')}`;
+const recoverySource = await readFile(new URL('../src/lib/recoveryState.js', import.meta.url), 'utf8');
+const recoveryUrl = `data:text/javascript;base64,${Buffer.from(recoverySource).toString('base64')}`;
 const syncSource = (await readFile(new URL('../src/lib/telemetrySync.js', import.meta.url), 'utf8'))
-  .replace("'./timerState'", JSON.stringify(timerUrl));
+  .replace("'./timerState'", JSON.stringify(timerUrl))
+  .replace("'./recoveryState'", JSON.stringify(recoveryUrl));
 let moduleNumber = 0;
 
 async function setup(local, cloud, beforeResponse = () => {}) {
@@ -24,8 +27,8 @@ async function setup(local, cloud, beforeResponse = () => {}) {
     if (!options) beforeResponse(storage);
     return { ok: true, json: async () => ({ userId: 'student-1', telemetryState: cloud, timerPreferences: {} }) };
   };
-  const module = await import(`data:text/javascript;base64,${Buffer.from(`${syncSource}\n// ${moduleNumber++}`).toString('base64')}`);
-  await module.reconcileCloudTelemetry();
+  const syncModule = await import(`data:text/javascript;base64,${Buffer.from(`${syncSource}\n// ${moduleNumber++}`).toString('base64')}`);
+  await syncModule.reconcileCloudTelemetry();
   return { storage, events, requests };
 }
 
@@ -91,5 +94,59 @@ test('recovery save retries use one unique study-session record', async () => {
   assert.equal(retry.status, 200);
   assert.equal(records.size, 1);
   assert.equal(first.body.session.duration, 600);
+  const short=await POST({json:async()=>({duration:59,recoveryId:'too-short'})});
+  assert.equal(short.status,400);
+  assert.equal(records.size,1);
   delete globalThis.__timerTestPrisma;
+});
+
+
+test('a cloud discard clears an already cached phone prompt and persists the resolution', async () => {
+  const { storage, events } = await setup({ 'ifocus_interrupted_session_student-1': JSON.stringify({id:'resolved',duration:420}) }, {
+    activeTimerState: {deviceId:'pc',timerSessionId:'resolved',isFocus:true,totalTime:900,timeLeft:480},
+    resolvedTimerSessions:['resolved'],
+  });
+  assert.equal(storage.has('ifocus_interrupted_session_student-1'),false);
+  assert.deepEqual(JSON.parse(storage.get('ifocus_resolved_timer_sessions_student-1')),['resolved']);
+  assert.equal(events.some(event=>event.type==='ifocus_recovery_resolved'),true);
+});
+
+test('a stale cloud response cannot re-offer a session already discarded locally', async () => {
+  const {storage}=await setup({'ifocus_resolved_timer_sessions_student-1':'["resolved"]'}, {
+    activeTimerState:{deviceId:'pc',timerSessionId:'resolved',isFocus:true,totalTime:900,timeLeft:480},
+    resolvedTimerSessions:[],
+  });
+  assert.equal(storage.has('ifocus_interrupted_session_student-1'),false);
+});
+
+test('less than a minute of checkpoint progress is never offered for recovery', async () => {
+  const {storage}=await setup({}, {activeTimerState:{deviceId:'pc',timerSessionId:'short',isFocus:true,totalTime:900,timeLeft:841}});
+  assert.equal(storage.has('ifocus_interrupted_session_student-1'),false);
+});
+
+
+test('telemetry sync retries a conflict and never clears resolved sessions with a stale payload', async () => {
+  let row = { telemetryState: JSON.stringify({resolvedTimerSessions:['pc-discard']}), timerPreferences: '{}' };
+  let attempts = 0;
+  globalThis.__recoveryTestDb = {
+    $transaction: async (callback, options) => {
+      assert.equal(options.isolationLevel, 'Serializable');
+      if (attempts++ === 0) throw Object.assign(new Error('serialization conflict'), {code:'P2034'});
+      return callback({user:{findUnique:async()=>row,update:async({data})=>{row={...row,...data};return row;}}});
+    },
+  };
+  const route = (await readFile(new URL('../src/app/api/user/telemetry/route.js', import.meta.url), 'utf8'))
+    .replace(/import \{ NextResponse \}[^;]+;/, 'const NextResponse={json:(body,options={})=>({body,status:options.status||200})};')
+    .replace(/import \{ getServerSession \}[^;]+;/, 'const getServerSession=async()=>({user:{id:"student-1"}});')
+    .replace(/import \{ authOptions \}[^;]+;/, 'const authOptions={};')
+    .replace(/import \{ prisma \}[^;]+;/, 'const prisma=globalThis.__recoveryTestDb;')
+    .replace("'../../../../lib/recoveryState'", JSON.stringify(recoveryUrl));
+  const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
+  for(const resolvedTimerSessions of [null, [], ['phone-save']]) {
+    const result=await POST({json:async()=>({telemetryState:{resolvedTimerSessions,activeTimerState:{updatedAt:200}}})});
+    assert.equal(result.status,200);
+    assert.ok(JSON.parse(row.telemetryState).resolvedTimerSessions.includes('pc-discard'));
+  }
+  assert.deepEqual(JSON.parse(row.telemetryState).resolvedTimerSessions,['pc-discard','phone-save']);
+  delete globalThis.__recoveryTestDb;
 });

@@ -1,0 +1,24 @@
+.telemetryCard { min-width: 0; }
+.telemetryContent { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.telemetryContent > * { flex-shrink: 0; }
+
+@media (min-width: 961px) {
+  .adaptationModal {
+    max-width: 720px !important;
+    max-height: calc(100dvh - 64px) !important;
+    padding: 30px 32px !important;
+    gap: 20px !important;
+  }
+  .adaptationModal h2 { font-size: 1.5rem !important; }
+  .adaptationGuidance {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 18px 20px !important;
+    flex-shrink: 0;
+  }
+  .adaptationGuidance p { font-size: 0.95rem !important; line-height: 1.75 !important; overflow-wrap: anywhere; }
+}
+
+@media (max-width: 960px) {
+  .telemetryContent { overflow: visible; }
+}

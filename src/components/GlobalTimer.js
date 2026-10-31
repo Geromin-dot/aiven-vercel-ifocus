@@ -1228,7 +1228,8 @@ export default function GlobalTimer() {
       const current = readStorageState();
       if (current?.authSessionId && current.authSessionId !== session.user.sessionId) {
         const recovery = recoveryFromCheckpoint(current);
-        if (recovery && current.userId === session.user.id) {
+        const resolved = JSON.parse(localStorage.getItem(`ifocus_resolved_timer_sessions_${session.user.id}`) || '[]');
+        if (recovery && !resolved.includes(recovery.id) && current.userId === session.user.id) {
           localStorage.setItem(`ifocus_interrupted_session_${session.user.id}`, JSON.stringify(recovery));
           window.dispatchEvent(new CustomEvent('ifocus_interrupted_session'));
         }

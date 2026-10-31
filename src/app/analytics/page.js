@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 
 ChartJS.register(
   CategoryScale,
@@ -412,8 +413,7 @@ export default function AnalyticsPage() {
 
       sessionHistory.forEach(s => {
         const sDate = new Date(s.date);
-        const rawDur = Number(s.duration) || 0;
-        const mins = rawDur > 180 ? Math.max(1, Math.round(rawDur / 60)) : rawDur;
+        const mins = sessionMinutes(s);
 
         if (sDate.toDateString() === todayStr) {
           todayMins += mins;
@@ -463,6 +463,7 @@ export default function AnalyticsPage() {
           return {
             id: s.id,
             duration: mins,
+            durationSeconds: rawSec,
             date: s.createdAt,
             deckName: s.deck?.title || 'General Focus',
             type: 'pomodoro',
@@ -564,9 +565,7 @@ export default function AnalyticsPage() {
   const weekHoursFormatted = (totalWeekMinutes / 60).toFixed(1);
 
   // Today Focus Display
-  const todayFocusFormatted = baseStats.todayMinutes < 60
-    ? `${baseStats.todayMinutes}m`
-    : `${(baseStats.todayMinutes / 60).toFixed(1)}h`;
+  const todayFocusFormatted = formatFocusMinutes(baseStats.todayMinutes);
 
   // Dynamic Chart Data with 10-Minute Resolution Option
   const focusChartData = useMemo(() => {

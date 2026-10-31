@@ -155,6 +155,9 @@ export async function POST(req) {
     if (durSec <= 0) {
       return NextResponse.json({ message: "Duration must be greater than 0" }, { status: 400 });
     }
+    if (recoveryId && durSec < 60) {
+      return NextResponse.json({ message: "Unfinished sessions need at least one minute of study time" }, { status: 400 });
+    }
 
     const targetDeckId = await getOrCreateDeck(deckId);
 

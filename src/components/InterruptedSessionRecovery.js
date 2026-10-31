@@ -1,26 +1,76 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import styles from './InterruptedSessionRecovery.module.css';
+import { applyResolvedSessions, mergeResolvedSessions } from '../lib/recoveryState';
 
 export default function InterruptedSessionRecovery({ userId }) {
   const [progress, setProgress] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const saving = useRef(false);
+  const dialogRef = useRef(null);
+  const recoveryId = progress?.id;
 
   useEffect(() => {
     if (!userId) return;
+    let disposed = false;
+    let checking = false;
     const load = () => {
       try {
         const saved = JSON.parse(localStorage.getItem(`ifocus_interrupted_session_${userId}`) || 'null');
         const resolved = JSON.parse(localStorage.getItem(`ifocus_resolved_timer_sessions_${userId}`) || '[]');
-        setProgress(saved && !resolved.includes(saved.id) ? saved : null);
+        const meaningfulProgress = saved && Number.isFinite(Number(saved.duration)) && Number(saved.duration) >= 60;
+        if (saved && !meaningfulProgress) localStorage.removeItem(`ifocus_interrupted_session_${userId}`);
+        if (!disposed) setProgress(meaningfulProgress && !resolved.includes(saved.id) ? saved : null);
       } catch { setProgress(null); }
     };
-    load();
-    window.addEventListener('ifocus_interrupted_session', load);
-    return () => window.removeEventListener('ifocus_interrupted_session', load);
+    // A cached prompt is only shown after checking decisions made on another device.
+    const sync = async (hideUntilVerified = true) => {
+      if (disposed || checking || saving.current) return;
+      if (!localStorage.getItem(`ifocus_interrupted_session_${userId}`)) { load(); return; }
+      checking = true;
+      if (hideUntilVerified) setProgress(null);
+      try {
+        const response = await fetch('/api/user/telemetry', { cache: 'no-store' });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (disposed || result.userId !== userId) return;
+        applyResolvedSessions(userId, result.telemetryState?.resolvedTimerSessions);
+        load();
+      } catch { /* Retry on focus; do not re-offer an unverified cached session offline. */ }
+      finally { checking = false; }
+    };
+    const refresh = () => { sync(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') sync(); };
+    refresh();
+    const interval = setInterval(() => { if (document.visibilityState === 'visible') sync(false); }, 15000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('ifocus_interrupted_session', refresh);
+    window.addEventListener('ifocus_recovery_resolved', load);
+    window.addEventListener('storage', refresh);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('ifocus_interrupted_session', refresh);
+      window.removeEventListener('ifocus_recovery_resolved', load);
+      window.removeEventListener('storage', refresh);
+    };
   }, [userId]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      dialog.close();
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [recoveryId]);
 
   const resolve = async (save) => {
     if (saving.current || !progress || !userId) return;
@@ -28,12 +78,21 @@ export default function InterruptedSessionRecovery({ userId }) {
     setBusy(true);
     setError('');
     try {
+      const latest = await fetch('/api/user/telemetry', { cache: 'no-store' });
+      if (!latest.ok) throw new Error('Could not verify this session. Please try again when connected.');
+      const current = await latest.json();
+      if (current.userId !== userId) throw new Error('Your account changed. Please reopen the app.');
+      const alreadyResolved = applyResolvedSessions(userId, current.telemetryState?.resolvedTimerSessions);
+      if (alreadyResolved.includes(progress.id)) { setProgress(null); return; }
+      let savedSession = null;
       if (save) {
         const response = await fetch('/api/study-sessions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ duration: progress.duration, score: 0, recoveryId: progress.id }),
         });
         if (!response.ok) throw new Error('Your progress could not be saved. Please try again when connected.');
+        const result = await response.json();
+        savedSession = result.session;
       }
       const response = await fetch('/api/user/telemetry', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -42,12 +101,16 @@ export default function InterruptedSessionRecovery({ userId }) {
       if (!response.ok) throw new Error('Your choice could not be synced. Please try again. Your saved time will not be duplicated.');
       const key = `ifocus_resolved_timer_sessions_${userId}`;
       const resolved = JSON.parse(localStorage.getItem(key) || '[]');
-      localStorage.setItem(key, JSON.stringify([...new Set([...resolved, progress.id])].slice(-100)));
+      localStorage.setItem(key, JSON.stringify(mergeResolvedSessions(resolved, [progress.id])));
       localStorage.removeItem(`ifocus_interrupted_session_${userId}`);
+      window.dispatchEvent(new CustomEvent('ifocus_recovery_resolved'));
       if (save) {
         const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-        if (!history.some(item => item.recoveryId === progress.id)) {
-          history.push({ date: progress.date, duration: progress.duration / 60, type: 'pomodoro', partial: true, synced: true, recoveryId: progress.id });
+        if (!history.some(item => item.recoveryId === progress.id || (savedSession?.id && item.id === savedSession.id))) {
+          history.push({ id: savedSession?.id, date: savedSession?.createdAt || progress.date,
+            duration: (savedSession?.duration ?? progress.duration) / 60,
+            durationSeconds: savedSession?.duration ?? progress.duration,
+            type: 'pomodoro', partial: true, synced: true, recoveryId: progress.id });
           localStorage.setItem('ifocus_session_history', JSON.stringify(history.slice(-200)));
         }
         window.dispatchEvent(new CustomEvent('ifocus_stats_updated'));
@@ -63,19 +126,31 @@ export default function InterruptedSessionRecovery({ userId }) {
 
   if (!progress) return null;
   const minutes = Math.floor(progress.duration / 60);
-  const seconds = progress.duration % 60;
+  const seconds = Math.floor(progress.duration % 60);
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 20000, background: 'rgba(15,23,42,.5)', display: 'grid', placeItems: 'center', padding: 20 }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="interrupted-session-title" style={{ background: '#fff', color: '#1e293b', borderRadius: 20, padding: 28, maxWidth: 420, width: '100%', boxShadow: '0 20px 60px #0003' }}>
-        <h2 id="interrupted-session-title" style={{ fontSize: 21, margin: '0 0 12px' }}>Save your unfinished session?</h2>
-        <p>You left a focus session on another device. Your last saved checkpoint contains <strong>{minutes}m {seconds}s</strong> of study time.</p>
-        <p>Would you like to add that time to your study history?</p>
-        {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 22 }}>
-          <button autoFocus disabled={busy} onClick={() => resolve(true)} style={{ padding: '12px 18px', background: '#27522d', color: '#fff', border: 0, borderRadius: 10, cursor: 'pointer' }}>{busy ? 'Please wait…' : 'Save study time'}</button>
-          <button disabled={busy} onClick={() => resolve(false)} style={{ padding: '12px 18px', background: '#f1f5f9', color: '#334155', border: 0, borderRadius: 10, cursor: 'pointer' }}>Discard</button>
+    <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="interrupted-session-title"
+      aria-describedby="interrupted-session-description" onCancel={event => event.preventDefault()}>
+      <div className={styles.content}>
+        <div className={styles.icon} aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+          </svg>
         </div>
-      </section>
-    </div>
+        <div className={styles.heading}>
+          <p className={styles.eyebrow}>Unfinished session</p>
+          <h2 id="interrupted-session-title">Keep your study progress?</h2>
+          <p id="interrupted-session-description">Your last focus session has saved study time. Add it to your history, or discard it to start fresh.</p>
+        </div>
+        <div className={styles.progress}>
+          <span>Study time to save</span>
+          <strong>{minutes}<small>m</small>{seconds > 0 && <> {seconds}<small>s</small></>}</strong>
+        </div>
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        <div className={styles.actions}>
+          <button type="button" autoFocus disabled={busy} onClick={() => resolve(true)} className={styles.save}>{busy ? 'Please wait…' : 'Save study time'}</button>
+          <button type="button" disabled={busy} onClick={() => resolve(false)} className={styles.discard}>Discard</button>
+        </div>
+      </div>
+    </dialog>
   );
 }

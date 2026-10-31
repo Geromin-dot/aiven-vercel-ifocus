@@ -103,3 +103,10 @@ test('check intervals stay locked through running, manual/presence pauses and br
   assert.equal(isTimerSessionOngoing({ ...ready, sessionCount: 2 }), true);
   assert.equal(isTimerSessionOngoing({ ...ready }), false);
 });
+
+
+test('unfinished recovery starts at exactly one minute, never below it', () => {
+  const checkpoint={...session(),totalTime:900,timeLeft:841};
+  assert.equal(recoveryFromCheckpoint(checkpoint),null);
+  assert.equal(recoveryFromCheckpoint({...checkpoint,timeLeft:840}).duration,60);
+});
