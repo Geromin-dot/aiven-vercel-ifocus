@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
+import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 
 export default function CoachPage() {
   const { data: session, status } = useSession();
@@ -157,39 +158,9 @@ export default function CoachPage() {
 
   const loadDiagnostics = useCallback(async () => {
     try {
-      // 0. Cloud Telemetry Sync: Retrieve cloud state from database (e.g. from PC when on iPhone PWA)
+      // 0. Bi-Directional Cloud Telemetry Sync: Merge and reconcile database with local state
       try {
-        const cloudRes = await fetch('/api/user/telemetry');
-        if (cloudRes.ok) {
-          const cloudData = await cloudRes.json();
-          if (cloudData?.telemetryState) {
-            const cloud = cloudData.telemetryState;
-            if (cloud.latestTelemetry) {
-              const cloudTime = new Date(cloud.latestTelemetry.timestamp || cloud.latestTelemetry.date || 0).getTime();
-              const localRaw = localStorage.getItem('ifocus_latest_telemetry');
-              const localTime = localRaw ? new Date(JSON.parse(localRaw).timestamp || 0).getTime() : 0;
-              if (cloudTime >= localTime) {
-                localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(cloud.latestTelemetry));
-                if (userName) localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(cloud.latestTelemetry));
-              }
-            }
-            if (cloud.recoveryCompleted) {
-              localStorage.setItem('ifocus_recovery_completed', String(cloud.recoveryCompleted));
-            }
-            if (cloud.cognitiveReset) {
-              localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
-            }
-            if (cloud.breakGateEvents && Array.isArray(cloud.breakGateEvents)) {
-              localStorage.setItem('ifocus_breakgate_events', JSON.stringify(cloud.breakGateEvents));
-            }
-            if (cloud.activeBreakGateDeck) {
-              localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(cloud.activeBreakGateDeck));
-            }
-            if (cloud.activeIdleAlert) {
-              localStorage.setItem('ifocus_active_idle_alert', JSON.stringify(cloud.activeIdleAlert));
-            }
-          }
-        }
+        await reconcileCloudTelemetry();
       } catch (err) {}
 
       // 0. Check Active AI Rest Recovery status

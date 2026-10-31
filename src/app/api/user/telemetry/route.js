@@ -76,6 +76,21 @@ export async function POST(req) {
           : body.telemetryState;
 
         const merged = { ...existingTelemetry, ...incoming };
+
+        // Deep merge breakGateEvents array so no events are dropped between devices
+        if (Array.isArray(incoming.breakGateEvents)) {
+          const existingEvents = Array.isArray(existingTelemetry.breakGateEvents) ? existingTelemetry.breakGateEvents : [];
+          const eventMap = new Map();
+          [...existingEvents, ...incoming.breakGateEvents].forEach(evt => {
+            if (!evt) return;
+            const key = evt.id || evt.timestamp || evt.date || (evt.time ? String(evt.time) : null);
+            if (key) eventMap.set(key, evt);
+          });
+          merged.breakGateEvents = Array.from(eventMap.values())
+            .sort((a, b) => new Date(a.date || a.timestamp || 0).getTime() - new Date(b.date || b.timestamp || 0).getTime())
+            .slice(-50);
+        }
+
         updateData.telemetryState = JSON.stringify(merged);
       }
 

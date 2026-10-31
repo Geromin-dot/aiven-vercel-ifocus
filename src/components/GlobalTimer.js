@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 import FeatureGuideModal from "./FeatureGuideModal";
+import { reconcileCloudTelemetry } from "../lib/telemetrySync";
 
 // Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
 const getUserAudioVolumeFactor = () => {
@@ -1324,45 +1325,10 @@ export default function GlobalTimer() {
     };
   }, [readStorageState, triggerPresencePause]);
 
-  // Sync timer preferences & telemetry from database on mount for multi-device parity (e.g. PC to iPhone PWA)
+  // Bi-Directional Cloud Telemetry & Preference Reconciliation on mount (PC to iPhone PWA parity)
   useEffect(() => {
     if (!session?.user?.id) return;
-    let isMounted = true;
-    fetch("/api/user/telemetry")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!isMounted || !data) return;
-        if (data.timerPreferences) {
-          const raw = localStorage.getItem("ifocus_timer_preferences") || "{}";
-          try {
-            const local = JSON.parse(raw);
-            localStorage.setItem("ifocus_timer_preferences", JSON.stringify({ ...local, ...data.timerPreferences }));
-          } catch (e) {}
-        }
-        if (data.telemetryState) {
-          const ts = data.telemetryState;
-          if (ts.latestTelemetry) {
-            localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(ts.latestTelemetry));
-            window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: ts.latestTelemetry }));
-          }
-          if (ts.recoveryCompleted) {
-            localStorage.setItem("ifocus_recovery_completed", String(ts.recoveryCompleted));
-          }
-          if (ts.cognitiveReset) {
-            localStorage.setItem("ifocus_cognitive_reset", String(ts.cognitiveReset));
-          }
-          if (ts.breakGateEvents && Array.isArray(ts.breakGateEvents)) {
-            localStorage.setItem("ifocus_breakgate_events", JSON.stringify(ts.breakGateEvents));
-            window.dispatchEvent(new CustomEvent("ifocus_breakgate_updated"));
-          }
-          if (ts.activeBreakGateDeck) {
-            localStorage.setItem("ifocus_active_breakgate_deck", JSON.stringify(ts.activeBreakGateDeck));
-            window.dispatchEvent(new CustomEvent("ifocus_breakgate_deck_changed", { detail: { active: true, deck: ts.activeBreakGateDeck } }));
-          }
-        }
-      })
-      .catch(() => {});
-    return () => { isMounted = false; };
+    reconcileCloudTelemetry().catch(() => {});
   }, [session?.user?.id]);
 
   // Main Global Timer Loop (Runs continuously across all routes in background)

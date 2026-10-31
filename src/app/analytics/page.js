@@ -13,6 +13,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 
 ChartJS.register(
   CategoryScale,
@@ -50,27 +51,9 @@ export default function AnalyticsPage() {
         }
       } catch (e) { }
 
-      // Sync cloud telemetry, breakgate events & study sessions from database
-      fetch('/api/user/telemetry')
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data?.telemetryState) {
-            const cloud = data.telemetryState;
-            if (cloud.latestTelemetry) {
-              localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(cloud.latestTelemetry));
-            }
-            if (cloud.recoveryCompleted) {
-              localStorage.setItem('ifocus_recovery_completed', String(cloud.recoveryCompleted));
-            }
-            if (cloud.cognitiveReset) {
-              localStorage.setItem('ifocus_cognitive_reset', String(cloud.cognitiveReset));
-            }
-            if (cloud.breakGateEvents && Array.isArray(cloud.breakGateEvents)) {
-              localStorage.setItem('ifocus_breakgate_events', JSON.stringify(cloud.breakGateEvents));
-            }
-            setForceUpdate(prev => prev + 1);
-          }
-        })
+      // Bi-Directional Cloud Telemetry & Events Reconciliation
+      reconcileCloudTelemetry()
+        .then(() => setForceUpdate(prev => prev + 1))
         .catch(() => {});
 
       // Hydrate study session history from PostgreSQL database for cross-device parity

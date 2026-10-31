@@ -3426,26 +3426,29 @@ export default function CommandCenterPage() {
             background: 'rgba(15, 23, 42, 0.72)', 
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
-            zIndex: 1000, 
+            zIndex: 99999, 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            padding: '1.25rem',
+            padding: '1rem',
             animation: 'fadeIn 0.2s ease-out'
           }}
         >
           <div 
             style={{ 
               background: '#ffffff',
-              borderRadius: '22px',
+              borderRadius: '20px',
               border: '1px solid rgba(0, 0, 0, 0.08)',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              maxWidth: '540px', 
+              maxWidth: '480px', 
               width: '100%', 
-              padding: '1.75rem 2rem',
+              maxHeight: 'min(86vh, 600px)',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              padding: '1.25rem 1.25rem 1.35rem',
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '1.15rem',
+              gap: '0.85rem',
               position: 'relative',
               animation: 'slideDown 0.25s ease'
             }}
@@ -3454,39 +3457,42 @@ export default function CommandCenterPage() {
             <button
               type="button"
               onClick={() => setAiFeedback(null)}
+              aria-label="Close"
               style={{
                 position: 'absolute',
-                top: '1.25rem',
-                right: '1.25rem',
-                background: 'transparent',
+                top: '0.85rem',
+                right: '0.85rem',
+                background: 'rgba(0, 0, 0, 0.05)',
                 border: 'none',
-                color: '#9ca3af',
+                color: '#64748b',
                 cursor: 'pointer',
-                padding: '4px',
+                width: '30px',
+                height: '30px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: '6px',
-                transition: 'color 0.15s ease'
+                borderRadius: '50%',
+                transition: 'all 0.15s ease',
+                zIndex: 2
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = '#374151'}
-              onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#1e293b'; e.currentTarget.style.background = 'rgba(0,0,0,0.08)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'rgba(0,0,0,0.05)'; }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/>
                 <line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
 
             {/* Header / State Banner */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.45rem' }}>
+            <div style={{ paddingRight: '2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                 <span style={{
                   background: aiFeedback.state === 'Stressed' ? 'rgba(220, 38, 38, 0.12)' : aiFeedback.state === 'Distracted' ? 'rgba(217, 119, 6, 0.12)' : 'rgba(46, 125, 50, 0.12)',
                   color: aiFeedback.state === 'Stressed' ? '#dc2626' : aiFeedback.state === 'Distracted' ? '#b45309' : '#2e7d32',
-                  padding: '0.22rem 0.7rem',
+                  padding: '0.2rem 0.6rem',
                   borderRadius: '6px',
-                  fontSize: '0.74rem',
+                  fontSize: '0.7rem',
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   display: 'inline-flex',
@@ -3501,37 +3507,37 @@ export default function CommandCenterPage() {
                   AI COACH ADAPTATION: {String(aiFeedback.state || 'Pacing').toUpperCase()}
                 </span>
               </div>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
+              <h2 style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
                 {aiFeedback.title?.replace('AI Adjusted Timer:\n', '') || 'Pacing Routine Updated'}
               </h2>
             </div>
 
             {/* 3 Diagnostic Key Chips */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
               <div style={{
                 background: '#f8faf8',
                 border: '1px solid rgba(95, 143, 94, 0.18)',
-                borderRadius: '12px',
-                padding: '0.75rem 0.85rem',
+                borderRadius: '10px',
+                padding: '0.55rem 0.65rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '2px'
               }}>
-                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Focus Cadence</div>
-                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>{aiFeedback.rhythm || 'Adaptive Rhythm'}</div>
+                <div style={{ fontSize: '0.66rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Focus Cadence</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#163824', wordBreak: 'break-word' }}>{aiFeedback.rhythm || 'Adaptive Rhythm'}</div>
               </div>
 
               <div style={{
                 background: '#f8faf8',
                 border: '1px solid rgba(95, 143, 94, 0.18)',
-                borderRadius: '12px',
-                padding: '0.75rem 0.85rem',
+                borderRadius: '10px',
+                padding: '0.55rem 0.65rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '2px'
               }}>
-                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Target Sessions</div>
-                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>
+                <div style={{ fontSize: '0.66rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Target Sessions</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#163824' }}>
                   {aiFeedback.sessions || (aiFeedback.state === 'Stressed' ? 2 : 4)} Cycles
                 </div>
               </div>
@@ -3539,14 +3545,14 @@ export default function CommandCenterPage() {
               <div style={{
                 background: '#f8faf8',
                 border: '1px solid rgba(95, 143, 94, 0.18)',
-                borderRadius: '12px',
-                padding: '0.75rem 0.85rem',
+                borderRadius: '10px',
+                padding: '0.55rem 0.65rem',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '2px'
               }}>
-                <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Task Priority</div>
-                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#163824' }}>
+                <div style={{ fontSize: '0.66rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Task Priority</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#163824' }}>
                   {aiFeedback.state === 'Stressed' ? 'Gentle Momentum' : aiFeedback.state === 'Distracted' ? 'Concrete Steps' : 'High Impact'}
                 </div>
               </div>
@@ -3556,18 +3562,18 @@ export default function CommandCenterPage() {
             <div style={{
               background: '#fafcfa',
               borderLeft: '4px solid #2e7d32',
-              borderRadius: '0 14px 14px 0',
-              padding: '1rem 1.2rem',
+              borderRadius: '0 12px 12px 0',
+              padding: '0.85rem 1rem',
               boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
             }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>
                 Strategy & Mentorship Guidance
               </div>
               <p style={{
                 margin: 0,
                 color: '#334155',
-                fontSize: '0.92rem',
-                lineHeight: 1.6,
+                fontSize: '0.85rem',
+                lineHeight: 1.55,
                 fontWeight: 500
               }}>
                 {aiFeedback.message}
@@ -3581,8 +3587,8 @@ export default function CommandCenterPage() {
               className="btn-primary" 
               style={{ 
                 width: '100%', 
-                padding: '0.8rem 1.4rem',
-                fontSize: '0.95rem',
+                padding: '0.75rem 1.2rem',
+                fontSize: '0.9rem',
                 fontWeight: 600,
                 borderRadius: '12px',
                 cursor: 'pointer',
@@ -3590,7 +3596,8 @@ export default function CommandCenterPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.5rem'
+                gap: '0.5rem',
+                marginTop: '0.2rem'
               }}
             >
               <span>Continue to Focus Session</span>
