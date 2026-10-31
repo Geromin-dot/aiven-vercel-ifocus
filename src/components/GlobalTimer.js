@@ -707,6 +707,7 @@ export default function GlobalTimer() {
     try {
       const normalizedState = {
         ...nextState,
+        updatedAt: Number(nextState.updatedAt) || Date.now(),
         ...(nextState.isRunning && nextState.isFocus && !nextState.activePresenceIntervalSeconds
           ? {
               activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
@@ -1024,16 +1025,9 @@ export default function GlobalTimer() {
       } else if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         const current = readStorageState() || stateRef.current;
         if (current?.isRunning && current?.isFocus && current?.targetEndTime) {
-          let activePresenceEnabled = true;
-          let activePresenceInterval = 5;
-          try {
-            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-            if (rawPrefs) {
-              const prefs = JSON.parse(rawPrefs);
-              if (prefs.activePresenceEnabled !== undefined) activePresenceEnabled = Boolean(prefs.activePresenceEnabled);
-              if (prefs.activePresenceInterval) activePresenceInterval = Number(prefs.activePresenceInterval);
-            }
-          } catch (e) {}
+          const activePresenceEnabled = current.activePresenceEnabledAtStart !== undefined
+            ? Boolean(current.activePresenceEnabledAtStart)
+            : getSavedPresenceEnabled();
 
           if (activePresenceEnabled) {
             const intervalSeconds = getPresenceIntervalSeconds(current);
@@ -1053,22 +1047,34 @@ export default function GlobalTimer() {
               });
             }
 
-            // Save one handoff checkpoint when backgrounding so another device
-            // can recover the session without a live per-second sync stream.
+            // Save one exact handoff checkpoint when backgrounding so another
+            // device can recover the session without a live sync stream.
             const checkpointNow = Date.now();
             if (navigator.onLine && checkpointNow - lastTimerCheckpointSyncRef.current >= 60000) {
               lastTimerCheckpointSyncRef.current = checkpointNow;
+              const checkpointElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
+              const checkpointRemaining = Math.max(0, totalTime - checkpointElapsed);
+              const checkpointState = {
+                ...current,
+                isRunning: false,
+                targetEndTime: null,
+                timeLeft: checkpointRemaining,
+                presencePaused: true,
+                lastPresenceCheckElapsed: checkpointElapsed,
+                lastPresenceRemaining: checkpointRemaining,
+                lastPresenceElapsed: checkpointElapsed,
+                updatedAt: checkpointNow,
+                activePresenceIntervalSeconds: intervalSeconds,
+              };
+              try {
+                localStorage.setItem("ifocus_timer_state", JSON.stringify(checkpointState));
+              } catch (err) {}
               fetch("/api/user/telemetry", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   telemetryState: {
-                    activeTimerState: {
-                      ...current,
-                      timeLeft: remainingSeconds,
-                      updatedAt: checkpointNow,
-                      activePresenceIntervalSeconds: intervalSeconds
-                    },
+                    activeTimerState: checkpointState,
                     updatedAt: new Date(checkpointNow).toISOString()
                   }
                 })
@@ -1240,6 +1246,7 @@ export default function GlobalTimer() {
       if (e?.detail) {
         const syncedState = {
           ...e.detail,
+          updatedAt: Number(e.detail.updatedAt) || Date.now(),
           ...(e.detail.isRunning && e.detail.isFocus && !e.detail.activePresenceIntervalSeconds
             ? {
                 activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
@@ -1249,6 +1256,9 @@ export default function GlobalTimer() {
               }
             : {})
         };
+        try {
+          localStorage.setItem("ifocus_timer_state", JSON.stringify(syncedState));
+        } catch (err) {}
         setTimerState(syncedState);
         if (syncedState.isRunning) {
           lastActivityRef.current = Date.now();
@@ -1956,6 +1966,7 @@ export default function GlobalTimer() {
       const updatedState = {
         ...current,
         timeLeft: remainingSeconds,
+        updatedAt: Date.now(),
         lastPresenceCheckElapsed: typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0,
         lastPresenceRemaining: remainingSeconds,
       };

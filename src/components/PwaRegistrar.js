@@ -18,6 +18,7 @@ export default function PwaRegistrar() {
           .register("/sw.js")
           .then((reg) => {
             console.log("PWA Service Worker registered with scope:", reg.scope);
+            reg.update().catch(() => {});
           })
           .catch((err) => {
             console.warn("PWA Service Worker registration failed:", err);
