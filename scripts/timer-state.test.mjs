@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../src/lib/timerState.js', import.meta.url), 'utf8');
-const { remainingTime, settlePresence, confirmPresence, toggleTimerState, recoveryFromCheckpoint } =
+const { remainingTime, settlePresence, confirmPresence, toggleTimerState, recoveryFromCheckpoint, isTimerSessionOngoing } =
   await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const start = 1000000;
 const session = (interval = 180) => ({ isRunning: true, isFocus: true, totalTime: 900,
@@ -88,4 +88,18 @@ test('cross-device recovery uses saved work, never elapsed wall time or a live c
   assert.equal(recoveryFromCheckpoint({ ...checkpoint, recoveryResolved: true }), null);
   assert.equal(recoveryFromCheckpoint({ ...checkpoint, isFocus: false }), null);
   assert.equal(recoveryFromCheckpoint(session()), null);
+});
+
+
+test('check intervals stay locked through running, manual/presence pauses and breaks until a reset', () => {
+  const ready = { isFocus: true, isRunning: false, totalTime: 900, timeLeft: 900, sessionCount: 1 };
+  assert.equal(isTimerSessionOngoing(null), false);
+  assert.equal(isTimerSessionOngoing(ready), false);
+  assert.equal(isTimerSessionOngoing({ ...ready, isRunning: true }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready, timeLeft: 847 }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready, presencePaused: true, timeLeft: 720 }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready, isFocus: false, totalTime: 180, timeLeft: 180 }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready, breakGatePending: true }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready, sessionCount: 2 }), true);
+  assert.equal(isTimerSessionOngoing({ ...ready }), false);
 });

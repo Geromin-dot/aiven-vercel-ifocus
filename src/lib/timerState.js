@@ -1,4 +1,11 @@
 // Timer math is independent of React, request timing, and background callbacks.
+export function isTimerSessionOngoing(state) {
+  if (!state) return false;
+  return Boolean(state.isRunning || state.presencePaused || state.breakGatePending ||
+    state.isFocus === false || Number(state.sessionCount) > 1 ||
+    (Number(state.totalTime) > 0 && Number(state.timeLeft) < Number(state.totalTime)));
+}
+
 export function remainingTime(state, now = Date.now()) {
   if (!state) return 0;
   if (state.presencePaused || !state.isRunning || !state.targetEndTime) {

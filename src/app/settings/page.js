@@ -5,6 +5,21 @@ import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import TimerNotificationSettings from '@/components/TimerNotificationSettings';
+import { isTimerSessionOngoing } from '@/lib/timerState';
+
+const checkIntervalsAreLocked = () => {
+  try { return isTimerSessionOngoing(JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null')); }
+  catch { return true; }
+};
+
+const savedCheckIntervals = () => {
+  const prefs = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+  const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+  return {
+    activePresenceInterval: Number(prefs.activePresenceInterval) || Number(timer?.activePresenceIntervalSeconds) / 60 || 5,
+    burnoutCheckMinutes: Number(prefs.burnoutCheckMinutes) || 20,
+  };
+};
 
 // Curated avatar styles and presets for customization (clean names, no emojis)
 const AVATAR_PRESETS = [
@@ -147,6 +162,25 @@ export default function SettingsPage() {
   const [afkCoachMinutes, setAfkCoachMinutes] = useState(1);
   const [burnoutCheckEnabled, setBurnoutCheckEnabled] = useState(true);
   const [burnoutCheckMinutes, setBurnoutCheckMinutes] = useState(20);
+  const [checkIntervalsLocked, setCheckIntervalsLocked] = useState(true);
+
+  useEffect(() => {
+    const refresh = () => {
+      const locked = checkIntervalsAreLocked();
+      setCheckIntervalsLocked(locked);
+      if (locked) {
+        try {
+          const prefs = savedCheckIntervals();
+          setActivePresenceInterval(Number(prefs.activePresenceInterval) || 5);
+          setBurnoutCheckMinutes(Number(prefs.burnoutCheckMinutes) || 20);
+        } catch { /* Keep the current values if storage is unavailable. */ }
+      }
+    };
+    refresh();
+    const events = ['ifocus_timer_sync', 'ifocus_timer_tick', 'storage', 'focus', 'ifocus_timer_prefs_updated'];
+    events.forEach(event => window.addEventListener(event, refresh));
+    return () => events.forEach(event => window.removeEventListener(event, refresh));
+  }, []);
 
   // 2. Notifications & Sound Preferences State
   const [defaultAmbientTrack, setDefaultAmbientTrack] = useState('Chill Lofi');
@@ -358,7 +392,13 @@ export default function SettingsPage() {
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (data?.timerPreferences) {
-            const tp = data.timerPreferences;
+            const tp = { ...data.timerPreferences };
+            // A delayed cloud response must not change intervals in an ongoing session.
+            if (checkIntervalsAreLocked()) {
+              const saved = savedCheckIntervals();
+              tp.activePresenceInterval = Number(saved.activePresenceInterval) || 5;
+              tp.burnoutCheckMinutes = Number(saved.burnoutCheckMinutes) || 20;
+            }
             if (tp.activePresenceInterval) {
               setActivePresenceInterval(Number(tp.activePresenceInterval));
             }
@@ -628,8 +668,12 @@ export default function SettingsPage() {
       const cleanBgCount = Number(breakGateQuestionCount || 3);
       setBreakGateQuestionCount(cleanBgCount);
 
-      const cleanInterval = Number(activePresenceInterval || 5);
+      const savedPrefs = savedCheckIntervals();
+      const intervalsLocked = checkIntervalsAreLocked();
+      const cleanInterval = Number((intervalsLocked ? savedPrefs.activePresenceInterval : activePresenceInterval) || 5);
+      const cleanBurnoutMinutes = Number((intervalsLocked ? savedPrefs.burnoutCheckMinutes : burnoutCheckMinutes) || 20);
       setActivePresenceInterval(cleanInterval);
+      setBurnoutCheckMinutes(cleanBurnoutMinutes);
 
       const cleanVolume = Number(ambientVolume);
       setAmbientVolume(cleanVolume);
@@ -644,7 +688,7 @@ export default function SettingsPage() {
         afkCoachEnabled: Boolean(afkCoachEnabled),
         afkCoachMinutes: Number(afkCoachMinutes || 1),
         burnoutCheckEnabled: Boolean(burnoutCheckEnabled),
-        burnoutCheckMinutes: Number(burnoutCheckMinutes || 20),
+        burnoutCheckMinutes: cleanBurnoutMinutes,
       };
       localStorage.setItem('ifocus_timer_preferences', JSON.stringify(timerPrefs));
       localStorage.setItem('ifocus_breakgate_question_count', String(cleanBgCount));
@@ -1362,6 +1406,10 @@ export default function SettingsPage() {
                 </label>
               </div>
 
+              {checkIntervalsLocked && <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                Active presence interval is locked during your session, including pauses. Finish or reset the timer to change it.
+              </p>}
+
               {activePresenceEnabled && (
                 <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
@@ -1389,7 +1437,10 @@ export default function SettingsPage() {
                         key={mins} 
                         type="button" 
                         className={`option-chip ${activePresenceInterval === mins ? 'selected' : ''}`}
+                        disabled={checkIntervalsLocked}
+                        title={checkIntervalsLocked ? 'Finish or reset your timer session to change this interval.' : undefined}
                         onClick={() => {
+                          if (checkIntervalsAreLocked()) return;
                           setActivePresenceInterval(mins);
                         }}
                         style={{
@@ -1404,6 +1455,104 @@ export default function SettingsPage() {
                           borderRadius: '10px',
                           textAlign: 'center',
                           boxSizing: 'border-box',
+                          opacity: checkIntervalsLocked ? 0.5 : 1,
+                          cursor: checkIntervalsLocked ? 'not-allowed' : 'pointer',
+                          margin: 0
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Task Stagnation & Burnout Check Toggle & Options (While Timer Running) */}
+              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Task Stagnation & Burnout Check</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically checks in if the focus timer has been active for the set threshold without any task completed.</p>
+                </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    checked={burnoutCheckEnabled}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setBurnoutCheckEnabled(val);
+                      try {
+                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                        const parsed = JSON.parse(raw);
+                        parsed.burnoutCheckEnabled = val;
+                        parsed.burnoutCheckMinutes = checkIntervalsAreLocked() ? (Number(parsed.burnoutCheckMinutes) || 20) : burnoutCheckMinutes;
+                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                        window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                      } catch(err) {}
+                    }} 
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              {checkIntervalsLocked && <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                Burnout interval is locked during your session, including pauses. Finish or reset the timer to change it.
+              </p>}
+
+              {burnoutCheckEnabled && (
+                <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
+                      Burnout Check Interval (During Focus Session)
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
+                      After {burnoutCheckMinutes} mins without completed task
+                    </span>
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
+                    gap: '8px',
+                    width: '100%'
+                  }}>
+                    {[
+                      { mins: 10, label: '10 mins' },
+                      { mins: 20, label: '20 mins' },
+                      { mins: 30, label: '30 mins' },
+                      { mins: 40, label: '40 mins' },
+                      { mins: 50, label: '50 mins' }
+                    ].map(({ mins, label }) => (
+                      <button 
+                        key={mins} 
+                        type="button" 
+                        className={`option-chip ${burnoutCheckMinutes === mins ? 'selected' : ''}`}
+                        disabled={checkIntervalsLocked}
+                        title={checkIntervalsLocked ? 'Finish or reset your timer session to change this interval.' : undefined}
+                        onClick={() => {
+                          if (checkIntervalsAreLocked()) return;
+                          setBurnoutCheckMinutes(mins);
+                          try {
+                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
+                            const parsed = JSON.parse(raw);
+                            parsed.burnoutCheckEnabled = burnoutCheckEnabled;
+                            parsed.burnoutCheckMinutes = mins;
+                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
+                            window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
+                          } catch(err) {}
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '38px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '0 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          borderRadius: '10px',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                          opacity: checkIntervalsLocked ? 0.5 : 1,
+                          cursor: checkIntervalsLocked ? 'not-allowed' : 'pointer',
                           margin: 0
                         }}
                       >
@@ -1428,7 +1577,7 @@ export default function SettingsPage() {
                 <label className="toggle-switch">
                   <input 
                     type="checkbox" 
-                    checked={afkCoachEnabled} 
+                    checked={afkCoachEnabled}
                     onChange={(e) => {
                       const val = e.target.checked;
                       setAfkCoachEnabled(val);
@@ -1480,93 +1629,6 @@ export default function SettingsPage() {
                             const parsed = JSON.parse(raw);
                             parsed.afkCoachEnabled = afkCoachEnabled;
                             parsed.afkCoachMinutes = mins;
-                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
-                            window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
-                          } catch(err) {}
-                        }}
-                        style={{
-                          width: '100%',
-                          height: '38px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '0 8px',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                          borderRadius: '10px',
-                          textAlign: 'center',
-                          boxSizing: 'border-box',
-                          margin: 0
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Task Stagnation & Burnout Check Toggle & Options (While Timer Running) */}
-              <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Task Stagnation & Burnout Check</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically checks in if the focus timer has been active for the set threshold without any task completed.</p>
-                </div>
-                <label className="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    checked={burnoutCheckEnabled} 
-                    onChange={(e) => {
-                      const val = e.target.checked;
-                      setBurnoutCheckEnabled(val);
-                      try {
-                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
-                        const parsed = JSON.parse(raw);
-                        parsed.burnoutCheckEnabled = val;
-                        parsed.burnoutCheckMinutes = burnoutCheckMinutes;
-                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
-                        window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
-                      } catch(err) {}
-                    }} 
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
-
-              {burnoutCheckEnabled && (
-                <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
-                      Burnout Check Interval (During Focus Session)
-                    </label>
-                    <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
-                      After {burnoutCheckMinutes} mins without completed task
-                    </span>
-                  </div>
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))',
-                    gap: '8px',
-                    width: '100%'
-                  }}>
-                    {[
-                      { mins: 10, label: '10 mins' },
-                      { mins: 20, label: '20 mins' },
-                      { mins: 30, label: '30 mins' },
-                      { mins: 40, label: '40 mins' },
-                      { mins: 50, label: '50 mins' }
-                    ].map(({ mins, label }) => (
-                      <button 
-                        key={mins} 
-                        type="button" 
-                        className={`option-chip ${burnoutCheckMinutes === mins ? 'selected' : ''}`}
-                        onClick={() => {
-                          setBurnoutCheckMinutes(mins);
-                          try {
-                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
-                            const parsed = JSON.parse(raw);
-                            parsed.burnoutCheckEnabled = burnoutCheckEnabled;
-                            parsed.burnoutCheckMinutes = mins;
                             localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
                             window.dispatchEvent(new CustomEvent('ifocus_timer_prefs_updated', { detail: parsed }));
                           } catch(err) {}
