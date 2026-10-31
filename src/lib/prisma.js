@@ -1,7 +1,28 @@
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = global;
+// Ensure DATABASE_URL has connection_limit=1 and pool_timeout in serverless environments
+// This prevents Vercel serverless functions from opening 5-10 connections per lambda
+// and exhausting Aiven's max_connections limit.
+function getDatabaseUrl() {
+  const url = process.env.DATABASE_URL || "";
+  if (!url || url.includes("connection_limit")) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}connection_limit=1&pool_timeout=15`;
+}
 
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+const globalForPrisma = globalThis;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    datasources: {
+      db: {
+        url: getDatabaseUrl(),
+      },
+    },
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+  });
+
+// Always cache the prisma instance in globalThis across all environments
+// so warm serverless lambdas reuse the single database connection.
+globalForPrisma.prisma = prisma;
