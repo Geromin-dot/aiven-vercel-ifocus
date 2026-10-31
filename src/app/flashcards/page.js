@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import HelpButton from '@/components/HelpButton';
 import emptyStateImg from '../../img/empty_flashcard_state.png';
+import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 
 // Helper: Ensure every card has a smart, active-recall mnemonic hint
 const getCardHint = (card, isDefFirst) => {
@@ -155,8 +156,12 @@ export default function FlashcardsPage() {
   const [storedMasteredKeys, setStoredMasteredKeys] = useState([]);
 
   useEffect(() => {
-    const loadMastered = () => {
+    const loadMastered = (e) => {
       try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setStoredMasteredKeys(e.detail);
+          return;
+        }
         const raw = localStorage.getItem('ifocus_mastered_cards');
         if (raw) setStoredMasteredKeys(JSON.parse(raw));
         else setStoredMasteredKeys([]);
@@ -165,6 +170,14 @@ export default function FlashcardsPage() {
     loadMastered();
     window.addEventListener('ifocus_mastery_updated', loadMastered);
     window.addEventListener('storage', loadMastered);
+
+    // Initial reconciliation from cloud so mobile PWA gets mastered cards immediately
+    reconcileCloudTelemetry().then((res) => {
+      if (res?.mergedMastered) {
+        setStoredMasteredKeys(res.mergedMastered);
+      }
+    }).catch(() => {});
+
     return () => {
       window.removeEventListener('ifocus_mastery_updated', loadMastered);
       window.removeEventListener('storage', loadMastered);
@@ -259,7 +272,17 @@ export default function FlashcardsPage() {
           storedMastered.push(currentQ.front);
           localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
           setStoredMasteredKeys(storedMastered);
-          window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
+          window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
+          fetch('/api/user/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telemetryState: {
+                masteredCards: storedMastered,
+                updatedAt: new Date().toISOString()
+              }
+            })
+          }).catch(() => {});
         }
       } catch(e) {}
     }
@@ -567,9 +590,20 @@ export default function FlashcardsPage() {
       }
       try {
         localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
-        window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
+        window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
       } catch(e) {}
       setStoredMasteredKeys(storedMastered);
+      fetch('/api/user/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telemetryState: {
+            masteredCards: storedMastered,
+            replaceMasteredCards: true,
+            updatedAt: new Date().toISOString()
+          }
+        })
+      }).catch(() => {});
       return next;
     });
   };
@@ -603,9 +637,21 @@ export default function FlashcardsPage() {
 
     try {
       localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
-      window.dispatchEvent(new CustomEvent('ifocus_mastery_updated'));
+      window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
     } catch (e) {}
     setStoredMasteredKeys(storedMastered);
+
+    fetch('/api/user/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telemetryState: {
+          masteredCards: storedMastered,
+          replaceMasteredCards: true,
+          updatedAt: new Date().toISOString()
+        }
+      })
+    }).catch(() => {});
   };
 
   // Keyboard navigation inside study mode

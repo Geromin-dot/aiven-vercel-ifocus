@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ifocus-pwa-v4';
+const CACHE_NAME = 'ifocus-pwa-v5';
 
 const STATIC_ASSETS = [
   '/',

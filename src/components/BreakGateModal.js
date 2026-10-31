@@ -210,6 +210,17 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         if (currentCard?.front && !stored.includes(currentCard.front)) {
           stored.push(currentCard.front);
           localStorage.setItem('ifocus_mastered_cards', JSON.stringify(stored));
+          window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: stored }));
+          fetch('/api/user/telemetry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telemetryState: {
+                masteredCards: stored,
+                updatedAt: new Date().toISOString()
+              }
+            })
+          }).catch(() => {});
         }
       } catch(e) {}
     }
@@ -241,6 +252,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
           body: JSON.stringify({
             telemetryState: {
               breakGateEvents: trimmed,
+              masteredCards: JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]'),
               updatedAt: iso
             }
           })

@@ -86,6 +86,15 @@ export async function reconcileCloudTelemetry() {
       if (raw) localAiDetails = JSON.parse(raw);
     } catch (e) {}
 
+    let localMastered = [];
+    try {
+      const raw = localStorage.getItem("ifocus_mastered_cards");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) localMastered = parsed;
+      }
+    } catch (e) {}
+
     // 2. Fetch cloud telemetry from PostgreSQL Aiven database
     const res = await fetch("/api/user/telemetry");
     if (!res.ok) return null;
@@ -122,6 +131,13 @@ export async function reconcileCloudTelemetry() {
     if (mergedJournal.length > 0) {
       localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(mergedJournal));
       localStorage.setItem("ifocus_journal_history", JSON.stringify(mergedJournal));
+    }
+
+    // 4b. Reconcile Mastered Flashcards (parity across PC, mobile PWA, and tablet)
+    const remoteMastered = Array.isArray(cloud.masteredCards) ? cloud.masteredCards : [];
+    const mergedMastered = Array.from(new Set([...localMastered, ...remoteMastered]));
+    if (mergedMastered.length > 0) {
+      localStorage.setItem("ifocus_mastered_cards", JSON.stringify(mergedMastered));
     }
 
     // 5. Reconcile Recovery & Cognitive Reset timestamps (highest/latest wins)
@@ -243,6 +259,7 @@ export async function reconcileCloudTelemetry() {
     // 9. BI-DIRECTIONAL PUSH: If local had data that cloud lacked or was behind on, push up to Aiven database!
     const isCloudMissingEvents = mergedEvents.length > remoteEvents.length;
     const isCloudMissingJournal = mergedJournal.length > remoteJournal.length;
+    const isCloudMissingMastered = mergedMastered.length > remoteMastered.length;
     const isCloudBehindRecovery = effectiveRecovery > cloudRecovery;
     const isCloudBehindReset = effectiveReset > cloudReset;
     const isCloudBehindTelem = localTelem && localTelemTime > cloudTelemTime;
@@ -254,6 +271,7 @@ export async function reconcileCloudTelemetry() {
     if (
       isCloudMissingEvents ||
       isCloudMissingJournal ||
+      isCloudMissingMastered ||
       isCloudBehindRecovery ||
       isCloudBehindReset ||
       isCloudBehindTelem ||
@@ -269,6 +287,7 @@ export async function reconcileCloudTelemetry() {
           telemetryState: {
             breakGateEvents: mergedEvents,
             journalHistory: mergedJournal,
+            masteredCards: mergedMastered,
             recoveryCompleted: effectiveRecovery || null,
             cognitiveReset: effectiveReset || null,
             latestTelemetry: effectiveTelem,
@@ -287,6 +306,9 @@ export async function reconcileCloudTelemetry() {
     window.dispatchEvent(new CustomEvent("ifocus_breakgate_updated"));
     window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: effectiveTelem }));
     window.dispatchEvent(new CustomEvent("ifocus_journal_updated", { detail: mergedJournal }));
+    if (mergedMastered.length > 0) {
+      window.dispatchEvent(new CustomEvent("ifocus_mastery_updated", { detail: mergedMastered }));
+    }
     if (effectiveDeck) {
       window.dispatchEvent(new CustomEvent("ifocus_breakgate_deck_changed", { detail: { active: true, deck: effectiveDeck } }));
     }
@@ -294,6 +316,7 @@ export async function reconcileCloudTelemetry() {
     return {
       mergedEvents,
       mergedJournal,
+      mergedMastered,
       effectiveRecovery,
       effectiveReset,
       effectiveTelem,

@@ -105,6 +105,16 @@ export async function POST(req) {
             .slice(0, 50);
         }
 
+        // Deep merge or replace masteredCards array so flashcard mastery is synchronized across all devices
+        if (Array.isArray(incoming.masteredCards)) {
+          if (incoming.replaceMasteredCards === true) {
+            merged.masteredCards = incoming.masteredCards;
+          } else {
+            const existingMastered = Array.isArray(existingTelemetry.masteredCards) ? existingTelemetry.masteredCards : [];
+            merged.masteredCards = Array.from(new Set([...existingMastered, ...incoming.masteredCards]));
+          }
+        }
+
         // Preserve highest recoveryCompleted and cognitiveReset timestamps
         if (incoming.recoveryCompleted) {
           const ex = Number(existingTelemetry.recoveryCompleted || 0);
