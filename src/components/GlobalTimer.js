@@ -82,6 +82,21 @@ const formatNotificationTime = (seconds) => {
   return `${m}m ${s < 10 ? "0" : ""}${s}s`;
 };
 
+const getPresenceIntervalSeconds = () => {
+  try {
+    const raw = localStorage.getItem("ifocus_timer_preferences");
+    const prefs = raw ? JSON.parse(raw) : {};
+    return Math.max(60, Number(prefs.activePresenceInterval || 5) * 60);
+  } catch (e) {
+    return 5 * 60;
+  }
+};
+
+const getPresenceCheckpoint = (elapsedSeconds, intervalSeconds = getPresenceIntervalSeconds()) => {
+  const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
+  return Math.floor(elapsed / intervalSeconds) * intervalSeconds;
+};
+
 const PRESENCE_NOTIFICATION_ACTIONS = [
   { action: "resume", title: "I am still here" },
   { action: "pause", title: "Stay Paused" }
@@ -719,7 +734,7 @@ export default function GlobalTimer() {
       targetEndTime: null,
       timeLeft: remainingSeconds,
       presencePaused: true,
-      lastPresenceCheckElapsed: elapsedSeconds,
+      lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds),
       lastPresenceRemaining: remainingSeconds,
       lastPresenceElapsed: elapsedSeconds,
     };
@@ -949,7 +964,7 @@ export default function GlobalTimer() {
               targetEndTime: null,
               timeLeft: remainingSeconds,
               presencePaused: true,
-              lastPresenceCheckElapsed: elapsedSeconds,
+              lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds, intervalSeconds),
               lastPresenceRemaining: remainingSeconds,
               lastPresenceElapsed: elapsedSeconds,
             };
@@ -1461,7 +1476,7 @@ export default function GlobalTimer() {
           const livePath = getEffectivePath();
           if (isExemptPath(livePath) || isAdmin) {
             // Do not pause on exempt routes; advance check baseline so countdown never hangs
-            current.lastPresenceCheckElapsed = elapsedSeconds;
+            current.lastPresenceCheckElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
             current.lastPresenceRemaining = remainingSeconds;
             lastActivityRef.current = Date.now();
           } else {
@@ -1472,7 +1487,7 @@ export default function GlobalTimer() {
               targetEndTime: null,
               timeLeft: remainingSeconds,
               presencePaused: true,
-              lastPresenceCheckElapsed: elapsedSeconds,
+              lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds, intervalSeconds),
               lastPresenceRemaining: remainingSeconds,
               lastPresenceElapsed: elapsedSeconds,
             };
@@ -1921,6 +1936,7 @@ export default function GlobalTimer() {
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
     const total = current.totalTime || 25 * 60;
     const currentElapsed = Math.max(0, total - remaining);
+    const presenceIntervalSeconds = getPresenceIntervalSeconds();
 
     const resumedState = {
       ...current,
@@ -1929,7 +1945,7 @@ export default function GlobalTimer() {
       timeLeft: remaining,
       targetEndTime: Date.now() + remaining * 1000,
       lastPresenceRemaining: remaining,
-      lastPresenceCheckElapsed: currentElapsed,
+      lastPresenceCheckElapsed: getPresenceCheckpoint(currentElapsed, presenceIntervalSeconds),
       lastPresenceElapsed: currentElapsed,
     };
     commitStorageState(resumedState, true);
@@ -1945,13 +1961,14 @@ export default function GlobalTimer() {
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
     const total = current.totalTime || 25 * 60;
     const currentElapsed = Math.max(0, total - remaining);
+    const presenceIntervalSeconds = getPresenceIntervalSeconds();
     const pausedState = {
       ...current,
       isRunning: false,
       presencePaused: false,
       targetEndTime: null,
       timeLeft: remaining,
-      lastPresenceCheckElapsed: currentElapsed,
+      lastPresenceCheckElapsed: getPresenceCheckpoint(currentElapsed, presenceIntervalSeconds),
       lastPresenceRemaining: remaining,
       lastPresenceElapsed: currentElapsed,
     };

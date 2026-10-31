@@ -1210,18 +1210,6 @@ export default function CommandCenterPage() {
     };
   }, []);
 
-  // High-reliability local display countdown: keeps on-screen timer ticking down every second smoothly
-  useEffect(() => {
-    if (!isActive) return;
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) return 0;
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isActive]);
-
   const handleBreakGateComplete = () => {
     setShowBreakGate(false);
     const breakMin = parseInt(customBreakTime.min) || 0;
