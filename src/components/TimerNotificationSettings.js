@@ -5,6 +5,7 @@ import { remainingTime, settlePresence, presenceInterval } from '../lib/timerSta
 import { formatNotificationTime, sendSystemNotification } from '../lib/timerNotifications';
 import { getBackgroundPushStatus, enableBackgroundPush, disableBackgroundPush, pushRequest } from '../lib/pushNotifications';
 import { getTimerDeviceId } from '../lib/timerState';
+import styles from './TimerNotificationSettings.module.css';
 
 export default function TimerNotificationSettings() {
   const [snapshot, setSnapshot] = useState(null);
@@ -12,6 +13,29 @@ export default function TimerNotificationSettings() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [background, setBackground] = useState(null);
+  const [showPermissionHelp, setShowPermissionHelp] = useState(false);
+
+  const requestPermission = async () => {
+    setBusy('permission');
+    setStatus('');
+    try {
+      if (!('Notification' in window)) {
+        setShowPermissionHelp(true);
+        setStatus('Notifications are unavailable here. On iPhone, open iFocus from your Home Screen.');
+        return;
+      }
+      // Invoke directly from the tap. A prior block may return "denied" without a prompt.
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      setShowPermissionHelp(result === 'denied');
+      setStatus(result === 'granted' ? 'Notifications are allowed. You can send a test below.'
+        : result === 'denied' ? 'Notifications are blocked. Follow the steps below to allow them again.'
+          : 'Permission was not granted. Tap Request Permission when you are ready.');
+    } catch {
+      setShowPermissionHelp(true);
+      setStatus('Could not request permission. Check your notification settings below.');
+    } finally { setBusy(false); }
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -25,7 +49,7 @@ export default function TimerNotificationSettings() {
   }, []);
 
   const backgroundAction = async action => {
-    setBusy(true);
+    setBusy(action);
     setStatus('');
     try {
       if (action === 'enable') {
@@ -65,14 +89,14 @@ export default function TimerNotificationSettings() {
   }, []);
 
   const testNotification = async () => {
-    setBusy(true);
+    setBusy('test');
     setStatus('');
     try {
-      // Request directly from the tap, before awaiting registration.
-      const result = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      const result = 'Notification' in window ? Notification.permission : 'unsupported';
       setPermission(result);
       if (result !== 'granted') {
-        setStatus('Allow notifications in your phone or browser settings, then try again.');
+        setShowPermissionHelp(result === 'denied' || result === 'unsupported');
+        setStatus(result === 'default' ? 'Tap Request Permission first, then send a test.' : 'Allow notifications in your phone or browser settings, then try again.');
         return;
       }
       if ('serviceWorker' in navigator) {
@@ -90,37 +114,56 @@ export default function TimerNotificationSettings() {
   };
 
   return (
-    <div style={{ padding: '1rem', border: '1px solid var(--glass-border)', borderRadius: '14px', display: 'grid', gap: '0.6rem' }}>
-      <h4 style={{ margin: 0 }}>PWA Timer & Notifications</h4>
-      <div role="timer" aria-label="Time remaining" style={{ fontSize: '1.8rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-        {snapshot ? formatNotificationTime(snapshot.remaining) : '--:--'}
+    <section className={styles.card} aria-label="PWA timer and notifications">
+      <div className={styles.header}>
+        <h4 className={styles.title}>PWA Timer & Notifications</h4>
+        <span className={`${styles.badge} ${permission === 'granted' ? styles.allowed : ''}`}>
+          <span className={styles.dot} aria-hidden="true" />
+          {permission === 'granted' ? 'Notifications allowed' : permission === 'denied' ? 'Notifications blocked'
+            : permission === 'loading' ? 'Checking permission…' : permission === 'unsupported' ? 'Unavailable here' : 'Permission needed'}
+        </span>
       </div>
-      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-        {snapshot?.presencePaused ? 'Paused for presence check. Open the presence prompt to Pause or Continue.' : snapshot?.isRunning ? 'Timer running' : 'Timer paused'}
-        {snapshot?.untilCheck != null && ` · Next presence check in ${formatNotificationTime(snapshot.untilCheck)}`}
-      </p>
-      <p style={{ margin: 0, fontSize: '0.8rem' }}>Notifications: {permission === 'granted' ? 'Allowed' : permission === 'default' ? 'Not enabled' : permission === 'denied' ? 'Blocked in device settings' : permission === 'loading' ? 'Checking…' : 'Unavailable — on iPhone, open the app from your Home Screen'}</p>
-      <button type="button" className="btn-secondary" onClick={testNotification} disabled={busy || permission === 'unsupported' || permission === 'loading'}>
-        {busy ? 'Sending…' : permission === 'default' ? 'Enable & Test Notifications' : 'Test Notification'}
-      </button>
-      <p style={{ margin: 0, fontSize: '0.8rem' }}>
-        Background notifications: {background === null ? 'Checking…' : !background.configured ? 'Waiting for server setup' : background.subscribed ? 'Enabled on this device' : 'Not enabled on this device'}
-        {background?.scheduled && ' · Next alert scheduled'}
-      </p>
-      {background?.error && <p role="status" style={{ margin: 0, fontSize: '0.8rem' }}>{background.error}</p>}
-      {background?.configured && permission !== 'unsupported' && (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button type="button" className="btn-secondary" disabled={busy} onClick={() => backgroundAction(background.subscribed ? 'disable' : 'enable')}>
-            {background.subscribed ? 'Disable Background Notifications' : 'Enable Background Notifications'}
-          </button>
-          {background.subscribed && <button type="button" className="btn-secondary" disabled={busy} onClick={() => backgroundAction('test')}>Test Server Push</button>}
+      <div className={styles.timerRow}>
+        <div role="timer" aria-label="Time remaining" className={styles.timer}>
+          {snapshot ? formatNotificationTime(snapshot.remaining) : '--:--'}
+        </div>
+        <div className={styles.timerDetails}>
+          <p className={styles.timerLabel}>{snapshot?.presencePaused ? 'Paused for presence check' : snapshot?.isRunning ? 'Timer running' : snapshot ? 'Timer paused' : 'No active timer'}</p>
+          <p className={styles.caption}>{snapshot?.untilCheck != null ? `Next check in ${formatNotificationTime(snapshot.untilCheck)}` : 'Time remaining in your session'}</p>
+        </div>
+      </div>
+      <div className={styles.actions}>
+        <button type="button" className={`${styles.button} ${styles.permissionButton}`} onClick={requestPermission} disabled={Boolean(busy) || permission === 'loading'}>
+          {busy === 'permission' ? 'Requesting…' : 'Request Permission'}
+        </button>
+        <button type="button" className={styles.button} onClick={testNotification} disabled={Boolean(busy) || permission === 'unsupported' || permission === 'loading'}>
+          {busy === 'test' ? 'Sending…' : 'Test Notification'}
+        </button>
+      </div>
+      {status && <p role="status" className={styles.status}>{status}</p>}
+      {(showPermissionHelp || permission === 'denied') && (
+        <div className={styles.help}>
+          <h5>Allow notifications again</h5>
+          <p><strong>iPhone:</strong> Open Settings → Notifications → iFocus → Allow Notifications. Use iFocus from your Home Screen.</p>
+          <p><strong>Web / Android:</strong> Open this site’s controls beside the address bar → Site settings or Permissions → Notifications → Allow.</p>
+          <p>Return here, then tap Request Permission to check again. A blocked permission must be changed in your device or browser settings.</p>
         </div>
       )}
-      {status && <p role="status" style={{ margin: 0, fontSize: '0.82rem' }}>{status}</p>}
-      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-        Alerts show the time remaining when the timer pauses. Where supported, they include Pause and Continue buttons. On iPhone, tap the alert to open these controls. The live countdown is shown here while the app is open.
-        {' '}Enable background notifications on this device to receive scheduled alerts while the app is in the background. Delivery also depends on your connection and device notification settings.
+      {background?.configured && permission !== 'unsupported' && (
+        <div className={styles.background}>
+          <p className={styles.caption}>Background notifications: {background.subscribed ? 'Enabled on this device' : 'Not enabled'}{background.scheduled && ' · Next alert scheduled'}</p>
+          {background.error && <p role="status" className={styles.caption}>{background.error}</p>}
+          <div className={styles.actions}>
+            <button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => backgroundAction(background.subscribed ? 'disable' : 'enable')}>
+              {background.subscribed ? 'Disable Background Notifications' : 'Enable Background Notifications'}
+            </button>
+            {background.subscribed && <button type="button" className={styles.button} disabled={Boolean(busy)} onClick={() => backgroundAction('test')}>Test Server Push</button>}
+          </div>
+        </div>
+      )}
+      <p className={styles.caption}>
+        Alerts show your remaining time. Tap an alert to open Pause / Continue. The live countdown stays here while the app is open.
       </p>
-    </div>
+    </section>
   );
 }
