@@ -275,7 +275,7 @@ async function reconcileCloudTelemetryInternal() {
       const hasPresetDiff = cloudTimer.timerPreset && cloudTimer.timerPreset !== localTimerState?.timerPreset;
       const isCloudNewer = (cloudTimer.updatedAt || 0) > (localTimerState?.updatedAt || 0);
 
-      if (!localTimerState || (!localTimerState.isRunning && (hasPresetDiff || isCloudRunning || isCloudNewer))) {
+      if (!localTimerState || isCloudNewer || (!localTimerState.isRunning && (hasPresetDiff || isCloudRunning))) {
         const remaining = isCloudRunning ? Math.max(0, Math.round((cloudTimer.targetEndTime - Date.now()) / 1000)) : cloudTimer.timeLeft;
         effectiveTimerState = {
           ...(localTimerState || {}),

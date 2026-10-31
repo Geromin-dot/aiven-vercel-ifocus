@@ -1353,18 +1353,6 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const val = e.target.checked;
                       setActivePresenceEnabled(val);
-                      try {
-                        const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
-                        const parsed = JSON.parse(raw);
-                        parsed.activePresenceEnabled = val;
-                        parsed.activePresenceInterval = activePresenceInterval;
-                        localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
-                        fetch('/api/user/telemetry', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ timerPreferences: parsed })
-                        }).catch(() => {});
-                      } catch(err) {}
                     }} 
                   />
                   <span className="toggle-slider"></span>
@@ -1400,18 +1388,6 @@ export default function SettingsPage() {
                         className={`option-chip ${activePresenceInterval === mins ? 'selected' : ''}`}
                         onClick={() => {
                           setActivePresenceInterval(mins);
-                          try {
-                            const raw = localStorage.getItem('ifocus_timer_preferences') || '{}';
-                            const parsed = JSON.parse(raw);
-                            parsed.activePresenceEnabled = activePresenceEnabled;
-                            parsed.activePresenceInterval = mins;
-                            localStorage.setItem('ifocus_timer_preferences', JSON.stringify(parsed));
-                            fetch('/api/user/telemetry', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ timerPreferences: parsed })
-                            }).catch(() => {});
-                          } catch(err) {}
                         }}
                         style={{
                           width: '100%',

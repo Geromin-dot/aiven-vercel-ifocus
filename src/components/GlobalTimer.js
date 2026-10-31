@@ -82,7 +82,7 @@ const formatNotificationTime = (seconds) => {
   return `${m}m ${s < 10 ? "0" : ""}${s}s`;
 };
 
-const getPresenceIntervalSeconds = () => {
+const getSavedPresenceIntervalSeconds = () => {
   try {
     const raw = localStorage.getItem("ifocus_timer_preferences");
     const prefs = raw ? JSON.parse(raw) : {};
@@ -92,7 +92,12 @@ const getPresenceIntervalSeconds = () => {
   }
 };
 
-const getPresenceCheckpoint = (elapsedSeconds, intervalSeconds = getPresenceIntervalSeconds()) => {
+const getPresenceIntervalSeconds = (timerState = null) => {
+  const sessionInterval = Number(timerState?.activePresenceIntervalSeconds);
+  return sessionInterval >= 60 ? sessionInterval : getSavedPresenceIntervalSeconds();
+};
+
+const getPresenceCheckpoint = (elapsedSeconds, intervalSeconds = getSavedPresenceIntervalSeconds()) => {
   const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
   return Math.floor(elapsed / intervalSeconds) * intervalSeconds;
 };
@@ -353,6 +358,7 @@ export default function GlobalTimer() {
   const [burnoutModalMinutes, setBurnoutModalMinutes] = useState(20);
   const tasksCompletedInSessionRef = useRef(0);
   const burnoutCheckedThisSessionRef = useRef(false);
+  const lastTimerCheckpointSyncRef = useRef(0);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
@@ -677,10 +683,16 @@ export default function GlobalTimer() {
   // Write updated timer state to localStorage and broadcast sync event
   const commitStorageState = useCallback((nextState, dispatchSync = true) => {
     try {
-      localStorage.setItem("ifocus_timer_state", JSON.stringify(nextState));
-      setTimerState(nextState);
+      const normalizedState = {
+        ...nextState,
+        ...(nextState.isRunning && nextState.isFocus && !nextState.activePresenceIntervalSeconds
+          ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
+          : {})
+      };
+      localStorage.setItem('ifocus_timer_state', JSON.stringify(normalizedState));
+      setTimerState(normalizedState);
       if (dispatchSync) {
-        window.dispatchEvent(new CustomEvent("ifocus_timer_sync", { detail: nextState }));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: normalizedState }));
       }
     } catch (e) {
       console.warn("Failed writing ifocus_timer_state:", e);
@@ -949,7 +961,7 @@ export default function GlobalTimer() {
             }
           } catch (e) {}
 
-          const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
+          const intervalSeconds = getPresenceIntervalSeconds(current);
           const totalTime = current.totalTime || 25 * 60;
           const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
           const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
@@ -958,15 +970,17 @@ export default function GlobalTimer() {
           const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
 
           if (activePresenceEnabled && focusSecondsSinceLastCheck >= intervalSeconds) {
+            const checkpointElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
+            const checkpointRemaining = Math.max(0, totalTime - checkpointElapsed);
             const pausedState = {
               ...current,
               isRunning: false,
               targetEndTime: null,
-              timeLeft: remainingSeconds,
+              timeLeft: checkpointRemaining,
               presencePaused: true,
-              lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds, intervalSeconds),
-              lastPresenceRemaining: remainingSeconds,
-              lastPresenceElapsed: elapsedSeconds,
+              lastPresenceCheckElapsed: checkpointElapsed,
+              lastPresenceRemaining: checkpointRemaining,
+              lastPresenceElapsed: checkpointElapsed,
             };
             commitStorageState(pausedState, true);
             setShowPresenceModal(true);
@@ -974,7 +988,7 @@ export default function GlobalTimer() {
             triggerVibration([250, 100, 250]);
             sendSystemNotification(
               "iFocus Active Presence Check",
-              `Timer: ${formatNotificationTime(remainingSeconds)} remaining. Are you still studying? Tap to continue or pause.`,
+              `Timer: ${formatNotificationTime(checkpointRemaining)} remaining. Are you still studying? Tap to continue or pause.`,
               "ifocus-presence",
               PRESENCE_NOTIFICATION_ACTIONS
             );
@@ -995,7 +1009,7 @@ export default function GlobalTimer() {
           } catch (e) {}
 
           if (activePresenceEnabled) {
-            const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
+            const intervalSeconds = getPresenceIntervalSeconds(current);
             const totalTime = current.totalTime || 25 * 60;
             const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
             const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
@@ -1010,6 +1024,28 @@ export default function GlobalTimer() {
                 delayMs: secondsUntilCheck * 1000,
                 remainingSeconds: Math.max(0, remainingSeconds - secondsUntilCheck)
               });
+            }
+
+            // Save one handoff checkpoint when backgrounding so another device
+            // can recover the session without a live per-second sync stream.
+            const checkpointNow = Date.now();
+            if (navigator.onLine && checkpointNow - lastTimerCheckpointSyncRef.current >= 60000) {
+              lastTimerCheckpointSyncRef.current = checkpointNow;
+              fetch("/api/user/telemetry", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  telemetryState: {
+                    activeTimerState: {
+                      ...current,
+                      timeLeft: remainingSeconds,
+                      updatedAt: checkpointNow,
+                      activePresenceIntervalSeconds: intervalSeconds
+                    },
+                    updatedAt: new Date(checkpointNow).toISOString()
+                  }
+                })
+              }).catch(() => {});
             }
           }
         }
@@ -1175,19 +1211,25 @@ export default function GlobalTimer() {
   useEffect(() => {
     const handleSync = (e) => {
       if (e?.detail) {
-        setTimerState(e.detail);
-        if (e.detail.isRunning) {
+        const syncedState = {
+          ...e.detail,
+          ...(e.detail.isRunning && e.detail.isFocus && !e.detail.activePresenceIntervalSeconds
+            ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
+            : {})
+        };
+        setTimerState(syncedState);
+        if (syncedState.isRunning) {
           lastActivityRef.current = Date.now();
         }
-        if (e.detail.presencePaused) {
+        if (syncedState.presencePaused) {
           const currentLive = getEffectivePath();
           if (!isExemptPath(currentLive) && !isAdmin) {
             setShowPresenceModal(true);
           }
-        } else if (!e.detail.presencePaused) {
+        } else if (!syncedState.presencePaused) {
           setShowPresenceModal(false);
         }
-        if (e.detail.breakGatePending) {
+        if (syncedState.breakGatePending) {
           // Check for active deck
           try {
             const rawDeck = localStorage.getItem("ifocus_active_breakgate_deck");
@@ -1458,7 +1500,7 @@ export default function GlobalTimer() {
         } catch (e) {}
 
         // Minimum active presence check interval is 60 seconds (1 minute)
-        const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
+        const intervalSeconds = getPresenceIntervalSeconds(current);
 
         // Track focus seconds elapsed since the last confirmed presence check
         const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number"
@@ -1936,7 +1978,7 @@ export default function GlobalTimer() {
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
     const total = current.totalTime || 25 * 60;
     const currentElapsed = Math.max(0, total - remaining);
-    const presenceIntervalSeconds = getPresenceIntervalSeconds();
+    const presenceIntervalSeconds = getPresenceIntervalSeconds(current);
 
     const resumedState = {
       ...current,
@@ -1961,7 +2003,7 @@ export default function GlobalTimer() {
     const remaining = current.timeLeft !== undefined ? current.timeLeft : 25 * 60;
     const total = current.totalTime || 25 * 60;
     const currentElapsed = Math.max(0, total - remaining);
-    const presenceIntervalSeconds = getPresenceIntervalSeconds();
+    const presenceIntervalSeconds = getPresenceIntervalSeconds(current);
     const pausedState = {
       ...current,
       isRunning: false,
@@ -2150,7 +2192,6 @@ export default function GlobalTimer() {
   // when navigating away from the dashboard. On mobile screens (<= 768px), navigation
   // to the timer is cleanly provided by the elevated center Timer button on the bottom nav bar.
   const showFloatingMiniTimer =
-    !isMobileScreen &&
     !isDashboard &&
     (timerState.isRunning || timerState.presencePaused || timerState.breakGatePending);
 
