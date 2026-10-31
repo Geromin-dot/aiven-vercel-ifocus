@@ -87,9 +87,15 @@ const PRESENCE_NOTIFICATION_ACTIONS = [
   { action: "pause", title: "Stay Paused" }
 ];
 
+let lastPresenceNotificationAt = 0;
+const PRESENCE_NOTIFICATION_DEDUPE_MS = 15000;
+
 // Cross-Platform Native System Notification Helper (iOS 16.4+ PWA ServiceWorker, Android, Desktop)
 const sendSystemNotification = async (title, body, tag = "ifocus-presence", actions = []) => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
+  const now = Date.now();
+  if (tag === "ifocus-presence" && now - lastPresenceNotificationAt < PRESENCE_NOTIFICATION_DEDUPE_MS) return;
+
   try {
     if (Notification.permission === "default") {
       try {
@@ -122,14 +128,20 @@ const sendSystemNotification = async (title, body, tag = "ifocus-presence", acti
       try {
         const registration = await navigator.serviceWorker.ready;
         if (registration && typeof registration.showNotification === "function") {
-          await registration.showNotification(title, options);
+          const existing = typeof registration.getNotifications === "function"
+            ? await registration.getNotifications({ tag })
+            : [];
+          if (existing.length > 0) return;
+          await registration.showNotification(title, { ...options, renotify: false });
+          if (tag === "ifocus-presence") lastPresenceNotificationAt = Date.now();
           return;
         }
       } catch (swErr) {}
     }
 
     // 2. Desktop browser fallback:
-    new Notification(title, options);
+    new Notification(title, { ...options, renotify: false });
+    if (tag === "ifocus-presence") lastPresenceNotificationAt = Date.now();
   } catch (e) {
     console.warn("sendSystemNotification error:", e);
   }

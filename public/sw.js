@@ -100,19 +100,22 @@ self.addEventListener('message', (event) => {
     const formatted = `${m}m ${s < 10 ? '0' : ''}${s}s`;
 
     backgroundPresenceTimer = setTimeout(() => {
-      self.registration.showNotification('iFocus Active Presence Check', {
-        body: `Timer: ${formatted} remaining. Are you still studying? Tap to continue or pause.`,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-192x192.png',
-        tag: 'ifocus-presence',
-        renotify: true,
-        requireInteraction: true,
-        actions: [
-          { action: 'resume', title: 'I am still here' },
-          { action: 'pause', title: 'Stay Paused' }
-        ],
-        data: { url: '/dashboard' }
-      });
+      self.registration.getNotifications({ tag: 'ifocus-presence' }).then((existing) => {
+        if (existing.length > 0) return;
+        return self.registration.showNotification('iFocus Active Presence Check', {
+          body: `Timer: ${formatted} remaining. Are you still studying? Tap to continue or pause.`,
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/icon-192x192.png',
+          tag: 'ifocus-presence',
+          renotify: false,
+          requireInteraction: true,
+          actions: [
+            { action: 'resume', title: 'I am still here' },
+            { action: 'pause', title: 'Stay Paused' }
+          ],
+          data: { url: '/dashboard' }
+        });
+      }).catch(() => {});
     }, delay);
   } else if (event.data?.type === 'CANCEL_BACKGROUND_PRESENCE_CHECK') {
     if (backgroundPresenceTimer) {
