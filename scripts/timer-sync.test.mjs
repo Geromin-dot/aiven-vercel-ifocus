@@ -70,36 +70,21 @@ test('saved or discarded sessions do not reappear from an old checkpoint', async
   assert.equal(storage.has('ifocus_interrupted_session_student-1'), false);
 });
 
-test('recovery save retries use one unique study-session record', async () => {
+test('verified recovery save retries use one unique study-session record', async () => {
+  const clockSource = await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8');
+  const clockUrl = `data:text/javascript;base64,${Buffer.from(clockSource).toString('base64')}`;
+  const source = (await readFile(new URL('../src/lib/focusRecording.js', import.meta.url), 'utf8')).replace("'./focusClock.js'", JSON.stringify(clockUrl));
+  const { recordVerifiedFocus } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const records = new Map();
-  const prisma = {
-    user: { findUnique: async () => ({ id: 'student-1' }) },
-    deck: { findFirst: async () => ({ id: 'deck-1' }) },
-    studySession: { upsert: async args => {
-      if (!records.has(args.where.id)) records.set(args.where.id, args.create);
-      return records.get(args.where.id);
-    } },
-  };
-  const route = (await readFile(new URL('../src/app/api/study-sessions/route.js', import.meta.url), 'utf8'))
-    .replace(/import \{ NextResponse \}[^;]+;/, 'const NextResponse = { json: (body, options = {}) => ({ body, status: options.status || 200 }) };')
-    .replace(/import \{ getServerSession \}[^;]+;/, 'const getServerSession = async () => ({ user: { id: "student-1" } });')
-    .replace(/import \{ authOptions \}[^;]+;/, 'const authOptions = {};')
-    .replace(/import \{ prisma \}[^;]+;/, 'const prisma = globalThis.__timerTestPrisma;');
-  globalThis.__timerTestPrisma = prisma;
-  const { POST } = await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
-  const request = () => ({ json: async () => ({ duration: 600, recoveryId: 'pc-session' }) });
-  const first = await POST(request());
-  const retry = await POST(request());
-  assert.equal(first.status, 200);
-  assert.equal(retry.status, 200);
-  assert.equal(records.size, 1);
-  assert.equal(first.body.session.duration, 600);
-  const short=await POST({json:async()=>({duration:59,recoveryId:'too-short'})});
-  assert.equal(short.status,400);
-  assert.equal(records.size,1);
-  delete globalThis.__timerTestPrisma;
+  let telemetryState=JSON.stringify({focusClock:{sessions:[{id:'pc-session',elapsedMs:600000,plannedMs:900000,runningSince:null}]}});
+  const tx={user:{findUnique:async()=>({telemetryState}),update:async({data})=>{telemetryState=data.telemetryState;}},
+    deck:{findFirst:async()=>({id:'deck-1'})},studySession:{findFirst:async({where})=>records.get(where.id)||null,
+      create:async({data})=>{records.set(data.id,data);return data;}}};
+  const input={timerSessionId:'pc-session',recoveryId:'pc-session',duration:600};
+  const first=await recordVerifiedFocus(tx,'student-1',input,1000000);
+  const retry=await recordVerifiedFocus(tx,'student-1',input,1000001);
+  assert.equal(first.id,retry.id);assert.equal(records.size,1);assert.equal(first.duration,600);
 });
-
 
 test('a cloud discard clears an already cached phone prompt and persists the resolution', async () => {
   const { storage, events } = await setup({ 'ifocus_interrupted_session_student-1': JSON.stringify({id:'resolved',duration:420}) }, {
@@ -140,7 +125,8 @@ test('telemetry sync retries a conflict and never clears resolved sessions with 
     .replace(/import \{ getServerSession \}[^;]+;/, 'const getServerSession=async()=>({user:{id:"student-1"}});')
     .replace(/import \{ authOptions \}[^;]+;/, 'const authOptions={};')
     .replace(/import \{ prisma \}[^;]+;/, 'const prisma=globalThis.__recoveryTestDb;')
-    .replace("'../../../../lib/recoveryState'", JSON.stringify(recoveryUrl));
+    .replace("'../../../../lib/recoveryState'", JSON.stringify(recoveryUrl))
+    .replace("'../../../../lib/focusClock'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8')).toString('base64')}`));
   const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
   for(const resolvedTimerSessions of [null, [], ['phone-save']]) {
     const result=await POST({json:async()=>({telemetryState:{resolvedTimerSessions,activeTimerState:{updatedAt:200}}})});

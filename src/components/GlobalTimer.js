@@ -8,6 +8,7 @@ import FeatureGuideModal from "./FeatureGuideModal";
 import { reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
+import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '../lib/verifiedStudyClient';
 import { sendSystemNotification, formatNotificationTime, PRESENCE_NOTIFICATION_ACTIONS, presenceCheckId } from '../lib/timerNotifications';
 
 // Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
@@ -523,10 +524,7 @@ export default function GlobalTimer() {
       if (event?.detail) Object.assign(event.detail, checkpoint);
       localStorage.setItem('ifocus_timer_state', JSON.stringify(checkpoint));
       lastTimerCheckpointSyncRef.current = now;
-      fetch('/api/user/telemetry', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-        body: JSON.stringify({ telemetryState: { activeTimerState: checkpoint } }),
-      }).catch(() => {});
+      syncTimerCheckpoint(checkpoint).catch(() => {});
     };
     const interval = setInterval(() => {
       const current = readStorageState();
@@ -917,7 +915,7 @@ export default function GlobalTimer() {
     return () => clearInterval(intervalId);
   }, [pathname, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, readStorageState, isAdmin, triggerIdleCoachIntervention]);
 
-  // Automatic Offline Re-sync Handler (ISO/IEC 25010 Item 8)
+  // Retry pending study saves when the connection returns.
   useEffect(() => {
     const syncPendingOfflineSessions = async () => {
       try {
@@ -929,12 +927,7 @@ export default function GlobalTimer() {
         const remaining = [];
         for (const sessionItem of pending) {
           try {
-            const res = await fetch('/api/study-sessions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sessionItem)
-            });
-            if (!res.ok) remaining.push(sessionItem);
+            await saveVerifiedStudySession(sessionItem);
           } catch (e) {
             remaining.push(sessionItem);
           }
@@ -1384,48 +1377,26 @@ export default function GlobalTimer() {
 
         if (current.isFocus) {
           // Record completed focus session in history & stats
-          const focusMins = Math.max(1, Math.round(totalTime / 60));
           try {
             const history = JSON.parse(localStorage.getItem("ifocus_session_history") || "[]");
             history.push({
+              timerSessionId: current.timerSessionId,
               date: new Date().toISOString(),
-              duration: focusMins,
+              duration: totalTime / 60,
+              durationSeconds: totalTime,
               type: "pomodoro",
-              synced: true,
+              synced: false,
+              verification: 'pending',
             });
             if (history.length > 200) history.splice(0, history.length - 200);
             localStorage.setItem("ifocus_session_history", JSON.stringify(history));
 
-            const today = new Date().toDateString();
-            const stats = JSON.parse(localStorage.getItem("ifocus_focus_stats") || "{}");
-            const currentSessions = (stats.sessions || 0) + 1;
-            const currentMinutes = (stats.minutes || 0) + focusMins;
-            const uniqueDates = new Set(history.map((s) => new Date(s.date).toISOString().slice(0, 10)));
-            let streakCount = 0;
-            let checkDate = new Date();
-            while (true) {
-              const dateStr = checkDate.toISOString().slice(0, 10);
-              if (uniqueDates.has(dateStr)) {
-                streakCount++;
-                checkDate.setDate(checkDate.getDate() - 1);
-              } else {
-                break;
-              }
-            }
-            localStorage.setItem(
-              "ifocus_focus_stats",
-              JSON.stringify({
-                date: today,
-                sessions: currentSessions,
-                minutes: currentMinutes,
-                streak: Math.max(1, streakCount),
-              })
-            );
-            window.dispatchEvent(new CustomEvent("ifocus_stats_updated"));
+            // Totals are updated after the server accepts the session.
 
-            // Cloud Sync to PostgreSQL Database with Offline Queue Resilience (ISO/IEC 25010 Item 8)
+            // Retain pending time if the connection drops; verify it after reconnection.
             const sessionPayload = {
-              duration: focusMins * 60,
+              timerSessionId: current.timerSessionId,
+              duration: totalTime,
               score: 100,
               deckId: breakGateDeck?.id || null,
               createdAt: new Date().toISOString()
@@ -1433,20 +1404,14 @@ export default function GlobalTimer() {
 
             const recordPendingOffline = (payload) => {
               try {
-                const pending = JSON.parse(localStorage.getItem('ifocus_pending_study_sessions') || '[]');
-                pending.push(payload);
-                localStorage.setItem('ifocus_pending_study_sessions', JSON.stringify(pending));
+                queueStudySession(payload);
               } catch (e) {}
             };
 
             if (typeof navigator !== 'undefined' && !navigator.onLine) {
               recordPendingOffline(sessionPayload);
             } else {
-              fetch('/api/study-sessions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(sessionPayload)
-              }).catch(() => {
+              saveVerifiedStudySession(sessionPayload).catch(() => {
                 recordPendingOffline(sessionPayload);
               });
             }

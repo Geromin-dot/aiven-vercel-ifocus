@@ -1,0 +1,45 @@
+{
+  "scope": "Basic server time checks and 320px Settings repair; no new service or database table",
+  "cases": [
+    {
+      "name": "Item 16: fabricated 15-minute requests rejected, including batch and forged checkpoint time",
+      "status": "PASS",
+      "details": {
+        "withoutTimer": 422,
+        "forgedTime": 422,
+        "batch": 422,
+        "createdRows": 0
+      }
+    },
+    {
+      "name": "Item 16: client cannot overwrite the server clock",
+      "status": "PASS",
+      "details": {
+        "overwriteRejected": true,
+        "internalClockHidden": true
+      }
+    },
+    {
+      "name": "Valid server-timed save, replay protection, account isolation, and server date",
+      "status": "PASS",
+      "details": {
+        "recordedSeconds": 4,
+        "repeatedRequests": 3,
+        "databaseRows": 1,
+        "otherAccountDenied": true
+      }
+    },
+    {
+      "name": "Actual one-minute presence pause and manual partial save",
+      "status": "PASS",
+      "details": {
+        "presencePausedAtRemainingSeconds": 60,
+        "recordedSeconds": 60,
+        "recoveryRetrySameRecord": true
+      }
+    }
+  ],
+  "errors": [],
+  "runtimeErrors": 0,
+  "cleaned": true
+}

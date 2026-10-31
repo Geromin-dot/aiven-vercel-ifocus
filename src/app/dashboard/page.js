@@ -9,6 +9,7 @@ import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
+import { saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
@@ -241,7 +242,7 @@ export default function CommandCenterPage() {
         const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
         
         const todayStr = new Date().toDateString();
-        const todaySessions = history.filter(item => new Date(item.date).toDateString() === todayStr);
+        const todaySessions = history.filter(item => item.verification !== 'pending' && new Date(item.date).toDateString() === todayStr);
         // Match Analytics: derive today's total from the same history on every update.
         const focusMinutes = todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
         const sessionCount = todaySessions.length;
@@ -300,11 +301,11 @@ export default function CommandCenterPage() {
           const combined = [...dbList, ...unsynced].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           localStorage.setItem('ifocus_session_history', JSON.stringify(combined));
 
-          const todaySessions = combined.filter(item => new Date(item.date).toDateString() === todayStr);
+          const todaySessions = combined.filter(item => item.verification !== 'pending' && new Date(item.date).toDateString() === todayStr);
           const todayMins = todaySessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
           const todayCount = todaySessions.length;
 
-          const dates = new Set(combined.map(s => {
+          const dates = new Set(combined.filter(s => s.verification !== 'pending').map(s => {
             const d = new Date(s.date);
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           }));
@@ -1432,81 +1433,32 @@ export default function CommandCenterPage() {
     forceResetTimer();
   };
 
-  const handleSaveAndEndSession = () => {
+  const handleSaveAndEndSession = async () => {
     setShowQuitModal(false);
     setIsActive(false);
-
-    const total = getTotalTime();
-    const elapsed = Math.max(0, total - timeLeft);
-    const focusMins = Math.floor(elapsed / 60);
-
-    if (focusMins < 1) {
-      forceResetTimer();
-      return;
-    }
-
+    const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+    if (!current) return;
+    const remaining = remainingTime(current);
+    const elapsed = Math.max(0, Number(current.totalTime) - remaining);
+    if (elapsed < 60) { forceResetTimer(); return; }
+    const paused = { ...current, timeLeft: remaining, isRunning: false, targetEndTime: null, updatedAt: Date.now() };
+    localStorage.setItem('ifocus_timer_state', JSON.stringify(paused));
+    window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: paused }));
+    const payload = { timerSessionId: current.timerSessionId, duration: elapsed };
     try {
-      const history = JSON.parse(localStorage.getItem("ifocus_session_history") || "[]");
-      history.push({
-        date: new Date().toISOString(),
-        duration: focusMins,
-        type: "pomodoro",
-        partial: true,
-        synced: true,
-      });
-      if (history.length > 200) history.splice(0, history.length - 200);
-      localStorage.setItem("ifocus_session_history", JSON.stringify(history));
-
-      const today = new Date().toDateString();
-      const stats = JSON.parse(localStorage.getItem("ifocus_focus_stats") || "{}");
-      const currentSessions = (stats.sessions || 0) + 1;
-      const currentMinutes = (stats.minutes || 0) + focusMins;
-      const uniqueDates = new Set(history.map((s) => new Date(s.date).toISOString().slice(0, 10)));
-      let streakCount = 0;
-      let checkDate = new Date();
-      while (true) {
-        const dateStr = checkDate.toISOString().slice(0, 10);
-        if (uniqueDates.has(dateStr)) {
-          streakCount++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
+      const { session: saved } = await saveVerifiedStudySession(payload);
+      forceResetTimer();
+      playTaskAddSound();
+      setSaveSessionToast({ show: true, message: `${Math.floor(saved.duration / 60)} minute(s) recorded to Analytics & Stats.` });
+    } catch (error) {
+      if (!navigator.onLine) {
+        queueStudySession(payload);
+        forceResetTimer();
+        setSaveSessionToast({ show: true, message: 'Study time saved locally. It will be verified when you reconnect.' });
+      } else {
+        setSaveSessionToast({ show: true, message: error.message });
       }
-      localStorage.setItem(
-        "ifocus_focus_stats",
-        JSON.stringify({
-          date: today,
-          sessions: currentSessions,
-          minutes: currentMinutes,
-          streak: Math.max(1, streakCount),
-        })
-      );
-
-      // Cloud Sync to PostgreSQL Database for Admin & Institutional Overview
-      fetch('/api/study-sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          duration: focusMins * 60,
-          score: 100
-        })
-      }).catch(() => {});
-
-      window.dispatchEvent(new CustomEvent("ifocus_stats_updated"));
-    } catch (e) {
-      console.warn("Failed saving partial session:", e);
     }
-
-    forceResetTimer();
-    playTaskAddSound();
-    setSaveSessionToast({
-      show: true,
-      message: `${focusMins} minute${focusMins > 1 ? 's' : ''} successfully recorded to Analytics & Stats.`,
-    });
-    setTimeout(() => {
-      setSaveSessionToast({ show: false, message: '' });
-    }, 4500);
   };
 
   const executePresetChange = (preset) => {

@@ -3,6 +3,7 @@ import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { mergeResolvedSessions } from '../../../../lib/recoveryState';
+import { advanceFocusClock, resolveFocusClock } from '../../../../lib/focusClock';
 
 export async function GET() {
   try {
@@ -31,6 +32,8 @@ export async function GET() {
         parsedTelemetry = JSON.parse(user.telemetryState);
       } catch (e) {}
     }
+    // Internal time evidence is maintained by the server, not synchronized as UI state.
+    if (parsedTelemetry) delete parsedTelemetry.focusClock;
 
     if (user.timerPreferences) {
       try {
@@ -89,6 +92,10 @@ export async function POST(req) {
             merged.activeTimerState = existingTelemetry.activeTimerState;
           }
           merged.resolvedTimerSessions = mergeResolvedSessions(existingTelemetry.resolvedTimerSessions, incoming.resolvedTimerSessions);
+          const savedPrefs = JSON.parse(currentUser?.timerPreferences || '{}');
+          merged.focusClock = advanceFocusClock(existingTelemetry.focusClock, incoming.activeTimerState,
+            savedPrefs, session.user.sessionId, Date.now());
+          merged.focusClock = resolveFocusClock(merged.focusClock, merged.resolvedTimerSessions);
 
           // Deep merge breakGateEvents array so no events are dropped between devices
           if (Array.isArray(incoming.breakGateEvents)) {

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import styles from './InterruptedSessionRecovery.module.css';
 import { applyResolvedSessions, mergeResolvedSessions } from '../lib/recoveryState';
+import { saveVerifiedStudySession } from '../lib/verifiedStudyClient';
 
 export default function InterruptedSessionRecovery({ userId }) {
   const [progress, setProgress] = useState(null);
@@ -86,12 +87,7 @@ export default function InterruptedSessionRecovery({ userId }) {
       if (alreadyResolved.includes(progress.id)) { setProgress(null); return; }
       let savedSession = null;
       if (save) {
-        const response = await fetch('/api/study-sessions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ duration: progress.duration, score: 0, recoveryId: progress.id }),
-        });
-        if (!response.ok) throw new Error('Your progress could not be saved. Please try again when connected.');
-        const result = await response.json();
+        const result = await saveVerifiedStudySession({ duration: progress.duration, timerSessionId: progress.id, recoveryId: progress.id });
         savedSession = result.session;
       }
       const response = await fetch('/api/user/telemetry', {

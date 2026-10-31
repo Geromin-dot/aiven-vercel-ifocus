@@ -1,0 +1,166 @@
+{
+  "date": "2026-10-31",
+  "commit": "repair build based on 3953858",
+  "scope": "Evaluation of the user-supplied 20 statements, not an ISO certification",
+  "statuses": {
+    "PASS": 10,
+    "PARTIAL": 10,
+    "FAIL": 0
+  },
+  "items": [
+    {
+      "item": 1,
+      "dimension": "Functional Suitability",
+      "status": "PASS",
+      "evidence": "Actual timer start, route changes, reload, and a real one-minute presence deadline preserved the session and froze at 120 seconds in a three-minute fixture.",
+      "showcase": "Start a three-minute timer with a one-minute presence interval. Switch pages, refresh, then show the automatic pause at 02:00."
+    },
+    {
+      "item": 2,
+      "dimension": "Functional Suitability",
+      "status": "PASS",
+      "evidence": "Actual flashcard endpoint returned three cards. The real reflection UI returned sentiment feedback. Settled online browser runs had zero runtime exceptions and zero console errors.",
+      "showcase": "Generate cards from the supplied biology notes; submit a short reflection; show the outputs and the Console."
+    },
+    {
+      "item": 3,
+      "dimension": "Functional Suitability",
+      "status": "PARTIAL",
+      "evidence": "Journal storage, same-ID updates, UTF-8 text, and retrieval passed. The journal is displayed in AI Coach, not as a reflection-log list in Analytics.",
+      "showcase": "Show the reflection in AI Coach, reload, then show its cloud-backed retrieval. Correct the questionnaire location."
+    },
+    {
+      "item": 4,
+      "dimension": "Performance Efficiency",
+      "status": "PASS",
+      "evidence": "Ten actual client navigations completed in 66–276 ms for route shells. No runtime exceptions in the focused online run. This is a local short sample.",
+      "showcase": "Use the app links between Dashboard, Cards, Coach, Analytics and Settings while the timer runs."
+    },
+    {
+      "item": 5,
+      "dimension": "Performance Efficiency",
+      "status": "PARTIAL",
+      "evidence": "Analytics loaded with synthetic chart fixtures. JavaScript heap measured 6.32 to 7.55 MiB after ten navigations and garbage collection; this is not total browser memory or a long-term leak test.",
+      "showcase": "Show Analytics plus a before/after Memory or browser Task Manager measurement; identify the measurement as a short sample."
+    },
+    {
+      "item": 6,
+      "dimension": "Performance Efficiency",
+      "status": "PARTIAL",
+      "evidence": "The focused navigation capture recorded 20 API requests and 2043 encoded API bytes. Cached, in-flight and media responses are not a complete bandwidth budget. Audio asset cost remains separate.",
+      "showcase": "In Network, separate Fetch/XHR from Media, compare transferred sizes, and disclose the media cost."
+    },
+    {
+      "item": 7,
+      "dimension": "Compatibility",
+      "status": "PASS",
+      "evidence": "A different foreground Chromium tab did not lose timer progress. The one-minute presence pause still occurred, and audio continued in the focused retest. No broad OS-conflict certification was performed.",
+      "showcase": "Open another tab for one minute, then return to the paused focus session."
+    },
+    {
+      "item": 8,
+      "dimension": "Compatibility",
+      "status": "PASS",
+      "evidence": "Actual Gemini returned HTTP 200 in 1251 ms. Real flashcard generation and reflection submission also succeeded.",
+      "showcase": "Show actual AI generation and a successful API response. Distinguish successful Gemini use from the app’s heuristic fallback."
+    },
+    {
+      "item": 9,
+      "dimension": "Usability",
+      "status": "PARTIAL",
+      "evidence": "Presence runs automatically while the browser remains able to execute it. QStash is not configured, so closed/suspended mobile-app delivery is not verified.",
+      "showcase": "Leave the active browser session alone until presence pauses automatically. Do not promise locked-phone delivery."
+    },
+    {
+      "item": 10,
+      "dimension": "Usability",
+      "status": "PARTIAL",
+      "evidence": "All five main routes were reachable through real in-app links. Whether users find navigation clear requires participant observation, not automation alone.",
+      "showcase": "Ask a classmate to open Cards, start Timer, find Coach, then open Analytics without coaching them."
+    },
+    {
+      "item": 11,
+      "dimension": "Usability",
+      "status": "PASS",
+      "evidence": "All five main routes fit 1440, 390 and 320 CSS-pixel viewports after authentication and data settled. All four Settings categories also fit without horizontal overflow.",
+      "showcase": "Open Settings at desktop width and 320 px. Switch all four categories and show that no horizontal scroll is needed."
+    },
+    {
+      "item": 12,
+      "dimension": "Reliability",
+      "status": "PARTIAL",
+      "evidence": "Regular online navigation, AI use, reload and timer checks completed without unexpected runtime exceptions in the final runs. Long-duration stability remains unmeasured. Complete offline navigation is outside the intended product scope.",
+      "showcase": "Run a short normal-use sequence, then separately disclose the offline navigation issue and remaining soak test."
+    },
+    {
+      "item": 13,
+      "dimension": "Reliability",
+      "status": "PARTIAL",
+      "evidence": "An online-started timer retained a connection restore point, queued its completion during a temporary disconnection, and saved exactly one accepted record after reconnection. Full offline use and every interrupted editing workflow are outside this check.",
+      "showcase": "Start a one-minute timer while online. After Start reaches the server, temporarily disconnect near completion. Reconnect and show one saved record. Describe this as connection recovery, not offline mode."
+    },
+    {
+      "item": 14,
+      "dimension": "Reliability",
+      "status": "PARTIAL",
+      "evidence": "The same audio element continued across actual in-app navigation and another foreground tab, advancing from about 0.003 to 2.475 seconds. Physical-device suspension and actual OS minimization remain untested; reload may require another play gesture.",
+      "showcase": "Start audio with a user click, navigate using app links, switch tabs, and return. Do not equate this with all phone lock-screen behavior."
+    },
+    {
+      "item": 15,
+      "dimension": "Security",
+      "status": "PASS",
+      "evidence": "Five private endpoints rejected unauthenticated access (401); wrong password was rejected (401); another account could not read/delete a deck (404); student admin access was denied (403). Session header A256GCM and HttpOnly plus bcrypt storage were verified without recording a token.",
+      "showcase": "Show failed login, two isolated test accounts, and redacted session/encryption configuration. Do not display actual cookie values."
+    },
+    {
+      "item": 16,
+      "dimension": "Security",
+      "status": "PASS",
+      "evidence": "Basic duration integrity passed: fabricated 900-second, forged-timestamp and batch requests returned 422 with zero fabricated rows; incoming private-clock edits were ignored. Real server-timed saves worked, retries created one row, and another account could not claim that timer. This is not proof of attention.",
+      "showcase": "Start and save a genuine timer. Show one resulting record, then show that a fabricated 900-second request is rejected and a repeated valid save does not create a duplicate."
+    },
+    {
+      "item": 17,
+      "dimension": "Maintainability",
+      "status": "PARTIAL",
+      "evidence": "Shared modules and API routes are separated. The 59-test suite, production build, Prisma validation and scoped lint for the new helpers passed. Full source lint still reports 59 errors and 19 warnings, matching the preexisting baseline.",
+      "showcase": "Show the module structure and build, and retain the code-quality finding for technical review."
+    },
+    {
+      "item": 18,
+      "dimension": "Maintainability",
+      "status": "PASS",
+      "evidence": "Prisma schema validation passed. Real deck/card/session storage and retrieval worked; declared user/deck/card/session relationships and cascades were inspected. Journal data currently lives inside a telemetry JSON field.",
+      "showcase": "Show User → Deck → Card and User/Deck → StudySession relationships, using only dummy records."
+    },
+    {
+      "item": 19,
+      "dimension": "Portability",
+      "status": "PARTIAL",
+      "evidence": "All five actual pages fit 1440, 390 and 320 CSS-pixel Chromium viewports with no horizontal overflow. Real iPhone/Android, Safari and Firefox testing remains necessary for device-specific claims.",
+      "showcase": "Demonstrate the desktop and phone-sized layouts. Repeat the key flow on an actual Android and iPhone before claiming physical-device compatibility."
+    },
+    {
+      "item": 20,
+      "dimension": "Portability",
+      "status": "PASS",
+      "evidence": "A real browser login form and all main routes worked in the local production build without installing a client application. The development/test tools are not requirements for end users.",
+      "showcase": "Open the deployed HTTPS URL in a normal browser and sign in. Explain that Home Screen installation is optional for basic web access."
+    }
+  ],
+  "retestResolution": {
+    "audio": "The broad script attempted to open the Dashboard audio widget while on Settings. That harness timeout is superseded by retest-followup.json, which uses the actual Dashboard and passes.",
+    "connection": "The final broad run and the final 10-second online-started repair fixture both passed. An earlier 5-second wait timeout is retained as test history, not counted as a successful run.",
+    "layout": "Both settled full-route checks and the four-category Settings repair checks passed at 320, 390 and 1440 px.",
+    "scope": "Connection restore points only; complete offline navigation is not an implemented product claim."
+  },
+  "applicationSourceChanged": true,
+  "cleanup": "All temporary evaluation users and associated records were removed; no real student records were edited.",
+  "evidenceFiles": [
+    "retest-evidence.json",
+    "retest-followup.json",
+    "repair-verification.json",
+    "minute-partial-save.json"
+  ]
+}

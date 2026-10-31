@@ -1,0 +1,254 @@
+{
+  "note": "Focused retests: correct in-app links, offline fixture prepared before disconnection, and verified online route layouts",
+  "cases": [
+    {
+      "name": "15: student cannot access administrator data",
+      "status": "PASS",
+      "details": {
+        "http": 403
+      }
+    },
+    {
+      "name": "14: audio across actual in-app navigation and background tab",
+      "status": "PASS",
+      "details": {
+        "sameAudioElement": true,
+        "before": {
+          "time": 0.002937,
+          "paused": false
+        },
+        "after": {
+          "time": 2.474842,
+          "paused": false,
+          "error": null
+        },
+        "note": "In-app navigation and real Chromium tab switch; no OS minimization/physical phone claim."
+      }
+    },
+    {
+      "name": "4/5/6/10/12: real client-side navigation, heap, API and media traffic",
+      "status": "PASS",
+      "details": {
+        "navigations": [
+          {
+            "route": "/dashboard",
+            "ms": 66
+          },
+          {
+            "route": "/flashcards",
+            "ms": 190
+          },
+          {
+            "route": "/coach",
+            "ms": 245
+          },
+          {
+            "route": "/analytics",
+            "ms": 194
+          },
+          {
+            "route": "/settings",
+            "ms": 169
+          },
+          {
+            "route": "/dashboard",
+            "ms": 276
+          },
+          {
+            "route": "/flashcards",
+            "ms": 149
+          },
+          {
+            "route": "/coach",
+            "ms": 131
+          },
+          {
+            "route": "/analytics",
+            "ms": 148
+          },
+          {
+            "route": "/settings",
+            "ms": 181
+          }
+        ],
+        "heapBeforeMiB": 6.32,
+        "heapAfterMiB": 7.55,
+        "apiRequests": 20,
+        "apiBytes": 2043,
+        "mediaBytes": 0
+      }
+    },
+    {
+      "name": "3: journal entries stored, updated by ID, and retrieved without duplicate/corrupted text",
+      "status": "PASS",
+      "details": {
+        "records": 1,
+        "unicodePreserved": true,
+        "updatePreserved": true,
+        "note": "Storage/retrieval verified; reflection journal UI lives in AI Coach, not Analytics."
+      }
+    },
+    {
+      "name": "19: verified-online actual pages fit desktop and mobile viewports",
+      "status": "PASS",
+      "details": {
+        "routes": 5,
+        "widths": [
+          1440,
+          390,
+          320
+        ],
+        "horizontalOverflow": false,
+        "physicalPhones": false
+      }
+    }
+  ],
+  "runtimeErrors": [],
+  "consoleErrors": [],
+  "metrics": {
+    "spa": {
+      "navigations": [
+        {
+          "route": "/dashboard",
+          "ms": 66
+        },
+        {
+          "route": "/flashcards",
+          "ms": 190
+        },
+        {
+          "route": "/coach",
+          "ms": 245
+        },
+        {
+          "route": "/analytics",
+          "ms": 194
+        },
+        {
+          "route": "/settings",
+          "ms": 169
+        },
+        {
+          "route": "/dashboard",
+          "ms": 276
+        },
+        {
+          "route": "/flashcards",
+          "ms": 149
+        },
+        {
+          "route": "/coach",
+          "ms": 131
+        },
+        {
+          "route": "/analytics",
+          "ms": 148
+        },
+        {
+          "route": "/settings",
+          "ms": 181
+        }
+      ],
+      "heapBeforeMiB": 6.32,
+      "heapAfterMiB": 7.55,
+      "apiRequests": 20,
+      "apiBytes": 2043,
+      "mediaBytes": 0
+    },
+    "layouts": [
+      {
+        "route": "/dashboard",
+        "width": 1440,
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "route": "/flashcards",
+        "width": 1440,
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "route": "/coach",
+        "width": 1440,
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "route": "/analytics",
+        "width": 1440,
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "route": "/settings",
+        "width": 1440,
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "route": "/dashboard",
+        "width": 390,
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "route": "/flashcards",
+        "width": 390,
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "route": "/coach",
+        "width": 390,
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "route": "/analytics",
+        "width": 390,
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "route": "/settings",
+        "width": 390,
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "route": "/dashboard",
+        "width": 320,
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "route": "/flashcards",
+        "width": 320,
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "route": "/coach",
+        "width": 320,
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "route": "/analytics",
+        "width": 320,
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "route": "/settings",
+        "width": 320,
+        "scroll": 320,
+        "viewport": 320
+      }
+    ]
+  },
+  "cleanup": {
+    "temporaryAccountRemoved": true
+  }
+}

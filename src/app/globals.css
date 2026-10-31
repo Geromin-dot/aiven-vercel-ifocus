@@ -3776,13 +3776,14 @@ textarea:focus {
   }
 
   .settings-category-bar {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 0.55rem !important;
     margin-bottom: 1rem !important;
     width: 100% !important;
   }
 
   .settings-cat-btn {
+    min-width: 0 !important;
     padding: 0.65rem 0.65rem !important;
     gap: 0.55rem !important;
     min-height: 64px !important;

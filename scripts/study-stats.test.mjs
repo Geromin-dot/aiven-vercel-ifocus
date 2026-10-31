@@ -22,3 +22,8 @@ test('long minute sessions are not mistaken for seconds', () => {
   assert.equal(sessionMinutes({ duration: 240, durationUnit: 'seconds' }), 4);
   assert.equal(sessionMinutes({ duration: 7, durationSeconds: 420 }), 7);
 });
+
+test('pending time stays out of recorded focus totals until accepted', () => {
+  assert.equal(sessionMinutes({ durationSeconds: 900, verification: 'pending' }), 0);
+  assert.equal(sessionMinutes({ durationSeconds: 900, synced: true }), 15);
+});

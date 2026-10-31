@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { prisma } from "../../../lib/prisma";
-import { createHash } from 'crypto';
+import { recordVerifiedFocus } from '../../../lib/focusRecording';
 
 // GET /api/study-sessions - Fetch current user's study sessions & aggregates
 export async function GET(req) {
@@ -60,132 +60,36 @@ export async function GET(req) {
   }
 }
 
-// POST /api/study-sessions - Save single session or sync batch from client
+// Only server-observed elapsed time may create a new focus record.
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || session.error) {
-      return NextResponse.json({ message: "Authentication required" }, { status: 401 });
-    }
-
-    let user = null;
-    if (session.user.id) {
-      user = await prisma.user.findUnique({ where: { id: session.user.id } });
-    }
-    if (!user && session.user.email) {
-      user = await prisma.user.findUnique({ where: { email: session.user.email } });
-    }
-    if (!user && session.user.username) {
-      user = await prisma.user.findUnique({ where: { username: session.user.username } });
-    }
-
-    if (!user) {
-      return NextResponse.json({ sessions: [], stats: { totalSessions: 0, totalSeconds: 0, avgScore: 0 } });
-    }
-
-    const userId = user.id;
+    if (!session?.user?.id || session.error) return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+    if (session.user.status && session.user.status !== 'ACTIVE') return NextResponse.json({ message: 'Account is not active' }, { status: 403 });
     const body = await req.json();
-    const { duration, score, deckId, batch, recoveryId } = body;
-    if (recoveryId !== undefined && (typeof recoveryId !== 'string' || !recoveryId || recoveryId.length > 200)) {
-      return NextResponse.json({ message: 'Invalid recovery reference' }, { status: 400 });
-    }
-
-    // Helper: find or create default deck so deckId foreign key is always satisfied
-    async function getOrCreateDeck(prefDeckId) {
-      if (prefDeckId) {
-        const found = await prisma.deck.findFirst({ where: { id: prefDeckId, userId } });
-        if (found) return found.id;
-      }
-      let userDeck = await prisma.deck.findFirst({ where: { userId } });
-      if (!userDeck) {
-        userDeck = await prisma.deck.create({
-          data: {
-            title: "General Focus Sessions",
-            description: "Default deck for Pomodoro focus time tracking",
-            userId
-          }
-        });
-      }
-      return userDeck.id;
-    }
-
-    // Support batch sync (e.g. from localStorage history)
-    if (Array.isArray(batch) && batch.length > 0) {
-    const targetDeckId = await getOrCreateDeck(deckId);
-      const createdList = [];
-
-      for (const item of batch) {
-        const rawDur = parseInt(item.duration) || 0;
-        // If minutes from legacy local storage history (item.type === 'pomodoro' and <= 180), convert to seconds
-        const durSec = (item.type === 'pomodoro' && rawDur <= 180) ? rawDur * 60 : rawDur;
-        if (durSec > 0) {
-          const itemDate = item.date ? new Date(item.date) : new Date();
-          const existing = await prisma.studySession.findFirst({
-            where: {
-              userId,
-              duration: durSec,
-              createdAt: {
-                gte: new Date(itemDate.getTime() - 3000),
-                lte: new Date(itemDate.getTime() + 3000)
-              }
-            }
-          });
-          if (!existing) {
-            const itemDeckId = item.deckId || targetDeckId;
-            const created = await prisma.studySession.create({
-              data: {
-                userId,
-                deckId: itemDeckId,
-                duration: durSec,
-                score: typeof item.score === "number" ? item.score : 100,
-                createdAt: itemDate
-              }
-            });
-            createdList.push(created);
-          }
-        }
-      }
-
-      return NextResponse.json({ success: true, count: createdList.length });
-    }
-
-    // Single session record (duration is sent by client in exact SECONDS)
-    const rawDur = parseInt(duration) || 0;
-    const durSec = rawDur;
-    if (durSec <= 0) {
-      return NextResponse.json({ message: "Duration must be greater than 0" }, { status: 400 });
-    }
-    if (recoveryId && durSec < 60) {
-      return NextResponse.json({ message: "Unfinished sessions need at least one minute of study time" }, { status: 400 });
-    }
-
-    const targetDeckId = await getOrCreateDeck(deckId);
-
-    const recoverySessionId = recoveryId
-      ? `recovery-${createHash('sha256').update(`${userId}:${recoveryId}`).digest('hex')}`
-      : null;
-    if (recoverySessionId) {
-      // A unique primary key makes retries and repeated clicks safe across devices.
-      const recovered = await prisma.studySession.upsert({
-        where: { id: recoverySessionId }, update: {},
-        create: { id: recoverySessionId, userId, deckId: targetDeckId, duration: durSec, score: 0 },
-      });
-      return NextResponse.json({ success: true, session: recovered });
-    }
-
-    const newSession = await prisma.studySession.create({
-      data: {
-        userId,
-        deckId: targetDeckId,
-        duration: durSec,
-        score: typeof score === "number" ? score : 100,
-        createdAt: new Date()
-      }
+    const inputs = Array.isArray(body.batch) ? body.batch : [body];
+    if (!inputs.length || inputs.length > 50) return NextResponse.json({ message: 'Invalid batch size' }, { status: 400 });
+    const normalize = item => ({ ...item,
+      duration: item.durationSeconds ?? (body.batch && item.type === 'pomodoro' ? Number(item.duration) * 60 : item.duration),
     });
-
-    return NextResponse.json({ success: true, session: newSession });
+    let records;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        records = await prisma.$transaction(async tx => {
+          const saved = [];
+          for (const item of inputs) saved.push(await recordVerifiedFocus(tx, session.user.id, normalize(item)));
+          return saved;
+        }, { isolationLevel: 'Serializable' });
+        break;
+      } catch (error) {
+        if (error.code === 'P2034' && attempt < 2) continue;
+        throw error;
+      }
+    }
+    return NextResponse.json(body.batch ? { success: true, count: records.length, sessions: records } : { success: true, session: records[0] });
   } catch (error) {
-    console.error("POST /api/study-sessions error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!error.code) return NextResponse.json({ message: error.message || 'Could not verify focus time' }, { status: 422 });
+    console.error('POST /api/study-sessions error:', error.message);
+    return NextResponse.json({ message: 'Could not save study time. Please try again.' }, { status: 503 });
   }
 }

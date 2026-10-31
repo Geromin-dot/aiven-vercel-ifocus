@@ -15,6 +15,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
+import { saveVerifiedStudySession } from '@/lib/verifiedStudyClient';
 
 ChartJS.register(
   CategoryScale,
@@ -34,22 +35,11 @@ export default function AnalyticsPage() {
     if (status === 'authenticated') {
       try {
         const history = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-        const unSynced = history.filter(s => !s.synced);
-        if (unSynced.length > 0) {
-          fetch('/api/study-sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ batch: unSynced })
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (data?.success) {
-                const marked = history.map(s => ({ ...s, synced: true }));
-                localStorage.setItem('ifocus_session_history', JSON.stringify(marked));
-              }
-            })
-            .catch(() => { });
-        }
+        // Keep legacy local-only entries locally; only sessions observed by the server can upload.
+        const unSynced = history.filter(s => !s.synced && s.timerSessionId);
+        unSynced.forEach(item => saveVerifiedStudySession({
+          timerSessionId: item.timerSessionId, duration: item.durationSeconds ?? Math.round(item.duration * 60),
+        }).catch(() => {}));
       } catch (e) { }
 
       // Bi-Directional Cloud Telemetry & Events Reconciliation
@@ -72,7 +62,8 @@ export default function AnalyticsPage() {
                   localHistory.push({
                     id: remote.id,
                     date: remote.createdAt,
-                    duration: remote.duration,
+                    duration: remote.duration / 60,
+                    durationSeconds: remote.duration,
                     score: remote.score,
                     deckTitle: remote.deck?.title || 'General Focus',
                     synced: true
@@ -360,7 +351,7 @@ export default function AnalyticsPage() {
   const computeStreakFromHistory = (history) => {
     if (!history || history.length === 0) return 0;
     const dates = new Set(
-      history.map(s => {
+      history.filter(s => s.verification !== 'pending').map(s => {
         const d = new Date(s.date);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       })
@@ -412,6 +403,7 @@ export default function AnalyticsPage() {
       let validSessionsCount = 0;
 
       sessionHistory.forEach(s => {
+        if (s.verification === 'pending') return;
         const sDate = new Date(s.date);
         const mins = sessionMinutes(s);
 
@@ -429,7 +421,7 @@ export default function AnalyticsPage() {
         }
       });
 
-      const recent = [...sessionHistory].reverse().slice(0, 4);
+      const recent = sessionHistory.filter(item => item.verification !== 'pending').reverse().slice(0, 4);
       const computedStreak = computeStreakFromHistory(sessionHistory);
 
       setBaseStats({

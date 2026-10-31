@@ -1,6 +1,7 @@
 // Local history stores minutes; database durations are explicitly stored in seconds.
 // Do not infer units from magnitude: a long focus session can exceed 180 minutes.
 export function sessionMinutes(session) {
+  if (session?.verification === 'pending') return 0;
   if (session?.durationSeconds != null && Number.isFinite(Number(session.durationSeconds))) {
     return Math.max(0, Number(session.durationSeconds)) / 60;
   }

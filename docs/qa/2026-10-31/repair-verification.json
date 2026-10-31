@@ -1,0 +1,122 @@
+{
+  "scope": "Basic server time checks and 320px Settings repair; no new service or database table",
+  "cases": [
+    {
+      "name": "Item 16: fabricated 15-minute requests rejected, including batch and forged checkpoint time",
+      "status": "PASS",
+      "details": {
+        "withoutTimer": 422,
+        "forgedTime": 422,
+        "batch": 422,
+        "createdRows": 0
+      }
+    },
+    {
+      "name": "Item 16: client cannot overwrite the server clock",
+      "status": "PASS",
+      "details": {
+        "overwriteRejected": true,
+        "internalClockHidden": true
+      }
+    },
+    {
+      "name": "Valid server-timed save, replay protection, account isolation, and server date",
+      "status": "PASS",
+      "details": {
+        "recordedSeconds": 4,
+        "repeatedRequests": 3,
+        "databaseRows": 1,
+        "otherAccountDenied": true
+      }
+    },
+    {
+      "name": "Real browser Start and automatic completion still save verified time",
+      "status": "PASS",
+      "details": {
+        "savedSeconds": 5,
+        "clientHistorySynced": true
+      }
+    },
+    {
+      "name": "Connection restore point: online-started time syncs once after reconnection",
+      "status": "PASS",
+      "details": {
+        "rows": 1,
+        "seconds": 10,
+        "note": "Connection recovery only; session Start was observed online."
+      }
+    },
+    {
+      "name": "Item 11: Settings fits 320px across all four categories",
+      "status": "PASS",
+      "details": {
+        "categories": 4,
+        "measurements": [
+          {
+            "title": "Focus Preferences",
+            "width": 320,
+            "scroll": 320
+          },
+          {
+            "title": "Notifications",
+            "width": 320,
+            "scroll": 320
+          },
+          {
+            "title": "Privacy & Security",
+            "width": 320,
+            "scroll": 320
+          },
+          {
+            "title": "Feedback & Support",
+            "width": 320,
+            "scroll": 320
+          },
+          {
+            "title": "Focus Preferences",
+            "width": 390,
+            "scroll": 390
+          },
+          {
+            "title": "Notifications",
+            "width": 390,
+            "scroll": 390
+          },
+          {
+            "title": "Privacy & Security",
+            "width": 390,
+            "scroll": 390
+          },
+          {
+            "title": "Feedback & Support",
+            "width": 390,
+            "scroll": 390
+          },
+          {
+            "title": "Focus Preferences",
+            "width": 1440,
+            "scroll": 1440
+          },
+          {
+            "title": "Notifications",
+            "width": 1440,
+            "scroll": 1440
+          },
+          {
+            "title": "Privacy & Security",
+            "width": 1440,
+            "scroll": 1440
+          },
+          {
+            "title": "Feedback & Support",
+            "width": 1440,
+            "scroll": 1440
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "runtimeErrors": 0,
+  "cleaned": true
+}

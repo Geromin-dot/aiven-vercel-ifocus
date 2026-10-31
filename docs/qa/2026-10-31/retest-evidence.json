@@ -1,0 +1,350 @@
+{
+  "commit": "working-tree-repair",
+  "date": "2026-10-31",
+  "environment": {
+    "app": "Local production build; real PostgreSQL and configured Gemini",
+    "browser": "Microsoft Edge / Chromium headless",
+    "physicalDevices": false
+  },
+  "cases": [
+    {
+      "name": "15: unauthenticated private endpoints reject access and wrong passwords fail",
+      "status": "PASS",
+      "ms": 335,
+      "details": {
+        "/api/decks": 401,
+        "/api/todos": 401,
+        "/api/study-sessions": 401,
+        "/api/user/telemetry": 401,
+        "/api/user/profile": 401
+      }
+    },
+    {
+      "name": "15/20: sign in using the actual browser login form",
+      "status": "PASS",
+      "ms": 1386,
+      "details": {
+        "browserOnly": true
+      }
+    },
+    {
+      "name": "1/15/18: save and retrieve isolated flashcard decks",
+      "status": "PASS",
+      "ms": 1888,
+      "details": {
+        "createdCards": 2,
+        "crossAccountRead": 404,
+        "crossAccountDelete": 404
+      }
+    },
+    {
+      "name": "16: reject fabricated focus time without a running session",
+      "status": "PASS",
+      "ms": 289,
+      "details": {
+        "status": 422
+      }
+    },
+    {
+      "name": "2/8: real AI flashcard generation endpoint",
+      "status": "PASS",
+      "ms": 77,
+      "details": {
+        "http": 200,
+        "cards": 3,
+        "note": "Route may use its documented heuristic fallback; provider probe is separate."
+      }
+    },
+    {
+      "name": "8: direct live Gemini connectivity, not local fallback",
+      "status": "PASS",
+      "ms": 1254,
+      "details": {
+        "status": 200,
+        "ms": 1251
+      }
+    },
+    {
+      "name": "2/3/8: real sentiment/reflection UI, cloud storage, and retrieval",
+      "status": "PASS",
+      "ms": 6725,
+      "details": {
+        "state": "Motivated",
+        "cloudEntries": 1,
+        "journalView": "AI Coach; not Analytics"
+      }
+    },
+    {
+      "name": "15: encrypted session cookie and hashed password evidence",
+      "status": "PASS",
+      "ms": 142,
+      "details": {
+        "encryptionHeader": "A256GCM",
+        "httpOnly": true,
+        "passwordAlgorithm": "bcrypt",
+        "cookieValueRecorded": false,
+        "secureFlagNote": "Local HTTP test; production HTTPS Secure flag requires deployed-domain inspection."
+      }
+    },
+    {
+      "name": "1/9/14: real timer survives navigation and reload",
+      "status": "PASS",
+      "ms": 4425,
+      "details": {
+        "sameSession": true,
+        "sameTargetEndTime": true,
+        "reloadPreserved": true
+      }
+    },
+    {
+      "name": "4/5/6/7/10/12: route cycling, memory, network, and responsiveness",
+      "status": "PASS",
+      "ms": 2234,
+      "details": {
+        "navigations": 10,
+        "heapBeforeMiB": 4.31,
+        "heapAfterMiB": 6.94,
+        "maxNavigationMs": 259,
+        "note": "Short controlled sample; not a long-duration leak or low-end-device certification."
+      }
+    },
+    {
+      "name": "14: audio across actual in-app navigation and background tab",
+      "status": "FAIL",
+      "ms": 12008,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ambient-island-widget')\u001b[22m\n"
+    },
+    {
+      "name": "1/9: automatic one-minute presence pause while another tab is foreground",
+      "status": "PASS",
+      "ms": 46413,
+      "details": {
+        "pausedAtSeconds": 120,
+        "reloadPreserved": true,
+        "serverPushConfigured": false
+      }
+    },
+    {
+      "name": "13: connection restore point uploads once after reconnection",
+      "status": "PASS",
+      "ms": 13621,
+      "details": {
+        "timerRegisteredOnline": true,
+        "queuedThenSaved": true,
+        "rows": 1,
+        "scope": "Connection recovery; not full offline use"
+      }
+    },
+    {
+      "name": "19: desktop and mobile-sized layout / navigation",
+      "status": "PASS",
+      "ms": 26574,
+      "details": {
+        "viewports": [
+          1440,
+          390,
+          320
+        ],
+        "routes": 5,
+        "physicalDevice": false
+      }
+    },
+    {
+      "name": "2/12: no unexpected browser JavaScript exceptions",
+      "status": "PASS",
+      "ms": 0,
+      "details": {
+        "runtimeExceptions": 0,
+        "normalConsoleErrors": 0,
+        "offlineConsoleErrors": 1
+      }
+    }
+  ],
+  "runtimeErrors": [],
+  "consoleErrors": [
+    {
+      "phase": "intentional-offline",
+      "message": "Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+    }
+  ],
+  "network": {
+    "requests": 1096,
+    "apiRequests": 189,
+    "encodedApiBytes": 145146,
+    "encodedMediaBytes": 0,
+    "encodedTotalBytes": 2431063
+  },
+  "metrics": {
+    "fabricatedFocusAccepted": false,
+    "chartData": "Synthetic fixture 67 minutes; not claimed as real timer use",
+    "generatedCards": [
+      {
+        "id": "gen-1793438386493-0",
+        "tag": "Definition",
+        "front": "What is Mitosis?",
+        "keyword": "Identical Daughter Cells",
+        "back": "Cell division process that produces two genetically identical daughter cells from a single parent cell. It is essential for growth and repair."
+      },
+      {
+        "id": "gen-1793438386493-1",
+        "tag": "Definition",
+        "front": "What is Meiosis?",
+        "keyword": "Diverse Haploid Cells",
+        "back": "Cell division process that produces four genetically diverse haploid cells from a single parent cell. It is crucial for sexual reproduction."
+      },
+      {
+        "id": "gen-1793438386493-2",
+        "tag": "Definition",
+        "front": "What is Photosynthesis?",
+        "keyword": "Light to Chemical Energy",
+        "back": "Process used by plants and other organisms to convert light energy into chemical energy, stored in glucose. This process occurs in chloroplasts."
+      }
+    ],
+    "geminiProviderStatus": 200,
+    "geminiProviderMs": 1251,
+    "reflectionState": "Motivated",
+    "timerDeadline": 1793438576762,
+    "presenceDueWallTime": 1793438456762,
+    "navigationTimes": [
+      {
+        "route": "/dashboard",
+        "ms": 245
+      },
+      {
+        "route": "/flashcards",
+        "ms": 202
+      },
+      {
+        "route": "/coach",
+        "ms": 215
+      },
+      {
+        "route": "/analytics",
+        "ms": 259
+      },
+      {
+        "route": "/settings",
+        "ms": 214
+      },
+      {
+        "route": "/dashboard",
+        "ms": 215
+      },
+      {
+        "route": "/flashcards",
+        "ms": 177
+      },
+      {
+        "route": "/coach",
+        "ms": 193
+      },
+      {
+        "route": "/analytics",
+        "ms": 201
+      },
+      {
+        "route": "/settings",
+        "ms": 216
+      }
+    ],
+    "heapBeforeMiB": 4.31,
+    "heapAfterMiB": 6.94,
+    "finalPageLongTasks": [],
+    "finalPageMaxTimerDriftMs": 31,
+    "layouts": [
+      {
+        "size": 1440,
+        "route": "/dashboard",
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "size": 1440,
+        "route": "/flashcards",
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "size": 1440,
+        "route": "/coach",
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "size": 1440,
+        "route": "/analytics",
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "size": 1440,
+        "route": "/settings",
+        "scroll": 1440,
+        "viewport": 1440
+      },
+      {
+        "size": 390,
+        "route": "/dashboard",
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "size": 390,
+        "route": "/flashcards",
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "size": 390,
+        "route": "/coach",
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "size": 390,
+        "route": "/analytics",
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "size": 390,
+        "route": "/settings",
+        "scroll": 390,
+        "viewport": 390
+      },
+      {
+        "size": 320,
+        "route": "/dashboard",
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "size": 320,
+        "route": "/flashcards",
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "size": 320,
+        "route": "/coach",
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "size": 320,
+        "route": "/analytics",
+        "scroll": 320,
+        "viewport": 320
+      },
+      {
+        "size": 320,
+        "route": "/settings",
+        "scroll": 320,
+        "viewport": 320
+      }
+    ]
+  },
+  "cleanup": {
+    "temporaryAccountsRemoved": true
+  }
+}
