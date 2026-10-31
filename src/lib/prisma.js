@@ -3,6 +3,11 @@ import { PrismaClient } from "@prisma/client";
 // Ensure DATABASE_URL has connection_limit=1 and pool_timeout in serverless environments
 // This prevents Vercel serverless functions from opening 5-10 connections per lambda
 // and exhausting Aiven's max_connections limit.
+if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("connection_limit")) {
+  const separator = process.env.DATABASE_URL.includes("?") ? "&" : "?";
+  process.env.DATABASE_URL = `${process.env.DATABASE_URL}${separator}connection_limit=1&pool_timeout=15`;
+}
+
 function getDatabaseUrl() {
   const url = process.env.DATABASE_URL || "";
   if (!url || url.includes("connection_limit")) return url;

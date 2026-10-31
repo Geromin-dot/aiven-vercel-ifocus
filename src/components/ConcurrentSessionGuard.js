@@ -65,12 +65,12 @@ export default function ConcurrentSessionGuard() {
     }
   }, [isExemptRoute, status, session?.error, hasConflict, triggerLogoutModal]);
 
-  // Periodic background check every 60 seconds + instant check on window focus / tab switch
+  // Periodic background check every 12 seconds + instant check on window focus / tab switch
   useEffect(() => {
     if (isExemptRoute || status !== "authenticated") return;
 
     verifyActiveSession();
-    const interval = setInterval(verifyActiveSession, 60000);
+    const interval = setInterval(verifyActiveSession, 12000);
 
     const onFocus = () => verifyActiveSession();
     const onVisibilityChange = () => {
