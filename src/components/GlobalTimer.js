@@ -8,6 +8,7 @@ import FeatureGuideModal from "./FeatureGuideModal";
 import { reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
+import { sendSystemNotification, formatNotificationTime, PRESENCE_NOTIFICATION_ACTIONS, presenceCheckId } from '../lib/timerNotifications';
 
 // Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
 const getUserAudioVolumeFactor = () => {
@@ -77,13 +78,6 @@ const triggerVibration = (pattern = [200, 100, 200]) => {
   }
 };
 
-const formatNotificationTime = (seconds) => {
-  const safe = Math.max(0, Number(seconds) || 0);
-  const m = Math.floor(safe / 60);
-  const s = safe % 60;
-  return `${m}m ${s < 10 ? "0" : ""}${s}s`;
-};
-
 const getSavedPresenceIntervalSeconds = () => {
   try {
     const raw = localStorage.getItem("ifocus_timer_preferences");
@@ -98,63 +92,6 @@ const getPresenceIntervalSeconds = (timerState = null) => {
   try {
     return presenceInterval(timerState, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
   } catch { return getSavedPresenceIntervalSeconds(); }
-};
-
-const PRESENCE_NOTIFICATION_ACTIONS = [
-  { action: "resume", title: "I am still here" },
-  { action: "pause", title: "Stay Paused" }
-];
-
-let lastPresenceNotificationAt = 0;
-const PRESENCE_NOTIFICATION_DEDUPE_MS = 15000;
-
-// Cross-Platform Native System Notification Helper (iOS 16.4+ PWA ServiceWorker, Android, Desktop)
-const sendSystemNotification = async (title, body, tag = "ifocus-presence", actions = []) => {
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-  const now = Date.now();
-  if (tag === "ifocus-presence" && now - lastPresenceNotificationAt < PRESENCE_NOTIFICATION_DEDUPE_MS) return;
-
-  try {
-    // Permission must be requested by the Start button's user gesture.
-    if (Notification.permission !== 'granted') return;
-
-    const options = {
-      body,
-      icon: "/icons/icon-192x192.png",
-      badge: "/icons/icon-192x192.png",
-      tag,
-      renotify: true,
-      silent: false,
-      requireInteraction: true,
-      data: { url: "/dashboard", tag },
-    };
-
-    if (Array.isArray(actions) && actions.length > 0) {
-      options.actions = actions;
-    }
-
-    // 1. Primary path for iOS PWA and modern Service Workers:
-    if ("serviceWorker" in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration && typeof registration.showNotification === "function") {
-          const existing = typeof registration.getNotifications === "function"
-            ? await registration.getNotifications({ tag })
-            : [];
-          if (existing.length > 0) return;
-          await registration.showNotification(title, { ...options, renotify: false });
-          if (tag === "ifocus-presence") lastPresenceNotificationAt = Date.now();
-          return;
-        }
-      } catch (swErr) {}
-    }
-
-    // 2. Desktop browser fallback:
-    new Notification(title, { ...options, renotify: false });
-    if (tag === "ifocus-presence") lastPresenceNotificationAt = Date.now();
-  } catch (e) {
-    console.warn("sendSystemNotification error:", e);
-  }
 };
 
 // Crystal-clear Web Audio Chimes (100% Client-side synthetic audio - loud, punchy, high-harmonic for iPhone & mobile)
@@ -665,7 +602,7 @@ export default function GlobalTimer() {
       "iFocus Active Presence Check",
       `Timer: ${timerFormatted} remaining. Are you still studying? Tap to continue or pause.`,
       "ifocus-presence",
-      PRESENCE_NOTIFICATION_ACTIONS
+      PRESENCE_NOTIFICATION_ACTIONS, readStorageState() || pausedState
     );
   }, [commitStorageState, readStorageState, getEffectivePath, isAdmin]);
 
@@ -840,7 +777,7 @@ export default function GlobalTimer() {
         if (document.visibilityState === 'visible') playPresenceChime();
         sendSystemNotification('iFocus Active Presence Check',
           `Timer paused at ${formatNotificationTime(settled.timeLeft)}. Continue when you are ready.`,
-          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS);
+          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS, readStorageState() || settled);
       }
       if (document.visibilityState === 'visible') {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CANCEL_BACKGROUND_PRESENCE_CHECK' });
@@ -1332,7 +1269,7 @@ export default function GlobalTimer() {
         triggerVibration([300, 150, 300]);
         sendSystemNotification('iFocus Active Presence Check',
           `Timer paused at ${formatNotificationTime(settled.timeLeft)}. Continue when you are ready.`,
-          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS);
+          'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS, readStorageState() || settled);
         return;
       }
       if (current.isFocus) {
@@ -1599,7 +1536,7 @@ export default function GlobalTimer() {
           // Transition to Break mode
           playCompletionAlarm();
           triggerVibration([250, 100, 250]);
-          sendSystemNotification("Focus Session Complete", "Great job! Time for your scheduled break.");
+          sendSystemNotification("Focus Session Complete", "Great job! Time for your scheduled break.", "ifocus-focus-complete");
           const nextBreakState = {
             ...current,
             isFocus: false,
@@ -1696,7 +1633,7 @@ export default function GlobalTimer() {
 
           playCompletionAlarm();
           triggerVibration([300, 150, 300]);
-          sendSystemNotification("Break Complete", `Your break has ended. Ready to continue Session ${nextCount}?`);
+          sendSystemNotification("Break Complete", `Your break has ended. Ready to continue Session ${nextCount}?`, "ifocus-break-complete");
           try {
             localStorage.setItem("ifocus_applied_toast", JSON.stringify({
               title: `Break Finished • Next: Session ${nextCount}`,
@@ -1791,7 +1728,9 @@ export default function GlobalTimer() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     const handleSwMessage = (e) => {
       const current = readStorageState();
-      if (e.data?.timerSessionId && e.data.timerSessionId !== current?.timerSessionId) return;
+      if (!current || !e.data?.timerSessionId || e.data.timerSessionId !== current.timerSessionId) return;
+      const settledForAction = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+      if (e.data.presenceCheckId && e.data.presenceCheckId !== presenceCheckId(settledForAction)) return;
       if (e.data?.type === 'IFOCUS_PRESENCE_DUE') {
         const settled = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
         if (settled !== current) commitStorageState(settled, true);
@@ -1801,6 +1740,9 @@ export default function GlobalTimer() {
         handleConfirmPresence();
       } else if (e.data?.type === "IFOCUS_PAUSE_PRESENCE") {
         handleKeepPaused();
+      } else if (e.data?.type === "IFOCUS_OPEN_PRESENCE" && settledForAction.presencePaused) {
+        if (settledForAction !== current) commitStorageState(settledForAction, true);
+        setShowPresenceModal(true);
       }
     };
     navigator.serviceWorker.addEventListener("message", handleSwMessage);
@@ -1808,9 +1750,19 @@ export default function GlobalTimer() {
     // Check query params if opened from notification click
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.get("resumePresence") === "1") {
+      if (url.searchParams.has("presenceAction") || url.searchParams.get("resumePresence") === "1") {
         const timerId = url.searchParams.get('timerSessionId');
-        if (timerId && timerId === readStorageState()?.timerSessionId) handleConfirmPresence();
+        const current = readStorageState();
+        const settled = settlePresence(current, JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'));
+        const checkId = url.searchParams.get('presenceCheckId');
+        if (timerId && timerId === current?.timerSessionId && (!checkId || checkId === presenceCheckId(settled))) {
+          const action = url.searchParams.get('presenceAction') || 'resume';
+          if (action === 'resume') handleConfirmPresence();
+          else if (action === 'pause') handleKeepPaused();
+          else if (settled?.presencePaused) { commitStorageState(settled, true); setShowPresenceModal(true); }
+        }
+        url.searchParams.delete('presenceAction');
+        url.searchParams.delete('presenceCheckId');
         url.searchParams.delete("resumePresence");
         url.searchParams.delete('timerSessionId');
         window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
@@ -2527,6 +2479,9 @@ export default function GlobalTimer() {
               </p>
             </div>
 
+            {!isTestPresenceModal && <p style={{ margin: 0, fontSize: '1.7rem', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+              {formatNotificationTime(timerState.timeLeft)} remaining
+            </p>}
             {/* Action Buttons */}
             <div style={{ display: "flex", gap: "0.8rem", width: "100%", marginTop: "0.4rem" }}>
               <button

@@ -54,6 +54,7 @@ model User {
   currentSessionId String?
   telemetryState   String?   @db.Text
   timerPreferences String?   @db.Text
+  pushSubscriptions PushSubscription[]
   
   accounts      Account[]
   sessions      Session[]
@@ -65,6 +66,40 @@ model User {
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// One browser installation per user/device. Queued jobs never contain push keys.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  endpoint  String   @unique @db.Text
+  p256dh    String
+  auth      String
+  lastTestAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  job       PresencePushJob?
+
+  @@unique([userId, deviceId])
+}
+
+model PresencePushJob {
+  subscriptionId  String   @id
+  subscription    PushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  generation      String
+  version         Float
+  timerSessionId  String?
+  authSessionId   String?
+  checkId         String?
+  remainingSeconds Int     @default(0)
+  dueAt           DateTime?
+  status          String   @default("CANCELLED")
+  scheduledAt     DateTime?
+  leaseUntil      DateTime?
+  deliveredAt     DateTime?
+  updatedAt       DateTime @updatedAt
 }
 
 model VerificationToken {

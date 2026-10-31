@@ -182,6 +182,15 @@ export const authOptions = {
   },
 };
 
+// Invalidate queued notifications for this login, without invalidating a newer login.
+authOptions.events = {
+  async signOut({ token }) {
+    if (token?.sub && token?.sessionId) {
+      await prisma.user.updateMany({ where: { id: token.sub, currentSessionId: token.sessionId }, data: { currentSessionId: null } });
+    }
+  },
+};
+
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

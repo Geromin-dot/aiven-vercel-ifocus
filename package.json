@@ -7,6 +7,9 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "test:timer": "node --test scripts/timer-state.test.mjs scripts/timer-sync.test.mjs scripts/timer-notifications.test.mjs scripts/timer-notification-delivery.test.mjs scripts/presence-push.test.mjs",
+    "push:keys": "node scripts/generate-push-keys.mjs",
+    "push:setup-db": "prisma db execute --schema prisma/schema.prisma --file prisma/push-notifications.sql",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -19,7 +22,8 @@
     "next-auth": "^4.24.15",
     "react": "19.2.8",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

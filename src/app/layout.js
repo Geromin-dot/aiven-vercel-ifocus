@@ -12,6 +12,7 @@ import { Providers } from "@/components/Providers";
 import GlobalTimer from "@/components/GlobalTimer";
 import PwaRegistrar from "@/components/PwaRegistrar";
 import ConcurrentSessionGuard from "@/components/ConcurrentSessionGuard";
+import BackgroundPushSync from "@/components/BackgroundPushSync";
 
 export const metadata = {
   title: "iFocus | Smart Flash Cards",
@@ -64,6 +65,7 @@ export default function RootLayout({ children }) {
             </main>
           </div>
           <GlobalTimer />
+          <BackgroundPushSync />
           <ConcurrentSessionGuard />
           <PwaRegistrar />
         </Providers>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
+import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 
 // Curated avatar styles and presets for customization (clean names, no emojis)
 const AVATAR_PRESETS = [
@@ -1337,6 +1338,8 @@ export default function SettingsPage() {
                 </label>
               </div>
 
+              <TimerNotificationSettings />
+
               {/* Active Presence Check Setting */}
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
@@ -1714,6 +1717,7 @@ export default function SettingsPage() {
           {/* 2. NOTIFICATIONS & SOUND PANEL */}
           {activeSection === 'notifications' && (
             <form onSubmit={handleSaveNotifications} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <TimerNotificationSettings />
               <div className="settings-input-group">
                 <label className="settings-label" style={{ fontSize: '0.85rem' }}>Default Ambient Soundscape</label>
                 <select 
