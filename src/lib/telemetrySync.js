@@ -95,6 +95,12 @@ export async function reconcileCloudTelemetry() {
       }
     } catch (e) {}
 
+    let localMasteredUpdatedAt = 0;
+    try {
+      const rawTime = localStorage.getItem("ifocus_mastered_updated_at");
+      if (rawTime) localMasteredUpdatedAt = Number(rawTime) || 0;
+    } catch (e) {}
+
     // 2. Fetch cloud telemetry from PostgreSQL Aiven database
     const res = await fetch("/api/user/telemetry");
     if (!res.ok) return null;
@@ -133,11 +139,25 @@ export async function reconcileCloudTelemetry() {
       localStorage.setItem("ifocus_journal_history", JSON.stringify(mergedJournal));
     }
 
-    // 4b. Reconcile Mastered Flashcards (parity across PC, mobile PWA, and tablet)
-    const remoteMastered = Array.isArray(cloud.masteredCards) ? cloud.masteredCards : [];
-    const mergedMastered = Array.from(new Set([...localMastered, ...remoteMastered]));
-    if (mergedMastered.length > 0) {
-      localStorage.setItem("ifocus_mastered_cards", JSON.stringify(mergedMastered));
+    // 4b. Reconcile Mastered Flashcards (timestamp-based parity across PC, mobile PWA, and tablet)
+    const remoteMastered = Array.isArray(cloud.masteredCards) ? cloud.masteredCards : null;
+    const cloudMasteredUpdatedAt = Number(cloud.masteredCardsUpdatedAt || 0);
+
+    let mergedMastered = localMastered;
+    let pushMasteredNeeded = false;
+
+    if (remoteMastered !== null) {
+      if (cloudMasteredUpdatedAt >= localMasteredUpdatedAt) {
+        // Cloud is newer or authoritative (e.g. phone unmastered/reset cards)
+        mergedMastered = remoteMastered;
+        localStorage.setItem("ifocus_mastered_cards", JSON.stringify(mergedMastered));
+        localStorage.setItem("ifocus_mastered_updated_at", String(cloudMasteredUpdatedAt || Date.now()));
+      } else {
+        // Local was updated more recently while offline
+        pushMasteredNeeded = true;
+      }
+    } else if (localMastered.length > 0) {
+      pushMasteredNeeded = true;
     }
 
     // 5. Reconcile Recovery & Cognitive Reset timestamps (highest/latest wins)
@@ -259,7 +279,7 @@ export async function reconcileCloudTelemetry() {
     // 9. BI-DIRECTIONAL PUSH: If local had data that cloud lacked or was behind on, push up to Aiven database!
     const isCloudMissingEvents = mergedEvents.length > remoteEvents.length;
     const isCloudMissingJournal = mergedJournal.length > remoteJournal.length;
-    const isCloudMissingMastered = mergedMastered.length > remoteMastered.length;
+    const isCloudBehindMastered = pushMasteredNeeded;
     const isCloudBehindRecovery = effectiveRecovery > cloudRecovery;
     const isCloudBehindReset = effectiveReset > cloudReset;
     const isCloudBehindTelem = localTelem && localTelemTime > cloudTelemTime;
@@ -271,7 +291,7 @@ export async function reconcileCloudTelemetry() {
     if (
       isCloudMissingEvents ||
       isCloudMissingJournal ||
-      isCloudMissingMastered ||
+      isCloudBehindMastered ||
       isCloudBehindRecovery ||
       isCloudBehindReset ||
       isCloudBehindTelem ||
@@ -288,6 +308,8 @@ export async function reconcileCloudTelemetry() {
             breakGateEvents: mergedEvents,
             journalHistory: mergedJournal,
             masteredCards: mergedMastered,
+            masteredCardsUpdatedAt: localMasteredUpdatedAt || Date.now(),
+            replaceMasteredCards: true,
             recoveryCompleted: effectiveRecovery || null,
             cognitiveReset: effectiveReset || null,
             latestTelemetry: effectiveTelem,
@@ -306,9 +328,7 @@ export async function reconcileCloudTelemetry() {
     window.dispatchEvent(new CustomEvent("ifocus_breakgate_updated"));
     window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: effectiveTelem }));
     window.dispatchEvent(new CustomEvent("ifocus_journal_updated", { detail: mergedJournal }));
-    if (mergedMastered.length > 0) {
-      window.dispatchEvent(new CustomEvent("ifocus_mastery_updated", { detail: mergedMastered }));
-    }
+    window.dispatchEvent(new CustomEvent("ifocus_mastery_updated", { detail: mergedMastered }));
     if (effectiveDeck) {
       window.dispatchEvent(new CustomEvent("ifocus_breakgate_deck_changed", { detail: { active: true, deck: effectiveDeck } }));
     }

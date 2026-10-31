@@ -113,6 +113,7 @@ export async function POST(req) {
             const existingMastered = Array.isArray(existingTelemetry.masteredCards) ? existingTelemetry.masteredCards : [];
             merged.masteredCards = Array.from(new Set([...existingMastered, ...incoming.masteredCards]));
           }
+          merged.masteredCardsUpdatedAt = incoming.masteredCardsUpdatedAt || Date.now();
         }
 
         // Preserve highest recoveryCompleted and cognitiveReset timestamps

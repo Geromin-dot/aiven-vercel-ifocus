@@ -173,14 +173,27 @@ export default function FlashcardsPage() {
 
     // Initial reconciliation from cloud so mobile PWA gets mastered cards immediately
     reconcileCloudTelemetry().then((res) => {
-      if (res?.mergedMastered) {
-        setStoredMasteredKeys(res.mergedMastered);
+      if (res?.mergedMastered !== undefined) {
+        setStoredMasteredKeys(res?.mergedMastered);
       }
     }).catch(() => {});
+
+    // Re-check on tab visibility switch (e.g. returning to PC after using phone)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        reconcileCloudTelemetry().then((res) => {
+          if (res?.mergedMastered !== undefined) {
+            setStoredMasteredKeys(res?.mergedMastered);
+          }
+        }).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.removeEventListener('ifocus_mastery_updated', loadMastered);
       window.removeEventListener('storage', loadMastered);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
@@ -269,8 +282,10 @@ export default function FlashcardsPage() {
       try {
         const storedMastered = JSON.parse(localStorage.getItem('ifocus_mastered_cards') || '[]');
         if (currentQ?.front && !storedMastered.includes(currentQ.front)) {
+          const now = Date.now();
           storedMastered.push(currentQ.front);
           localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+          localStorage.setItem('ifocus_mastered_updated_at', String(now));
           setStoredMasteredKeys(storedMastered);
           window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
           fetch('/api/user/telemetry', {
@@ -279,6 +294,8 @@ export default function FlashcardsPage() {
             body: JSON.stringify({
               telemetryState: {
                 masteredCards: storedMastered,
+                masteredCardsUpdatedAt: now,
+                replaceMasteredCards: true,
                 updatedAt: new Date().toISOString()
               }
             })
@@ -588,8 +605,10 @@ export default function FlashcardsPage() {
           storedMastered.push(cardKey);
         }
       }
+      const now = Date.now();
       try {
         localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+        localStorage.setItem('ifocus_mastered_updated_at', String(now));
         window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
       } catch(e) {}
       setStoredMasteredKeys(storedMastered);
@@ -599,6 +618,7 @@ export default function FlashcardsPage() {
         body: JSON.stringify({
           telemetryState: {
             masteredCards: storedMastered,
+            masteredCardsUpdatedAt: now,
             replaceMasteredCards: true,
             updatedAt: new Date().toISOString()
           }
@@ -635,8 +655,10 @@ export default function FlashcardsPage() {
       showToast(`All ${activeDeck.cards.length} cards marked as fully mastered!`);
     }
 
+    const now = Date.now();
     try {
       localStorage.setItem('ifocus_mastered_cards', JSON.stringify(storedMastered));
+      localStorage.setItem('ifocus_mastered_updated_at', String(now));
       window.dispatchEvent(new CustomEvent('ifocus_mastery_updated', { detail: storedMastered }));
     } catch (e) {}
     setStoredMasteredKeys(storedMastered);
@@ -647,6 +669,7 @@ export default function FlashcardsPage() {
       body: JSON.stringify({
         telemetryState: {
           masteredCards: storedMastered,
+          masteredCardsUpdatedAt: now,
           replaceMasteredCards: true,
           updatedAt: new Date().toISOString()
         }

@@ -75,8 +75,20 @@ const triggerVibration = (pattern = [200, 100, 200]) => {
   }
 };
 
+const formatNotificationTime = (seconds) => {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${m}m ${s < 10 ? "0" : ""}${s}s`;
+};
+
+const PRESENCE_NOTIFICATION_ACTIONS = [
+  { action: "resume", title: "I am still here" },
+  { action: "pause", title: "Stay Paused" }
+];
+
 // Cross-Platform Native System Notification Helper (iOS 16.4+ PWA ServiceWorker, Android, Desktop)
-const sendSystemNotification = async (title, body, tag = "ifocus-presence") => {
+const sendSystemNotification = async (title, body, tag = "ifocus-presence", actions = []) => {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   try {
     if (Notification.permission === "default") {
@@ -97,8 +109,13 @@ const sendSystemNotification = async (title, body, tag = "ifocus-presence") => {
       tag,
       renotify: true,
       silent: false,
-      data: { url: "/dashboard" },
+      requireInteraction: true,
+      data: { url: "/dashboard", tag },
     };
+
+    if (Array.isArray(actions) && actions.length > 0) {
+      options.actions = actions;
+    }
 
     // 1. Primary path for iOS PWA and modern Service Workers:
     if ("serviceWorker" in navigator) {
@@ -698,6 +715,14 @@ export default function GlobalTimer() {
     commitStorageState(pausedState, true);
     setShowPresenceModal(true);
     playPresenceChime();
+    triggerVibration([250, 100, 250]);
+    const timerFormatted = formatNotificationTime(remainingSeconds);
+    sendSystemNotification(
+      "iFocus Active Presence Check",
+      `Timer: ${timerFormatted} remaining. Are you still studying? Tap to continue or pause.`,
+      "ifocus-presence",
+      PRESENCE_NOTIFICATION_ACTIONS
+    );
   }, [commitStorageState, readStorageState, getEffectivePath, isAdmin]);
 
   // Proactive Idle Coach Intervention Trigger
@@ -863,6 +888,11 @@ export default function GlobalTimer() {
 
     const handleVisibilityOrFocus = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "CANCEL_BACKGROUND_PRESENCE_CHECK"
+          });
+        }
         const livePath = getEffectivePath();
         if (isAdmin || isExemptPath(livePath)) {
           lastActivityRef.current = Date.now();
@@ -915,7 +945,45 @@ export default function GlobalTimer() {
             setShowPresenceModal(true);
             playPresenceChime();
             triggerVibration([250, 100, 250]);
-            sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
+            sendSystemNotification(
+              "iFocus Active Presence Check",
+              `Timer: ${formatNotificationTime(remainingSeconds)} remaining. Are you still studying? Tap to continue or pause.`,
+              "ifocus-presence",
+              PRESENCE_NOTIFICATION_ACTIONS
+            );
+          }
+        }
+      } else if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        const current = readStorageState() || stateRef.current;
+        if (current?.isRunning && current?.isFocus && current?.targetEndTime) {
+          let activePresenceEnabled = true;
+          let activePresenceInterval = 5;
+          try {
+            const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
+            if (rawPrefs) {
+              const prefs = JSON.parse(rawPrefs);
+              if (prefs.activePresenceEnabled !== undefined) activePresenceEnabled = Boolean(prefs.activePresenceEnabled);
+              if (prefs.activePresenceInterval) activePresenceInterval = Number(prefs.activePresenceInterval);
+            }
+          } catch (e) {}
+
+          if (activePresenceEnabled) {
+            const intervalSeconds = Math.max(60, Number(activePresenceInterval || 5) * 60);
+            const totalTime = current.totalTime || 25 * 60;
+            const remainingSeconds = Math.max(0, Math.round((current.targetEndTime - Date.now()) / 1000));
+            const elapsedSeconds = Math.max(0, totalTime - remainingSeconds);
+            const lastCheckElapsed = typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0;
+            const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
+            const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
+            const secondsUntilCheck = Math.max(5, intervalSeconds - focusSecondsSinceLastCheck);
+
+            if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({
+                type: "SCHEDULE_BACKGROUND_PRESENCE_CHECK",
+                delayMs: secondsUntilCheck * 1000,
+                remainingSeconds: Math.max(0, remainingSeconds - secondsUntilCheck)
+              });
+            }
           }
         }
       }
@@ -1400,7 +1468,12 @@ export default function GlobalTimer() {
             setShowPresenceModal(true);
             playPresenceChime();
             triggerVibration([300, 150, 300, 150, 400]);
-            sendSystemNotification("iFocus Presence Check", "Are you still studying? Tap to continue your session.");
+            sendSystemNotification(
+              "iFocus Active Presence Check",
+              `Timer: ${formatNotificationTime(remainingSeconds)} remaining. Are you still studying? Tap to continue or pause.`,
+              "ifocus-presence",
+              PRESENCE_NOTIFICATION_ACTIONS
+            );
             lastActivityRef.current = Date.now();
             return;
           }
@@ -1872,6 +1945,33 @@ export default function GlobalTimer() {
     };
     commitStorageState(pausedState, true);
   };
+
+  // Handle Service Worker Notification Action Messages (e.g., "I am still here")
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    const handleSwMessage = (e) => {
+      if (e.data?.type === "IFOCUS_RESUME_PRESENCE") {
+        handleConfirmPresence();
+      } else if (e.data?.type === "IFOCUS_PAUSE_PRESENCE") {
+        handleKeepPaused();
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handleSwMessage);
+
+    // Check query params if opened from notification click
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("resumePresence") === "1") {
+        handleConfirmPresence();
+        url.searchParams.delete("resumePresence");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      }
+    } catch (e) {}
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+    };
+  }, []);
 
   // Handle BreakGate Completion
   const handleBreakGateComplete = () => {
