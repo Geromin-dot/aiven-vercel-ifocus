@@ -65,12 +65,14 @@ export default function ConcurrentSessionGuard() {
     }
   }, [isExemptRoute, status, session?.error, hasConflict, triggerLogoutModal]);
 
-  // Periodic background check every 12 seconds + instant check on window focus / tab switch
+  // Check visible tabs periodically; hidden PWA tabs should not generate requests.
   useEffect(() => {
     if (isExemptRoute || status !== "authenticated") return;
 
-    verifyActiveSession();
-    const interval = setInterval(verifyActiveSession, 12000);
+    const initialCheck = setTimeout(verifyActiveSession, 0);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") verifyActiveSession();
+    }, 30000);
 
     const onFocus = () => verifyActiveSession();
     const onVisibilityChange = () => {
@@ -81,6 +83,7 @@ export default function ConcurrentSessionGuard() {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      clearTimeout(initialCheck);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);

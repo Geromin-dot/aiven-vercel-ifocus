@@ -1,7 +1,25 @@
 // Unified Client-Side Bi-Directional Cloud Telemetry & State Reconciliation
 // Ensures 100% data parity across all devices (PC browser, mobile PWA, tablet) for the same user account.
 
-export async function reconcileCloudTelemetry() {
+let reconciliationPromise = null;
+let lastReconciliationAt = 0;
+const RECONCILIATION_COOLDOWN_MS = 10000;
+
+export function reconcileCloudTelemetry() {
+  const now = Date.now();
+
+  if (reconciliationPromise) return reconciliationPromise;
+  if (now - lastReconciliationAt < RECONCILIATION_COOLDOWN_MS) return Promise.resolve(null);
+
+  lastReconciliationAt = now;
+  reconciliationPromise = reconcileCloudTelemetryInternal().finally(() => {
+    reconciliationPromise = null;
+  });
+
+  return reconciliationPromise;
+}
+
+async function reconcileCloudTelemetryInternal() {
   if (typeof window === "undefined") return null;
 
   try {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -28,32 +27,14 @@ export async function GET(request) {
       }, { status: 401 });
     }
 
-    // Direct database validation to immediately catch new logins on other devices
-    if (session.user.id) {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true, currentSessionId: true, status: true, statusReason: true }
-      });
-
-      if (!dbUser) {
-        return NextResponse.json({ active: false, purged: true }, { status: 401 });
-      }
-
-      if (dbUser.status === "ON_HOLD" || dbUser.status === "BANNED") {
-        return NextResponse.json({
-          active: false,
-          onHold: true,
-          reason: dbUser.statusReason || "Academic Integrity Review"
-        }, { status: 403 });
-      }
-
-      if (session.user.sessionId && dbUser.currentSessionId && session.user.sessionId !== dbUser.currentSessionId) {
-        return NextResponse.json({
-          active: false,
-          conflict: true,
-          reason: 'CONCURRENT_LOGIN'
-        }, { status: 401 });
-      }
+    // getServerSession already runs the JWT callback, which verifies the user,
+      // status, and active session against PostgreSQL. Avoid a second lookup here.
+    if (session.user.status === "ON_HOLD" || session.user.status === "BANNED") {
+      return NextResponse.json({
+        active: false,
+        onHold: true,
+        reason: session.user.statusReason || "Academic Integrity Review"
+      }, { status: 403 });
     }
 
     return NextResponse.json({
