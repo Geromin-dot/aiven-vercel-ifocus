@@ -92,6 +92,28 @@ const getSavedPresenceIntervalSeconds = () => {
   }
 };
 
+const getSavedBurnoutSettings = () => {
+  try {
+    const raw = localStorage.getItem("ifocus_timer_preferences");
+    const prefs = raw ? JSON.parse(raw) : {};
+    return {
+      enabled: prefs.burnoutCheckEnabled !== undefined ? Boolean(prefs.burnoutCheckEnabled) : true,
+      minutes: Math.max(1, Number(prefs.burnoutCheckMinutes || 20)),
+    };
+  } catch (e) {
+    return { enabled: true, minutes: 20 };
+  }
+};
+
+const getSavedPresenceEnabled = () => {
+  try {
+    const prefs = JSON.parse(localStorage.getItem("ifocus_timer_preferences") || "{}");
+    return prefs.activePresenceEnabled !== undefined ? Boolean(prefs.activePresenceEnabled) : true;
+  } catch (e) {
+    return true;
+  }
+};
+
 const getPresenceIntervalSeconds = (timerState = null) => {
   const sessionInterval = Number(timerState?.activePresenceIntervalSeconds);
   return sessionInterval >= 60 ? sessionInterval : getSavedPresenceIntervalSeconds();
@@ -686,7 +708,12 @@ export default function GlobalTimer() {
       const normalizedState = {
         ...nextState,
         ...(nextState.isRunning && nextState.isFocus && !nextState.activePresenceIntervalSeconds
-          ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
+          ? {
+              activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
+              activePresenceEnabledAtStart: getSavedPresenceEnabled(),
+              burnoutCheckEnabledAtStart: getSavedBurnoutSettings().enabled,
+              burnoutCheckMinutesAtStart: getSavedBurnoutSettings().minutes,
+            }
           : {})
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(normalizedState));
@@ -1214,7 +1241,12 @@ export default function GlobalTimer() {
         const syncedState = {
           ...e.detail,
           ...(e.detail.isRunning && e.detail.isFocus && !e.detail.activePresenceIntervalSeconds
-            ? { activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds() }
+            ? {
+                activePresenceIntervalSeconds: getSavedPresenceIntervalSeconds(),
+                activePresenceEnabledAtStart: getSavedPresenceEnabled(),
+                burnoutCheckEnabledAtStart: getSavedBurnoutSettings().enabled,
+                burnoutCheckMinutesAtStart: getSavedBurnoutSettings().minutes,
+              }
             : {})
         };
         setTimerState(syncedState);
@@ -1484,22 +1516,16 @@ export default function GlobalTimer() {
 
       // --- 1. ACTIVE PRESENCE CHECK ---
       if (current.isFocus) {
-        let activePresenceEnabled = true;
-        let activePresenceInterval = 5; // default 5 minutes
-        try {
-          const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-          if (rawPrefs) {
-            const prefs = JSON.parse(rawPrefs);
-            if (prefs.activePresenceEnabled !== undefined) {
-              activePresenceEnabled = prefs.activePresenceEnabled;
-            }
-            if (prefs.activePresenceInterval) {
-              activePresenceInterval = Number(prefs.activePresenceInterval);
-            }
-          }
-        } catch (e) {}
-
-        // Minimum active presence check interval is 60 seconds (1 minute)
+        const activePresenceEnabled = current.activePresenceEnabledAtStart !== undefined
+          ? Boolean(current.activePresenceEnabledAtStart)
+          : (() => {
+              try {
+                const prefs = JSON.parse(localStorage.getItem("ifocus_timer_preferences") || "{}");
+                return prefs.activePresenceEnabled !== undefined ? Boolean(prefs.activePresenceEnabled) : true;
+              } catch (e) {
+                return true;
+              }
+            })();
         const intervalSeconds = getPresenceIntervalSeconds(current);
 
         // Track focus seconds elapsed since the last confirmed presence check
@@ -1509,29 +1535,28 @@ export default function GlobalTimer() {
 
         // Reset baseline if lastCheckElapsed is ahead of elapsedSeconds (e.g. new session started or reset)
         const validLastCheck = lastCheckElapsed > elapsedSeconds ? 0 : lastCheckElapsed;
-        const focusSecondsSinceLastCheck = Math.max(0, elapsedSeconds - validLastCheck);
-
-        // Periodic Elapsed Focus Time Check: triggers strictly when the interval has elapsed (e.g. 60s for 1m test, 300s for 5m)
-        const isIntervalReached = focusSecondsSinceLastCheck >= intervalSeconds;
+        const nextCheckpointElapsed = validLastCheck + intervalSeconds;
+        const isIntervalReached = elapsedSeconds >= nextCheckpointElapsed;
 
         if (activePresenceEnabled && isIntervalReached) {
           const livePath = getEffectivePath();
           if (isExemptPath(livePath) || isAdmin) {
             // Do not pause on exempt routes; advance check baseline so countdown never hangs
-            current.lastPresenceCheckElapsed = getPresenceCheckpoint(elapsedSeconds, intervalSeconds);
+            current.lastPresenceCheckElapsed = nextCheckpointElapsed;
             current.lastPresenceRemaining = remainingSeconds;
             lastActivityRef.current = Date.now();
           } else {
-            // Immediately pause timer! It CANNOT continue until user clicks confirm!
+            // Freeze at the exact checkpoint, even if this tick is late.
+            const checkpointRemaining = Math.max(0, totalTime - nextCheckpointElapsed);
             const pausedState = {
               ...current,
               isRunning: false,
               targetEndTime: null,
-              timeLeft: remainingSeconds,
+              timeLeft: checkpointRemaining,
               presencePaused: true,
-              lastPresenceCheckElapsed: getPresenceCheckpoint(elapsedSeconds, intervalSeconds),
-              lastPresenceRemaining: remainingSeconds,
-              lastPresenceElapsed: elapsedSeconds,
+              lastPresenceCheckElapsed: nextCheckpointElapsed,
+              lastPresenceRemaining: checkpointRemaining,
+              lastPresenceElapsed: nextCheckpointElapsed,
             };
             commitStorageState(pausedState, true);
             setShowPresenceModal(true);
@@ -1539,7 +1564,7 @@ export default function GlobalTimer() {
             triggerVibration([300, 150, 300, 150, 400]);
             sendSystemNotification(
               "iFocus Active Presence Check",
-              `Timer: ${formatNotificationTime(remainingSeconds)} remaining. Are you still studying? Tap to continue or pause.`,
+              `Timer: ${formatNotificationTime(checkpointRemaining)} remaining. Are you still studying? Tap to continue or pause.`,
               "ifocus-presence",
               PRESENCE_NOTIFICATION_ACTIONS
             );
@@ -1552,20 +1577,11 @@ export default function GlobalTimer() {
         if (!burnoutCheckedThisSessionRef.current) {
           const livePath = getEffectivePath();
           if (!isExemptPath(livePath) && !isAdmin) {
-            let burnoutCheckEnabled = true;
-            let burnoutCheckMinutes = 20;
-            try {
-              const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-              if (rawPrefs) {
-                const prefs = JSON.parse(rawPrefs);
-                if (prefs.burnoutCheckEnabled !== undefined) {
-                  burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
-                }
-                if (prefs.burnoutCheckMinutes) {
-                  burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
-                }
-              }
-            } catch (e) {}
+            const savedBurnout = getSavedBurnoutSettings();
+            const burnoutCheckEnabled = current.burnoutCheckEnabledAtStart !== undefined
+              ? Boolean(current.burnoutCheckEnabledAtStart)
+              : savedBurnout.enabled;
+            const burnoutCheckMinutes = current.burnoutCheckMinutesAtStart || savedBurnout.minutes;
 
             const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
             const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
