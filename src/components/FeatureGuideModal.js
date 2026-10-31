@@ -155,7 +155,6 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const dialogRef = useRef(null);
-  const navRef = useRef(null);
   const imageButtonRef = useRef(null);
   const zoomCloseRef = useRef(null);
   useEffect(() => {
@@ -169,13 +168,12 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
     document.body.style.overflow = 'hidden';
     return () => { dialog.close(); document.body.style.overflow = overflow; };
   }, [isOpen]);
-  useEffect(() => {
-    navRef.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [activeTopicId, isOpen]);
   useEffect(() => { if (isZoomed) zoomCloseRef.current?.focus(); }, [isZoomed]);
   if (!isOpen) return null;
   const topicIndex = Math.max(0, TUTORIAL_TOPICS.findIndex(t => t.id === activeTopicId));
   const topic = TUTORIAL_TOPICS[topicIndex];
+  const totalSteps = TUTORIAL_TOPICS.reduce((total, item) => total + item.steps.length, 0);
+  const stepNumber = TUTORIAL_TOPICS.slice(0, topicIndex).reduce((total, item) => total + item.steps.length, 0) + currentStepIndex + 1;
   const step = topic.steps[currentStepIndex] || topic.steps[0];
   const first = currentStepIndex === 0 && topicIndex === 0;
   const last = currentStepIndex === topic.steps.length - 1 && topicIndex === TUTORIAL_TOPICS.length - 1;
@@ -200,29 +198,33 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
       onCancel={e => { e.preventDefault(); if (isZoomed) closeZoom(); else onClose(); }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={e => {
-        if (isZoomed) return;
+        if (isZoomed || e.target.tagName === 'SELECT') return;
         if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
         if (e.key === 'ArrowLeft') { e.preventDefault(); previous(); }
       }}>
       <div className={styles.frame} inert={isZoomed ? true : undefined}>
         <header className={styles.header}>
-          <div><h2 id="feature-guide-title">iFocus Feature Guide</h2><p>Explore the tools, one step at a time.</p></div>
+          <div><span className={styles.eyebrow}>GET TO KNOW IFOCUS</span><h2 id="feature-guide-title">Feature guide</h2></div>
           <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
         </header>
-        <nav ref={navRef} className={styles.topics} aria-label="Guide topics">
-          {TUTORIAL_TOPICS.map(t => <button type="button" key={t.id} aria-pressed={t.id === topic.id} onClick={() => selectTopic(t.id)}>{t.icon}<span>{t.label}</span></button>)}
+        <div className={styles.content}>
+        <nav className={styles.topics} aria-label="Guide topics">
+          <span className={styles.navLabel}>Explore features</span>
+          {TUTORIAL_TOPICS.map((t, index) => <button type="button" key={t.id} aria-pressed={t.id === topic.id} onClick={() => selectTopic(t.id)}>{t.icon}<span>{t.label}</span><span className={styles.topicNumber}>{String(index + 1).padStart(2, '0')}</span></button>)}
+          <label className={styles.mobileTopics}>Explore features<select value={topic.id} onChange={e => selectTopic(e.target.value)}>{TUTORIAL_TOPICS.map((t, index) => <option key={t.id} value={t.id}>{String(index + 1).padStart(2, '0')} · {t.label}</option>)}</select></label>
         </nav>
         <div className={styles.body} key={step.title}>
-          <div className={styles.stepLine}><span>{topic.label} · Step {currentStepIndex + 1} of {topic.steps.length}</span><span className={styles.keyboardHint}>← → to navigate</span></div>
+          <div className={styles.stepLine}><span>{topic.label}</span><span className={styles.stepDots} aria-label={'Step ' + (currentStepIndex + 1) + ' of ' + topic.steps.length}>{topic.steps.map((_, index) => <span key={index} className={index === currentStepIndex ? styles.activeDot : undefined} />)}</span></div>
           <h3>{step.title}</h3><p className={styles.description}>{step.description}</p>
           <button ref={imageButtonRef} type="button" className={styles.screenshot} onClick={() => setIsZoomed(true)} aria-label={'Enlarge screenshot for ' + step.title}>
-            {picture(styles.picture)}<span className={styles.enlarge}>Tap to enlarge</span>
+            {picture(styles.picture)}<span className={styles.enlarge}>View full size ↗</span>
           </button>
           <p className={styles.tip}><strong>Tip</strong> {step.tip}</p>
         </div>
+        </div>
         <footer className={styles.footer}>
           <button type="button" onClick={previous} disabled={first}>← Previous</button>
-          <span className={styles.progress} aria-label={'Topic ' + (topicIndex + 1) + ' of ' + TUTORIAL_TOPICS.length}>{topicIndex + 1} / {TUTORIAL_TOPICS.length}</span>
+          <div className={styles.progress}><span>{String(stepNumber).padStart(2, '0')} <span className={styles.progressTotal}>/ {totalSteps}</span></span><div className={styles.progressTrack} aria-hidden="true"><span style={{ width: `${stepNumber / totalSteps * 100}%` }} /></div></div>
           <button type="button" className={styles.next} onClick={next}>{last ? 'Done' : 'Next →'}</button>
         </footer>
       </div>
