@@ -11,7 +11,9 @@ export function advanceFocusClock(clock = {}, state, prefs = {}, loginId, now = 
   clock = clock && typeof clock === 'object' ? clock : {};
   if (!state || typeof state.timerSessionId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{7,99}$/.test(state.timerSessionId)) return clock;
   const version = Number(state.updatedAt);
-  if (!Number.isFinite(version) || version > now + 60000 || version < (clock.version || 0)) return clock;
+  // Browser timestamps order checkpoints; only the server clock earns elapsed time.
+  // A device clock ahead of the server must not silently prevent timer tracking.
+  if (!Number.isFinite(version) || version < (clock.version || 0)) return clock;
   const sessions = (Array.isArray(clock.sessions) ? clock.sessions : []).map(entry => ({ ...settleFocusClock(entry, now) }));
   let entry = sessions.find(item => item.id === state.timerSessionId);
   // Only one focus session per account can earn elapsed time at a time.
@@ -44,9 +46,22 @@ export function resolveFocusClock(clock = {}, resolvedIds = [], now = Date.now()
 export function verifiedFocusSeconds(entry, requested, recovery = false, now = Date.now()) {
   const settled = settleFocusClock(entry, now);
   if (!settled || settled.discarded) throw new Error('This session has no server-verified study time. Start a new timer while connected.');
-  const seconds = Math.min(Math.round(settled.elapsedMs / 1000), Math.floor(settled.plannedMs / 1000));
-  if (!Number.isInteger(requested) || requested <= 0 || requested > seconds + 2) throw new Error('Requested time exceeds the server-verified focus time.');
+  const seconds = Math.min((recovery ? Math.floor : Math.round)(settled.elapsedMs / 1000), Math.floor(settled.plannedMs / 1000));
+  // Recovery saves the available verified time, even if a cached browser timer is ahead.
+  if (!Number.isInteger(requested) || requested <= 0 || (!recovery && requested > seconds + 2)) throw new Error('Requested time exceeds the server-verified focus time.');
   const duration = Math.min(seconds, requested);
   if (duration < (recovery ? 60 : 1)) throw new Error(recovery ? 'Unfinished sessions need at least one verified minute.' : 'No elapsed focus time has been verified yet.');
   return { duration, entry: { ...settled, runningSince: null } };
+}
+
+export function recoverableFocusSessions(clock = {}, now = Date.now()) {
+  return (clock.sessions || []).flatMap(entry => {
+    if (entry.claimedId || entry.discarded) return [];
+    try {
+      const { duration } = verifiedFocusSeconds(entry, Math.floor(entry.plannedMs / 1000), true, now);
+      return [{ id: entry.id, duration }];
+    } catch {
+      return [];
+    }
+  });
 }

@@ -3,7 +3,7 @@ import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { mergeResolvedSessions } from '../../../../lib/recoveryState';
-import { advanceFocusClock, resolveFocusClock } from '../../../../lib/focusClock';
+import { advanceFocusClock, resolveFocusClock, recoverableFocusSessions } from '../../../../lib/focusClock';
 
 export async function GET() {
   try {
@@ -32,6 +32,7 @@ export async function GET() {
         parsedTelemetry = JSON.parse(user.telemetryState);
       } catch (e) {}
     }
+    const recoverySessions = recoverableFocusSessions(parsedTelemetry?.focusClock);
     // Internal time evidence is maintained by the server, not synchronized as UI state.
     if (parsedTelemetry) delete parsedTelemetry.focusClock;
 
@@ -44,6 +45,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       userId: session.user.id,
+      recoverableFocusSessions: recoverySessions,
       telemetryState: parsedTelemetry,
       timerPreferences: parsedTimerPrefs,
     });

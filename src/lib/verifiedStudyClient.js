@@ -20,7 +20,7 @@ export function queueStudySession(payload) {
 
 export async function saveVerifiedStudySession(payload) {
   // Let the Start/Pause checkpoint reach the server before asking to record time.
-  await checkpointRequest.catch(() => {});
+  await checkpointRequest;
   const response = await fetch('/api/study-sessions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });

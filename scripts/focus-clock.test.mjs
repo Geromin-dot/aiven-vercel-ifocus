@@ -3,10 +3,39 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8');
-const { advanceFocusClock, verifiedFocusSeconds, resolveFocusClock } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { advanceFocusClock, verifiedFocusSeconds, resolveFocusClock, recoverableFocusSessions } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const start = 1000000;
 const timer = (changes = {}) => ({ timerSessionId: 'session-1', isRunning: true, isFocus: true, totalTime: 900, updatedAt: start, lastPresenceCheckElapsed: 0, ...changes });
 const advance = (clock, state, seconds) => advanceFocusClock(clock, { ...state, updatedAt: start + seconds * 1000 }, { activePresenceInterval: 1 }, 'login-1', start + seconds * 1000);
+
+test('recovery saves one verified minute when the browser requests 63 seconds', () => {
+  const clock = advance({}, timer(), 0);
+  assert.equal(verifiedFocusSeconds(clock.sessions[0], 63, true, start + 63000).duration, 60);
+  assert.throws(() => verifiedFocusSeconds(clock.sessions[0], 63, false, start + 63000), /exceeds/);
+});
+
+test('a device clock ahead of the server can start tracking without creating extra time', () => {
+  const clock = advanceFocusClock({}, timer({ updatedAt: start + 3600000 }),
+    { activePresenceEnabled: false }, 'login-1', start);
+  assert.equal(clock.sessions.length, 1);
+  assert.throws(() => verifiedFocusSeconds(clock.sessions[0], 120, false, start), /exceeds/);
+  assert.equal(verifiedFocusSeconds(clock.sessions[0], 120, false, start + 120000).duration, 120);
+  assert.deepEqual(recoverableFocusSessions(clock, start + 120000), [{ id: 'session-1', duration: 120 }]);
+});
+
+test('recovery popup eligibility starts at 60 complete verified seconds', () => {
+  const clock = advance({}, timer(), 0);
+  assert.deepEqual(recoverableFocusSessions(clock, start + 59000), []);
+  assert.deepEqual(recoverableFocusSessions(clock, start + 59999), []);
+  assert.throws(() => verifiedFocusSeconds(clock.sessions[0], 60, true, start + 59999), /at least one/);
+  assert.deepEqual(recoverableFocusSessions(clock, start + 60000), [{ id: 'session-1', duration: 60 }]);
+  assert.deepEqual(recoverableFocusSessions(clock, start + 63000), [{ id: 'session-1', duration: 60 }]);
+  clock.sessions[0].claimedId = 'saved-1';
+  assert.deepEqual(recoverableFocusSessions(clock, start + 63000), []);
+  delete clock.sessions[0].claimedId;
+  clock.sessions[0].discarded = true;
+  assert.deepEqual(recoverableFocusSessions(clock, start + 63000), []);
+});
 
 test('invented durations and browser timestamps cannot create elapsed time', () => {
   assert.throws(() => verifiedFocusSeconds(null, 900), /server-verified/);

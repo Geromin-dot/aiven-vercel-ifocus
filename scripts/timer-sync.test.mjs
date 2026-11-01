@@ -11,6 +11,26 @@ const syncSource = (await readFile(new URL('../src/lib/telemetrySync.js', import
   .replace("'./recoveryState'", JSON.stringify(recoveryUrl));
 let moduleNumber = 0;
 
+test('saving waits for timer checkpoints and stops if the checkpoint failed', async () => {
+  const source = await readFile(new URL('../src/lib/verifiedStudyClient.js', import.meta.url), 'utf8');
+  const { syncTimerCheckpoint, saveVerifiedStudySession } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  const requests = [];
+  let finishCheckpoint;
+  globalThis.fetch = async url => {
+    requests.push(url);
+    return new Promise(resolve => { finishCheckpoint = resolve; });
+  };
+  const checkpoint = syncTimerCheckpoint({ timerSessionId: 'session-1', isRunning: true });
+  const rejectedCheckpoint = assert.rejects(checkpoint, /checkpoint/);
+  const save = saveVerifiedStudySession({ timerSessionId: 'session-1', duration: 120 });
+  const rejectedSave = assert.rejects(save, /checkpoint/);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(requests, ['/api/user/telemetry']);
+  finishCheckpoint({ ok: false });
+  await Promise.all([rejectedCheckpoint, rejectedSave]);
+  assert.deepEqual(requests, ['/api/user/telemetry']);
+});
+
 async function setup(local, cloud, beforeResponse = () => {}) {
   const storage = new Map(Object.entries({ ifocus_timer_device_id: 'phone', ...local }));
   const events = [];

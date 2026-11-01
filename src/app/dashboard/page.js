@@ -9,7 +9,7 @@ import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
-import { saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
+import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import { reflectionInputError } from '@/lib/reflectionInput';
 import coachStyles from '@/components/CoachLayout.module.css';
 
@@ -91,6 +91,8 @@ export default function CommandCenterPage() {
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [saveSessionToast, setSaveSessionToast] = useState({ show: false, message: '' });
+  const timerStartPendingRef = useRef(false);
+  const sessionSavePendingRef = useRef(false);
 
   // AI-Adapted Timer State & Override Confirmation Prompt
   const [isAiAdjustedTimer, setIsAiAdjustedTimer] = useState(false);
@@ -1261,7 +1263,8 @@ export default function CommandCenterPage() {
     window.dispatchEvent(new CustomEvent('ifocus_skip_break'));
   };
 
-  const startTimerDirectly = () => {
+  const startTimerDirectly = async () => {
+    if (timerStartPendingRef.current || sessionSavePendingRef.current) return;
     setShowNoBreakGateModal(false);
     const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
     const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
@@ -1299,6 +1302,18 @@ export default function CommandCenterPage() {
       userId: session?.user?.id,
       timerSessionId: baseState.timerSessionId || crypto.randomUUID(),
     };
+    // Confirm the server is tracking this timer before starting the visible countdown.
+    timerStartPendingRef.current = true;
+    try {
+      await syncTimerCheckpoint(nextState);
+      if (nextState.isRunning) Object.assign(nextState, toggleTimerState(baseState, preferences));
+    } catch (error) {
+      setSaveSessionToast({ show: true, title: 'Timer could not sync', error: true,
+        message: 'Please check your connection and try again. Your timer has not been changed.' });
+      return;
+    } finally {
+      timerStartPendingRef.current = false;
+    }
     setIsActive(nextState.isRunning);
     setTimeLeft(nextState.timeLeft);
     try {
@@ -1306,17 +1321,6 @@ export default function CommandCenterPage() {
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: nextState }));
     } catch (e) {}
 
-    // Cloud session checkpoint
-    fetch('/api/user/telemetry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        telemetryState: {
-          activeTimerState: nextState,
-          updatedAt: new Date().toISOString()
-        }
-      })
-    }).catch(() => {});
   };
 
   const toggleTimer = () => {
@@ -1436,6 +1440,7 @@ export default function CommandCenterPage() {
   };
 
   const handleSaveAndEndSession = async () => {
+    if (sessionSavePendingRef.current || timerStartPendingRef.current) return;
     setShowQuitModal(false);
     setIsActive(false);
     const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
@@ -1447,7 +1452,9 @@ export default function CommandCenterPage() {
     localStorage.setItem('ifocus_timer_state', JSON.stringify(paused));
     window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: paused }));
     const payload = { timerSessionId: current.timerSessionId, duration: elapsed };
+    sessionSavePendingRef.current = true;
     try {
+      await syncTimerCheckpoint(paused);
       const { session: saved } = await saveVerifiedStudySession(payload);
       forceResetTimer();
       playTaskAddSound();
@@ -1456,10 +1463,12 @@ export default function CommandCenterPage() {
       if (!navigator.onLine) {
         queueStudySession(payload);
         forceResetTimer();
-        setSaveSessionToast({ show: true, message: 'Study time saved locally. It will be verified when you reconnect.' });
+        setSaveSessionToast({ show: true, title: 'Waiting to sync', message: 'Study time is queued on this device. It has not been recorded to Analytics yet.' });
       } else {
-        setSaveSessionToast({ show: true, message: error.message });
+        setSaveSessionToast({ show: true, title: 'Study time not saved', error: true, message: error.message });
       }
+    } finally {
+      sessionSavePendingRef.current = false;
     }
   };
 
@@ -4495,7 +4504,7 @@ export default function CommandCenterPage() {
             top: '24px',
             right: '24px',
             background: '#ffffff',
-            border: '1px solid rgba(46, 125, 50, 0.35)',
+            border: saveSessionToast.error ? '1px solid #efb5b5' : '1px solid rgba(46, 125, 50, 0.35)',
             boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0,0,0,0.04)',
             borderRadius: '16px',
             padding: '12px 18px',
@@ -4511,8 +4520,8 @@ export default function CommandCenterPage() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: 'rgba(46, 125, 50, 0.12)',
-              color: '#2e7d32',
+              background: saveSessionToast.error ? '#fff0f0' : 'rgba(46, 125, 50, 0.12)',
+              color: saveSessionToast.error ? '#b42318' : '#2e7d32',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -4520,7 +4529,7 @@ export default function CommandCenterPage() {
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
+              {saveSessionToast.error ? <><line x1="12" y1="4" x2="12" y2="12" /><circle cx="12" cy="16" r="0.5" /></> : <polyline points="20 6 9 17 4 12" />}
             </svg>
           </div>
           <div>

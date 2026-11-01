@@ -17,12 +17,18 @@ export default function InterruptedSessionRecovery({ userId }) {
     if (!userId) return;
     let disposed = false;
     let checking = false;
+    let verifiedSessions = null;
     const load = () => {
       try {
-        const saved = JSON.parse(localStorage.getItem(`ifocus_interrupted_session_${userId}`) || 'null');
+        let saved = JSON.parse(localStorage.getItem(`ifocus_interrupted_session_${userId}`) || 'null');
         const resolved = JSON.parse(localStorage.getItem(`ifocus_resolved_timer_sessions_${userId}`) || '[]');
+        // Another sync can dispatch a refresh before the first verification completes.
+        if (saved && verifiedSessions === null) { setProgress(null); return; }
+        const verified = verifiedSessions?.find(item => item.id === saved?.id);
+        if (saved) saved = { ...saved, duration: Math.min(Number(saved.duration), verified?.duration ?? 0) };
         const meaningfulProgress = saved && Number.isFinite(Number(saved.duration)) && Number(saved.duration) >= 60;
         if (saved && !meaningfulProgress) localStorage.removeItem(`ifocus_interrupted_session_${userId}`);
+        if (meaningfulProgress) localStorage.setItem(`ifocus_interrupted_session_${userId}`, JSON.stringify(saved));
         if (!disposed) setProgress(meaningfulProgress && !resolved.includes(saved.id) ? saved : null);
       } catch { setProgress(null); }
     };
@@ -37,6 +43,7 @@ export default function InterruptedSessionRecovery({ userId }) {
         if (!response.ok) return;
         const result = await response.json();
         if (disposed || result.userId !== userId) return;
+        verifiedSessions = result.recoverableFocusSessions || [];
         applyResolvedSessions(userId, result.telemetryState?.resolvedTimerSessions);
         load();
       } catch { /* Retry on focus; do not re-offer an unverified cached session offline. */ }
