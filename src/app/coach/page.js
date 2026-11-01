@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { adaptCoachToResilience } from '@/lib/coachResilience';
-import { latestCoachSignal, currentCoachResilience } from '@/lib/coachSignals';
+import { latestCoachSignal, currentCoachResilience, formatCoachInsight } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
@@ -285,8 +285,6 @@ export default function CoachPage() {
         since: Math.max(todayStart - 1, effectiveResetTime),
         lastActivity: Number(localStorage.getItem('ifocus_last_user_activity')) || 0,
       });
-      setInsight(telem ? { ...telem, reason: telem.reason || telem.text,
-        actionPlan: telem.actionPlan || telem.aiReply?.message } : null);
 
       // Check if telemetry/reflection is from today and not invalidated by a newer recovery/reset
       if (telem) {
@@ -323,6 +321,10 @@ export default function CoachPage() {
       const isDistracted = !isIdle && !isStress && (stateStr.includes('distract') || reasonStr.includes('distract') || errorRate > 15);
       const isFatigued = !isIdle && !isStress && (stateStr.includes('fatigue') || reasonStr.includes('fatigue') || stateStr === 'hesitant' || reasonStr.includes('hesitation'));
       const isMotivated = !isIdle && !isStress && (stateStr.includes('motivat') || stateStr.includes('energetic') || stateStr.includes('ready'));
+      setInsight(formatCoachInsight(telem ? { ...telem,
+        state: isIdle ? 'Idle' : isStress ? 'Stressed' : isDistracted ? 'Distracted'
+          : isFatigued ? 'Fatigued' : isMotivated ? 'Motivated' : telem.state,
+      } : null));
 
       let cogState = {
         title: 'In the Zone',
@@ -871,7 +873,7 @@ export default function CoachPage() {
       reason: "High cognitive dwell time detected: Your study pace slowed by 38% over the past 20 minutes, indicating onset of mental fatigue.",
       actionPlan: "1. Take a 5-minute hydration & stretch break.\n2. Switch to low-effort flashcard review before tackling difficult topics.\n3. Re-engage with 15-minute focused bursts."
     };
-    setInsight(sampleIntervention);
+    setInsight(formatCoachInsight({ ...sampleIntervention, state: 'Fatigued' }));
     const telemetryKey = `ifocus_telemetry_insight_${userName}`;
     localStorage.setItem(telemetryKey, JSON.stringify(sampleIntervention));
   };
@@ -887,6 +889,7 @@ export default function CoachPage() {
     return planText;
   };
 
+  const insightColor = insight?.isIntervention ? '#d97706' : '#27522d';
   if (loading) return null;
 
   return (
@@ -928,7 +931,7 @@ export default function CoachPage() {
             background: '#ffffff', 
             padding: '1.35rem 1.45rem', 
             borderRadius: '16px', 
-            border: insight ? '1.5px solid var(--warning)' : '1px solid var(--glass-border)', 
+            border: insight?.isIntervention ? '1.5px solid var(--warning)' : '1px solid var(--glass-border)',
             boxShadow: insight ? '0 4px 18px rgba(217, 119, 6, 0.1)' : '0 2px 10px rgba(0,0,0,0.02)', 
             height: '100%', 
             minHeight: 0, 
@@ -994,18 +997,20 @@ export default function CoachPage() {
               /* Active Telemetry Intervention */
               <div style={{ display: 'flex', flexDirection: 'column', flex: '1 0 auto', gap: '0.85rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0 }}>
-                  <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'rgba(217, 119, 6, 0.15)', color: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: `${insightColor}18`, color: insightColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                      <line x1="12" y1="9" x2="12" y2="13"></line>
-                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      {insight.isIntervention ? <>
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </> : <polyline points="20 6 9 17 4 12" />}
                     </svg>
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--warning)' }}>
-                      Coach Intervention Triggered
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: insightColor }}>
+                      {insight.isIntervention ? 'Coach Intervention Triggered' : 'Current Study Guidance'}
                     </h3>
-                    <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Automated Cognitive Telemetry Alert</span>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{insight.source?.startsWith('reflection') || insight.aiReply ? 'Based on your latest reflection' : 'Based on your latest interaction'}</span>
                   </div>
                 </div>
 
@@ -1048,21 +1053,15 @@ export default function CoachPage() {
                   flexShrink: 0
                 }}>
                   <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Guided Focus Reset Protocol
+                    {insight.protocolTitle || 'Guided Focus Reset'}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.82rem', color: '#374151', lineHeight: '1.4' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
-                      <span>Disengage from the screen and take slow deep breaths</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
-                      <span>Hydrate and relax mental friction before resuming</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</span>
-                      <span>Resume with a low-friction warm-up task to regain flow</span>
-                    </div>
+                    {(insight.steps || []).map((step, index) => (
+                      <div key={step} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</span>
+                        <span>{step}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

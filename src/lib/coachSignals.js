@@ -15,6 +15,50 @@ export function latestCoachSignal(signals, { since = 0, lastActivity = 0 } = {})
     .sort((a, b) => signalTime(b) - signalTime(a))[0] || null;
 }
 
+export function formatCoachInsight(signal) {
+  if (!signal) return null;
+  const state = String(signal.state || signal.sentiment || signal.type || '').toLowerCase();
+  const idle = isIdleSignal(signal);
+  const stressed = !idle && /stress|friction|tension|frustrat|overwhelm/.test(state);
+  const fatigued = !idle && /fatigue|hesitant/.test(state);
+  const distracted = /distract/.test(state);
+  const energetic = /motivat|energ|ready/.test(state);
+  const guidance = idle ? {
+    reason: 'You were inactive for a while without a focus timer running. Start with one small task to ease back into studying.',
+    actionPlan: 'Choose a manageable task and try a short focus session. You can build up your pace once you feel ready.',
+    steps: ['Choose one small task', 'Start a short focus session', 'Check your progress before the next task'],
+  } : stressed ? {
+    reason: signal.source?.startsWith('keystroke')
+      ? 'Your recent typing showed frequent corrections or input friction. If the task feels difficult, take a moment to slow down and regroup.'
+      : 'Your latest reflection indicates stress or frustration. A gentler study pace may help you get started.',
+    actionPlan: 'Pause briefly if you need to, then choose one manageable task. Continue with a shorter focus block and reassess how you feel afterward.',
+    steps: ['Pause and take a few slow breaths', 'Choose one manageable task', 'Resume with a short focus block'],
+  } : fatigued ? {
+    reason: 'Your latest interaction suggests a slower study pace or tiredness. Give yourself room to recover before tackling harder material.',
+    actionPlan: 'Take a brief stretch or water break if needed. Return with a lighter task and a shorter focus block.',
+    steps: ['Check whether you need a short break', 'Choose a lighter task', 'Return at a comfortable pace'],
+  } : distracted ? {
+    reason: 'Your latest reflection indicates distraction. A clear, smaller task can help you regain focus.',
+    actionPlan: 'Reduce distractions and choose one specific goal for your next focus block. Check that goal before moving on.',
+    steps: ['Reduce distractions', 'Set one clear study goal', 'Work on that goal for one focus block'],
+  } : energetic ? {
+    reason: 'Your latest reflection indicates that you feel energetic and ready to study.',
+    actionPlan: 'Use that energy for a priority task. Follow your recommended focus rhythm and take your scheduled breaks.',
+    steps: ['Choose a priority task', 'Begin your recommended focus block', 'Take your scheduled break'],
+  } : {
+    reason: 'Your latest interaction shows that you are active and ready to continue at a steady pace.',
+    actionPlan: 'Choose your next study goal and follow a comfortable focus rhythm. Check in with yourself as you go.',
+    steps: ['Choose your next study goal', 'Start a comfortable focus block', 'Check your progress and take a break'],
+  };
+  const reason = signal.reason || signal.text;
+  const shortLabel = /^(high friction|hesitant|steady flow|fast flow|calibrating\.{0,3}|ready)$/i.test(String(reason || '').trim());
+  const isIntervention = idle || stressed || fatigued || distracted;
+  return { ...signal, reason: !reason || shortLabel ? guidance.reason : reason,
+    actionPlan: signal.actionPlan || signal.aiReply?.message || guidance.actionPlan,
+    isIntervention, steps: guidance.steps,
+    protocolTitle: idle ? 'Focus Kickstart Steps' : isIntervention ? 'Guided Focus Reset' : 'Next Study Steps' };
+}
+
 export function clearIdleOnActivity(storage, userName, now) {
   let cleared = false;
   const keys = ['ifocus_latest_telemetry', 'ifocus_active_idle_alert',

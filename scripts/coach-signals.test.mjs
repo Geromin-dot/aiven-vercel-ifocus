@@ -3,9 +3,47 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const source = await readFile(new URL('../src/lib/coachSignals.js', import.meta.url), 'utf8');
-const { latestCoachSignal, currentCoachResilience, clearIdleOnActivity } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { latestCoachSignal, currentCoachResilience, clearIdleOnActivity, formatCoachInsight } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const start = Date.parse('2026-11-01T01:00:00Z');
 const signal = (state, offset, extra = {}) => ({ state, timestamp: new Date(start + offset).toISOString(), ...extra });
+
+test('a live cadence label becomes a full explanation and action plan', () => {
+  const current = signal('Stressed', 2000, { reason: 'High Friction', source: 'keystroke_cadence' });
+  const insight = formatCoachInsight(current);
+  assert.match(insight.reason, /recent typing.*corrections/);
+  assert.notEqual(insight.reason, 'High Friction');
+  assert.match(insight.actionPlan, /manageable task/);
+  assert.equal(insight.steps.length, 3);
+  assert.equal(insight.timestamp, current.timestamp);
+  assert.equal(insight.isIntervention, true);
+});
+
+test('the latest detailed coach response is kept intact', () => {
+  const current = signal('Stressed', 2000, { reason: 'Your latest reflection describes pressure about an exam.',
+    actionPlan: 'Start with the first practice question, then review your reasoning.' });
+  const insight = formatCoachInsight(current);
+  assert.equal(insight.reason, current.reason);
+  assert.equal(insight.actionPlan, current.actionPlan);
+});
+
+test('energetic reflections keep their AI reply and receive study steps rather than stress reset steps', () => {
+  const insight = formatCoachInsight(signal('Motivated', 2000, { text: 'I am energetic',
+    aiReply: { message: 'Use your energy for the next priority task.' } }));
+  assert.equal(insight.actionPlan, 'Use your energy for the next priority task.');
+  assert.equal(insight.isIntervention, false);
+  assert.equal(insight.protocolTitle, 'Next Study Steps');
+  assert.match(insight.steps[0], /priority task/);
+});
+
+test('idle signals get kickstart steps and fatigue gets its own explanation', () => {
+  const idle = formatCoachInsight(signal('Idle', 2000));
+  assert.equal(idle.protocolTitle, 'Focus Kickstart Steps');
+  assert.match(idle.steps[0], /small task/);
+  const fatigue = formatCoachInsight(signal('Fatigued', 2000, { reason: 'Hesitant' }));
+  assert.match(fatigue.reason, /tiredness/);
+  assert.match(fatigue.actionPlan, /lighter task/);
+  assert.equal(formatCoachInsight(null), null);
+});
 
 test('new reflections and keyboard friction supersede old AFK regardless of source order', () => {
   const idle = signal('idle', 0);
