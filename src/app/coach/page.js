@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { adaptCoachToResilience } from '@/lib/coachResilience';
+import { latestCoachSignal, currentCoachResilience } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
@@ -130,7 +131,7 @@ export default function CoachPage() {
       subtext: 'Silent observation: Attention levels optimal'
     },
     studyStamina: {
-      title: '94% Resilience',
+      title: '100% Resilience',
       color: '#2e7d32',
       subtext: 'BreakGate cycle compliance on track'
     },
@@ -158,19 +159,16 @@ export default function CoachPage() {
     }
   ]);
 
-  const loadDiagnostics = useCallback(async () => {
+  const loadDiagnostics = useCallback(async (syncCloud = true) => {
     try {
       // 0. Bi-Directional Cloud Telemetry Sync: Merge and reconcile database with local state
       let reconciled = null;
       try {
-        reconciled = await reconcileCloudTelemetry();
+        if (syncCloud === true) reconciled = await reconcileCloudTelemetry();
       } catch (err) {}
 
       if (reconciled?.mergedJournal && Array.isArray(reconciled.mergedJournal)) {
         setJournalEntries(reconciled.mergedJournal);
-      }
-      if (reconciled?.effectiveInsight) {
-        setInsight(reconciled.effectiveInsight);
       }
 
       // 0. Check Active AI Rest Recovery status
@@ -213,6 +211,7 @@ export default function CoachPage() {
 
       // If Rest Recovery is actively running, display dedicated resting state
       if (restRunning) {
+        setInsight(null);
         setTelemetryDiagnostics({
           cognitiveState: {
             title: 'Restorative Recovery Active',
@@ -282,14 +281,12 @@ export default function CoachPage() {
         }
       } catch (e) {}
 
-      // Sort candidate telemetry by newest timestamp
-      telemCandidates.sort((a, b) => {
-        const tA = a?.timestamp ? new Date(a.timestamp).getTime() : (a?.date ? new Date(a.date).getTime() : 0);
-        const tB = b?.timestamp ? new Date(b.timestamp).getTime() : (b?.date ? new Date(b.date).getTime() : 0);
-        return tB - tA;
+      let telem = latestCoachSignal(telemCandidates, {
+        since: Math.max(todayStart - 1, effectiveResetTime),
+        lastActivity: Number(localStorage.getItem('ifocus_last_user_activity')) || 0,
       });
-
-      let telem = telemCandidates.length > 0 ? telemCandidates[0] : null;
+      setInsight(telem ? { ...telem, reason: telem.reason || telem.text,
+        actionPlan: telem.actionPlan || telem.aiReply?.message } : null);
 
       // Check if telemetry/reflection is from today and not invalidated by a newer recovery/reset
       if (telem) {
@@ -300,9 +297,10 @@ export default function CoachPage() {
       }
 
       const stateStr = String(telem?.state || telem?.sentiment || telem?.type || '').toLowerCase();
-      const reasonStr = String(telem?.reason || telem?.actionPlan || '').toLowerCase();
-      const backspaces = Number(telem?.backspaces) || 0;
-      const errorRate = Number(telem?.errorRate || telem?.metrics?.errorRate) || 0;
+      const isReflection = telem?.source?.startsWith('reflection') || Boolean(telem?.aiReply);
+      const reasonStr = isReflection ? '' : String(telem?.reason || telem?.actionPlan || '').toLowerCase();
+      const backspaces = isReflection ? 0 : Number(telem?.backspaces) || 0;
+      const errorRate = isReflection ? 0 : Number(telem?.errorRate || telem?.metrics?.errorRate) || 0;
 
       const isIdle = stateStr.includes('idle') || stateStr.includes('inactivity') || reasonStr.includes('idle') || reasonStr.includes('inactivity');
       const isStress = !isIdle && (
@@ -331,7 +329,7 @@ export default function CoachPage() {
         status: 'Optimal',
         color: '#27522d',
         dotColor: '#16a34a',
-        subtext: recoveryCompletedTime >= todayStart
+        subtext: telem ? 'Based on your latest interaction: a steady study pace.' : recoveryCompletedTime >= todayStart
           ? 'Restorative break completed: cognitive baseline restored and ready for study'
           : 'Silent observation: Attention levels optimal'
       };
@@ -412,8 +410,8 @@ export default function CoachPage() {
         };
       }
 
-      // Check custom timer overrides if not currently in high stress or idle
-      if (!isStress && !isIdle) {
+      // A saved schedule is a fallback; it cannot override a newer interaction.
+      if (!telem) {
         try {
           const customTimerRaw = localStorage.getItem('ifocus_custom_timer');
           if (customTimerRaw) {
@@ -431,114 +429,22 @@ export default function CoachPage() {
         } catch (e) {}
       }
 
-      // 2. BreakGate / Study Stamina Calculation (Daily Reset Aware & Recovery Aware)
-      let stamina = {
-        title: '100% Resilience',
-        color: '#16a34a',
-        subtext: recoveryCompletedTime >= todayStart
-          ? 'Recovery break completed: cognitive baseline restored'
-          : 'Fresh study day: ready for your first focus session'
+      // Use the newest interaction as the current baseline, keeping prior events in history.
+      let events = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+        if (Array.isArray(stored)) events = stored;
+      } catch {}
+      const currentResilience = currentCoachResilience({
+        signal: telem, events, since: Math.max(todayStart - 1, effectiveResetTime),
+        isStress, isFatigued, isDistracted, isIdle,
+      });
+      const { staminaPct, totalEvents, completedEvents, skippedEvents } = currentResilience;
+      const stamina = {
+        title: `${staminaPct}% Resilience`,
+        color: staminaPct < 60 ? '#dc2626' : staminaPct < 80 || skippedEvents ? '#d97706' : '#16a34a',
+        subtext: currentResilience.subtext,
       };
-
-      let staminaPct = 100;
-      let totalEvents = 0;
-      let completedEvents = 0;
-      let skippedEvents = 0;
-
-      const rawEvents = localStorage.getItem('ifocus_breakgate_events');
-      if (rawEvents) {
-        try {
-          const events = JSON.parse(rawEvents);
-          if (Array.isArray(events) && events.length > 0) {
-            // Daily reset: strictly isolate events logged today (starting from 12:00 AM)
-            const todayEvents = events.filter(e => {
-              const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
-              return t >= todayStart;
-            });
-
-            // If recovery was completed today, any skipped BreakGate events that occurred BEFORE recovery completed have been reconciled!
-            const unrecoveredEvents = recoveryCompletedTime >= todayStart
-              ? todayEvents.filter(e => {
-                  const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
-                  return t > recoveryCompletedTime;
-                })
-              : todayEvents;
-
-            if (unrecoveredEvents.length > 0) {
-              totalEvents = unrecoveredEvents.length;
-              completedEvents = unrecoveredEvents.filter(e => e.status === 'completed').length;
-              skippedEvents = totalEvents - completedEvents;
-              // Proportional deduction: baseline 100%, -20% per skip, +5% per completed recovery
-              staminaPct = Math.max(0, Math.min(100, 100 - (skippedEvents * 20) + (completedEvents * 5)));
-              const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
-
-              if (skippedEvents >= 3 || staminaPct < 60) {
-                stamina = {
-                  title: `${staminaPct}% Resilience`,
-                  color: '#dc2626',
-                  subtext: `Break challenges skipped (${skippedEvents} unrecovered today) - rest needed`
-                };
-              } else if (skippedEvents > 0 || staminaPct < 80) {
-                stamina = {
-                  title: `${staminaPct}% Resilience`,
-                  color: '#d97706',
-                  subtext: `Pacing lag detected (${skippedEvents} break challenge skipped today)`
-                };
-              } else {
-                stamina = {
-                  title: `${staminaPct}% Resilience`,
-                  color: '#16a34a',
-                  subtext: `High consistency: ${completedEvents} of ${totalEvents} BreakGates completed today`
-                };
-              }
-            } else if (recoveryCompletedTime >= todayStart) {
-              // Recovery completed today and no new unaddressed skips
-              totalEvents = 0;
-              completedEvents = 0;
-              skippedEvents = 0;
-              staminaPct = 100;
-              stamina = {
-                title: '100% Resilience',
-                color: '#16a34a',
-                subtext: 'Recovery break completed: cognitive baseline restored'
-              };
-            } else if (isStress) {
-              // BreakGate inactive/no events today, but user has cognitive stress/frustration
-              stamina = {
-                title: '65% Resilience',
-                color: '#d97706',
-                subtext: 'Cognitive strain detected - lighter study block advised'
-              };
-              staminaPct = 65;
-            } else {
-              // No sessions recorded yet today -> Full 100% Resilience reset for the fresh day
-              totalEvents = 0;
-              completedEvents = 0;
-              skippedEvents = 0;
-              staminaPct = 100;
-              stamina = {
-                title: '100% Resilience',
-                color: '#16a34a',
-                subtext: 'BreakGate cycle compliance on track'
-              };
-            }
-          }
-        } catch (e) {}
-      } else if (recoveryCompletedTime >= todayStart) {
-        stamina = {
-          title: '100% Resilience',
-          color: '#16a34a',
-          subtext: 'Recovery break completed: cognitive baseline restored'
-        };
-        staminaPct = 100;
-      } else if (isStress) {
-        stamina = {
-          title: '65% Resilience',
-          color: '#d97706',
-          subtext: 'Cognitive strain detected - lighter study block advised'
-        };
-        staminaPct = 65;
-      }
 
       // Recovery evidence takes priority over positive reflections and saved timers.
       const resilienceDiagnostics = adaptCoachToResilience({
@@ -556,7 +462,7 @@ export default function CoachPage() {
       const dynamicStrategies = [];
 
       // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
-      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !isStress) {
+      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !telem) {
         dynamicStrategies.push({
           title: 'Pacing & Recovery Rebalanced',
           badge: 'Deficit Resolved',
@@ -617,7 +523,7 @@ export default function CoachPage() {
       }
 
       // Strategy Card 2: Cognitive Telemetry & Study Protocol
-      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !isStress) {
+      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !telem) {
         dynamicStrategies.push({
           title: 'Flow State Maintenance',
           badge: 'Optimal Flow',
@@ -702,60 +608,15 @@ export default function CoachPage() {
   useEffect(() => {
     if (status === 'loading') return;
 
+    loadDiagnostics(false);
     loadDiagnostics();
 
-    // Load active insight from localStorage across namespaced & global keys
-    let activeInsight = null;
-    try {
-      const stored = localStorage.getItem(`ifocus_telemetry_insight_${userName}`) || 
-                     localStorage.getItem('ifocus_telemetry_insight_anonymous') ||
-                     localStorage.getItem('ifocus_active_idle_alert') ||
-                     localStorage.getItem('ifocus_latest_telemetry');
-      if (stored) {
-        const data = JSON.parse(stored);
-        if (data && (data.reason || data.actionPlan)) {
-          let isRestActive = false;
-          try {
-            const rRaw = localStorage.getItem('ifocus_ai_rest_recovery');
-            if (rRaw) {
-              const rData = JSON.parse(rRaw);
-              if (rData && rData.active) isRestActive = true;
-            }
-          } catch (e) {}
-
-          let rcTime = 0;
-          try {
-            rcTime = Number(localStorage.getItem('ifocus_recovery_completed')) || 0;
-          } catch (e) {}
-
-          let crTime = 0;
-          try {
-            crTime = Number(localStorage.getItem('ifocus_cognitive_reset')) || 0;
-          } catch (e) {}
-
-          const effectiveReset = Math.max(rcTime, crTime);
-          const insightTime = data.timestamp ? new Date(data.timestamp).getTime() : 0;
-
-          if (!isRestActive && (effectiveReset === 0 || (insightTime > 0 && insightTime > effectiveReset))) {
-            activeInsight = data;
-          }
-        }
-      }
-    } catch (e) {
-      console.error("Error parsing telemetry data", e);
-    }
-
-    setInsight(activeInsight);
     setLoading(false);
 
-    const handleTelemetryEvent = (e) => {
-      loadDiagnostics();
-      if (e?.detail && (e.detail.reason || e.detail.actionPlan)) {
-        setInsight(e.detail);
-      }
-    };
+    const handleTelemetryEvent = () => { loadDiagnostics(false); };
 
     const handleJournalUpdate = () => {
+      loadDiagnostics(false);
       try {
         const stored = localStorage.getItem(`ifocus_journal_history_${userName}`);
         if (stored) setJournalEntries(JSON.parse(stored));
@@ -767,6 +628,7 @@ export default function CoachPage() {
     window.addEventListener('ifocus_timer_sync', loadDiagnostics);
     window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
     window.addEventListener('storage', handleJournalUpdate);
+    window.addEventListener('focus', handleTelemetryEvent);
 
     return () => {
       window.removeEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
@@ -774,6 +636,7 @@ export default function CoachPage() {
       window.removeEventListener('ifocus_timer_sync', loadDiagnostics);
       window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
       window.removeEventListener('storage', handleJournalUpdate);
+      window.removeEventListener('focus', handleTelemetryEvent);
     };
   }, [status, userName, loadDiagnostics]);
 
@@ -800,8 +663,7 @@ export default function CoachPage() {
 
       const rhythmTitle = String(telemetryDiagnostics?.recommendedRhythm?.title || '');
       const cogTitle = String(telemetryDiagnostics?.cognitiveState?.title || '');
-      const alertBody = `${insight?.actionPlan || ''} ${insight?.reason || ''}`.toLowerCase();
-      const combined = `${rhythmTitle} ${cogTitle} ${alertBody}`.toLowerCase();
+      const combined = `${rhythmTitle} ${cogTitle}`.toLowerCase();
 
       // Idle / Inactivity checks: When user is idle, they need to START a focus session (not take a rest break!)
       const isIdleAlert = combined.includes('inactivity detected') || 
@@ -872,8 +734,7 @@ export default function CoachPage() {
         detectedState === 'Stressed' || 
         combined.includes('rest needed') || 
         combined.includes('break recovery deficit') || 
-        (combined.includes('fatigue') && !combined.includes('idle')) || 
-        (insight?.actionPlan && (insight.actionPlan.toLowerCase().includes('hydration') || insight.actionPlan.toLowerCase().includes('take a 5-minute')))));
+        (combined.includes('fatigue') && !combined.includes('idle'))));
 
       // 2. Persist custom timer schedule so it actually applies to the dashboard
       const customTimer = {

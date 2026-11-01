@@ -7,5 +7,5 @@ test('greetings, typos, and empty text do not become cognitive assessments',()=>
   for(const text of ['',null,'Hello','hello there!','Ty','hi','asdfghjkl','aaaaaaa'])assert.ok(reflectionInputError(text),String(text));
 });
 test('short meaningful moods and English or Tagalog study context remain valid',()=>{
-  for(const text of ['tired','pagod','stressed','motivated','I want to review biology','Pagod ako pero gusto ko magreview','I have 25 minutes to study'])assert.equal(reflectionInputError(text),'',text);
+  for(const text of ['tired','pagod','stressed','motivated','I am energetic','I want to review biology','Pagod ako pero gusto ko magreview','I have 25 minutes to study'])assert.equal(reflectionInputError(text),'',text);
 });

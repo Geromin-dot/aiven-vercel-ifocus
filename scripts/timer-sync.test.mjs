@@ -6,9 +6,11 @@ const timerSource = await readFile(new URL('../src/lib/timerState.js', import.me
 const timerUrl = `data:text/javascript;base64,${Buffer.from(timerSource).toString('base64')}`;
 const recoverySource = await readFile(new URL('../src/lib/recoveryState.js', import.meta.url), 'utf8');
 const recoveryUrl = `data:text/javascript;base64,${Buffer.from(recoverySource).toString('base64')}`;
+const signalUrl = `data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/coachSignals.js', import.meta.url), 'utf8')).toString('base64')}`;
 const syncSource = (await readFile(new URL('../src/lib/telemetrySync.js', import.meta.url), 'utf8'))
   .replace("'./timerState'", JSON.stringify(timerUrl))
-  .replace("'./recoveryState'", JSON.stringify(recoveryUrl));
+  .replace("'./recoveryState'", JSON.stringify(recoveryUrl))
+  .replace("'./coachSignals'", JSON.stringify(signalUrl));
 let moduleNumber = 0;
 
 test('saving waits for timer checkpoints and stops if the checkpoint failed', async () => {
@@ -67,6 +69,18 @@ test('a pause made during an in-flight request remains authoritative', async () 
     activeTimerState: { ...pause, timeLeft: 900, isRunning: true, updatedAt: 100 },
   }, storage => storage.set('ifocus_timer_state', JSON.stringify(pause)));
   assert.deepEqual(JSON.parse(storage.get('ifocus_timer_state')), pause);
+});
+
+test('a new reflection during a cloud request cannot be overwritten by old AFK data', async () => {
+  const idle = { state: 'idle', timestamp: '2026-11-01T01:00:00Z', reason: 'Inactivity detected' };
+  const stress = { state: 'Stressed', timestamp: '2026-11-01T01:01:00Z', source: 'reflection_submission' };
+  const { storage } = await setup({ ifocus_latest_telemetry: JSON.stringify(idle) },
+    { latestTelemetry: idle, insightData: idle, activeIdleAlert: idle }, values => {
+      values.set('ifocus_latest_telemetry', JSON.stringify(stress));
+    });
+  assert.equal(JSON.parse(storage.get('ifocus_latest_telemetry')).state, 'Stressed');
+  assert.equal(JSON.parse(storage.get('ifocus_telemetry_insight_anonymous')).state, 'Stressed');
+  assert.equal(storage.has('ifocus_active_idle_alert'), false);
 });
 
 test('PC to phone handoff offers the recorded 10 minutes without starting a countdown', async () => {
@@ -131,7 +145,9 @@ test('less than a minute of checkpoint progress is never offered for recovery', 
 
 
 test('telemetry sync retries a conflict and never clears resolved sessions with a stale payload', async () => {
-  let row = { telemetryState: JSON.stringify({resolvedTimerSessions:['pc-discard']}), timerPreferences: '{}' };
+  const newSignal = { state: 'Stressed', timestamp: '2026-11-01T01:01:00Z' };
+  const oldSignal = { state: 'idle', timestamp: '2026-11-01T01:00:00Z' };
+  let row = { telemetryState: JSON.stringify({resolvedTimerSessions:['pc-discard'], latestTelemetry: newSignal}), timerPreferences: '{}' };
   let attempts = 0;
   globalThis.__recoveryTestDb = {
     $transaction: async (callback, options) => {
@@ -149,9 +165,10 @@ test('telemetry sync retries a conflict and never clears resolved sessions with 
     .replace("'../../../../lib/focusClock'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8')).toString('base64')}`));
   const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
   for(const resolvedTimerSessions of [null, [], ['phone-save']]) {
-    const result=await POST({json:async()=>({telemetryState:{resolvedTimerSessions,activeTimerState:{updatedAt:200}}})});
+    const result=await POST({json:async()=>({telemetryState:{resolvedTimerSessions,latestTelemetry:oldSignal,activeTimerState:{updatedAt:200}}})});
     assert.equal(result.status,200);
     assert.ok(JSON.parse(row.telemetryState).resolvedTimerSessions.includes('pc-discard'));
+    assert.equal(JSON.parse(row.telemetryState).latestTelemetry.state, 'Stressed');
   }
   assert.deepEqual(JSON.parse(row.telemetryState).resolvedTimerSessions,['pc-discard','phone-save']);
   delete globalThis.__recoveryTestDb;

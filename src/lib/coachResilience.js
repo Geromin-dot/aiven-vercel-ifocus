@@ -17,15 +17,16 @@ export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, stam
     cognitiveState: {
       ...cognitiveState,
       title: preserveState ? cognitiveState.title : recoveryNeeded ? 'Recovery Needed' : 'Rebuilding Study Consistency',
-      status: recoveryNeeded ? 'Rest Needed' : 'Pacing Advisory',
-      color,
-      dotColor: color,
-      subtext: `${evidence}. ${recoveryNeeded ? 'Take a recovery break before a lighter study block.' : 'Complete your next BreakGate before increasing the pace.'}`,
+      status: preserveState && cognitiveState.status ? cognitiveState.status : recoveryNeeded ? 'Rest Needed' : 'Pacing Advisory',
+      color: preserveState && cognitiveState.color ? cognitiveState.color : color,
+      dotColor: preserveState && cognitiveState.dotColor ? cognitiveState.dotColor : color,
+      subtext: preserveState && cognitiveState.subtext ? cognitiveState.subtext
+        : `${evidence}. ${recoveryNeeded ? 'Take a recovery break before a lighter study block.' : 'Complete your next BreakGate before increasing the pace.'}`,
     },
     recommendedRhythm: {
       title: `${workMinutes}m Work / ${breakMinutes}m Gate`,
       color,
-      subtext: recoveryNeeded
+      subtext: preserveState && !recoveryNeeded ? recommendedRhythm.subtext : recoveryNeeded
         ? `Take a 5m recovery break first, then resume with ${workMinutes}m focus blocks.`
         : `Shorter focus blocks while rebuilding study resilience; complete each BreakGate.`,
     },

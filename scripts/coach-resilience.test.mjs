@@ -54,3 +54,13 @@ test('restored resilience removes recovery restrictions', () => {
   assert.equal(recovered.recoveryNeeded, false);
   assert.equal(recovered.cognitiveState.title, 'High Energy / Driven');
 });
+
+test('current stress status and explanation are preserved instead of an older pacing advisory', () => {
+  const cognitiveState = { title: 'High Tension / Stress', status: 'Tension', color: '#dc2626',
+    dotColor: '#dc2626', subtext: 'Stress noted in your reflection.' };
+  const recommendedRhythm = { title: '15m Work / 5m Gate', subtext: 'Lighter focus blocks for current stress.' };
+  const result = adaptCoachToResilience({ cognitiveState, recommendedRhythm,
+    staminaPct: 65, skippedEvents: 0, preserveState: true });
+  assert.deepEqual(result.cognitiveState, cognitiveState);
+  assert.equal(result.recommendedRhythm.subtext, recommendedRhythm.subtext);
+});

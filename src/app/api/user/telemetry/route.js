@@ -88,6 +88,14 @@ export async function POST(req) {
             : body.telemetryState;
 
           const merged = { ...existingTelemetry, ...incoming };
+          // A delayed AFK/keyboard request must not replace a newer interaction.
+          for (const field of ['latestTelemetry', 'insightData', 'activeIdleAlert']) {
+            const previous = existingTelemetry[field];
+            const next = incoming[field];
+            if (previous && next && Date.parse(previous.timestamp || previous.date) > Date.parse(next.timestamp || next.date)) {
+              merged[field] = previous;
+            }
+          }
           // Ignore delayed checkpoint requests that arrive after a newer pause/reset.
           if (incoming.activeTimerState && existingTelemetry.activeTimerState &&
               Number(incoming.activeTimerState.updatedAt || 0) < Number(existingTelemetry.activeTimerState.updatedAt || 0)) {

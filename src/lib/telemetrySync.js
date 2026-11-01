@@ -3,6 +3,7 @@
 
 import { getTimerDeviceId, recoveryFromCheckpoint } from './timerState';
 import { applyResolvedSessions } from './recoveryState';
+import { latestCoachSignal, signalTime } from './coachSignals';
 
 let reconciliationPromise = null;
 let lastReconciliationAt = 0;
@@ -139,6 +140,10 @@ async function reconcileCloudTelemetryInternal() {
     localStorage.setItem("ifocus_breakgate_events", JSON.stringify(mergedEvents));
 
     // 4. Reconcile Reflection Journal History (merge entries by unique ID, date, or text)
+    try {
+      const latest = JSON.parse(localStorage.getItem(`ifocus_journal_history_${userName}`) || 'null');
+      if (Array.isArray(latest)) localJournal = latest;
+    } catch {}
     const remoteJournal = Array.isArray(cloud.journalHistory) ? cloud.journalHistory : [];
     const journalMap = new Map();
     [...localJournal, ...remoteJournal].forEach((entry) => {
@@ -189,61 +194,29 @@ async function reconcileCloudTelemetryInternal() {
       localStorage.setItem("ifocus_cognitive_reset", String(effectiveReset));
     }
 
-    // 6. Reconcile Telemetry, Insight & Idle Alert
+    // A reflection or key event may have arrived while the cloud GET was in flight.
+    try { localTelem = JSON.parse(localStorage.getItem('ifocus_latest_telemetry') || 'null'); } catch {}
+    try { localInsight = JSON.parse(localStorage.getItem(`ifocus_telemetry_insight_${userName}`) || 'null'); } catch {}
+    try { localIdleAlert = JSON.parse(localStorage.getItem('ifocus_active_idle_alert') || 'null'); } catch {}
     const effectiveResetBaseline = Math.max(effectiveRecovery, effectiveReset);
-
-    let effectiveTelem = cloud.latestTelemetry || localTelem;
-    const localTelemTime = localTelem ? new Date(localTelem.timestamp || localTelem.date || 0).getTime() : 0;
-    const cloudTelemTime = cloud.latestTelemetry ? new Date(cloud.latestTelemetry.timestamp || cloud.latestTelemetry.date || 0).getTime() : 0;
-    if (localTelem && localTelemTime >= cloudTelemTime) {
-      effectiveTelem = localTelem;
-    }
-
-    if (effectiveTelem) {
-      const telemTime = new Date(effectiveTelem.timestamp || effectiveTelem.date || 0).getTime();
-      if (effectiveResetBaseline > 0 && telemTime <= effectiveResetBaseline) {
-        effectiveTelem = null;
-        localStorage.removeItem("ifocus_latest_telemetry");
-      } else {
-        localStorage.setItem("ifocus_latest_telemetry", JSON.stringify(effectiveTelem));
-      }
-    } else {
-      localStorage.removeItem("ifocus_latest_telemetry");
-    }
-
-    // Reconcile Insight Data
-    let effectiveInsight = cloud.insightData || localInsight;
-    const localInsightTime = localInsight ? new Date(localInsight.timestamp || localInsight.date || 0).getTime() : 0;
-    const cloudInsightTime = cloud.insightData ? new Date(cloud.insightData.timestamp || cloud.insightData.date || 0).getTime() : 0;
-    if (localInsight && localInsightTime >= cloudInsightTime) {
-      effectiveInsight = localInsight;
-    }
-    if (effectiveInsight) {
-      const insTime = new Date(effectiveInsight.timestamp || effectiveInsight.date || 0).getTime();
-      if (effectiveResetBaseline > 0 && insTime <= effectiveResetBaseline) {
-        effectiveInsight = null;
-        localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
-        localStorage.removeItem("ifocus_telemetry_insight_anonymous");
-      } else {
-        localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(effectiveInsight));
-        localStorage.setItem("ifocus_telemetry_insight_anonymous", JSON.stringify(effectiveInsight));
-      }
-    } else {
-      localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
-      localStorage.removeItem("ifocus_telemetry_insight_anonymous");
-    }
-
-    let effectiveIdle = cloud.activeIdleAlert || localIdleAlert;
-    if (effectiveIdle) {
-      const idleTime = new Date(effectiveIdle.timestamp || 0).getTime();
-      if (effectiveResetBaseline > 0 && idleTime <= effectiveResetBaseline) {
-        effectiveIdle = null;
-        localStorage.removeItem("ifocus_active_idle_alert");
-      } else {
-        localStorage.setItem("ifocus_active_idle_alert", JSON.stringify(effectiveIdle));
-      }
-    } else {
-      localStorage.removeItem("ifocus_active_idle_alert");
+    const signalOptions = { since: effectiveResetBaseline,
+      lastActivity: Number(localStorage.getItem('ifocus_last_user_activity')) || 0 };
+    const localTelemTime = signalTime(localTelem);
+    const cloudTelemTime = signalTime(cloud.latestTelemetry);
+    const effectiveTelem = latestCoachSignal([localTelem, cloud.latestTelemetry], signalOptions);
+    const localInsightTime = signalTime(localInsight);
+    const cloudInsightTime = signalTime(cloud.insightData);
+    const effectiveInsight = latestCoachSignal([localInsight, cloud.insightData, effectiveTelem], signalOptions);
+    let effectiveIdle = latestCoachSignal([localIdleAlert, cloud.activeIdleAlert], signalOptions);
+    if (signalTime(effectiveIdle) < Math.max(signalTime(effectiveTelem), signalTime(effectiveInsight))) effectiveIdle = null;
+    for (const [key, value] of [
+      ['ifocus_latest_telemetry', effectiveTelem],
+      [`ifocus_telemetry_insight_${userName}`, effectiveInsight],
+      ['ifocus_telemetry_insight_anonymous', effectiveInsight],
+      ['ifocus_active_idle_alert', effectiveIdle],
+    ]) {
+      if (value) localStorage.setItem(key, JSON.stringify(value));
+      else localStorage.removeItem(key);
     }
 
     // 7. Reconcile Timer Preferences & Checkpoint

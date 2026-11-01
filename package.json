@@ -10,6 +10,7 @@
     "test:timer": "node --test scripts/timer-state.test.mjs scripts/timer-sync.test.mjs scripts/timer-notifications.test.mjs scripts/timer-notification-delivery.test.mjs scripts/presence-push.test.mjs scripts/study-stats.test.mjs scripts/focus-clock.test.mjs",
     "push:keys": "node scripts/generate-push-keys.mjs",
     "test:reflection": "node --test scripts/reflection-input.test.mjs",
+    "test:coach": "node --test scripts/coach-signals.test.mjs scripts/coach-resilience.test.mjs scripts/reflection-input.test.mjs",
     "push:setup-db": "prisma db execute --schema prisma/schema.prisma --file prisma/push-notifications.sql",
     "postinstall": "prisma generate"
   },

@@ -9,6 +9,7 @@ import { reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '../lib/verifiedStudyClient';
+import { clearIdleOnActivity } from '../lib/coachSignals';
 import { sendSystemNotification, formatNotificationTime, PRESENCE_NOTIFICATION_ACTIONS, presenceCheckId } from '../lib/timerNotifications';
 
 // Helper: Retrieve user-configured audio volume factor from settings (0.0 to 1.0)
@@ -733,36 +734,20 @@ export default function GlobalTimer() {
       }
 
       const now = Date.now();
-      const last = lastActivityRef.current || now;
-      const idleMs = now - last;
-
-      // Update in-memory & persistent activity timestamp
       lastActivityRef.current = now;
       try {
-        localStorage.setItem("ifocus_last_user_activity", String(now));
-      } catch (e) {}
-
-      // If user returns after being AFK for longer than timeout and NO timer is running:
-      const current = readStorageState() || stateRef.current;
-      const isTimerRunning = Boolean(current?.isRunning);
-
-      if (!isTimerRunning && !showIdleCoachModal && !showPresenceModal && !showBreakGateModal && !showReflectionModal && !showCycleCompleteModal && !showBurnoutModal) {
-        let afkEnabled = true;
-        let afkMinutes = 1;
-        try {
-          const raw = localStorage.getItem("ifocus_timer_preferences");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.afkCoachEnabled !== undefined) afkEnabled = Boolean(parsed.afkCoachEnabled);
-            if (parsed.afkCoachMinutes !== undefined) afkMinutes = Number(parsed.afkCoachMinutes) || 1;
-          }
-        } catch (e) {}
-
-        const thresholdMs = Math.max(30000, afkMinutes * 60 * 1000);
-        if (afkEnabled && idleMs >= thresholdMs) {
-          triggerIdleCoachIntervention(false, afkMinutes);
+        localStorage.setItem('ifocus_last_user_activity', String(now));
+        const userName = session?.user?.name || session?.user?.username || localStorage.getItem('ifocus_user_name') || 'Student';
+        const resumed = clearIdleOnActivity(localStorage, userName, now);
+        if (resumed) {
+          window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: resumed }));
+          fetch('/api/user/telemetry', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telemetryState: { latestTelemetry: resumed, activeIdleAlert: null } }),
+          }).catch(() => {});
         }
-      }
+      } catch {}
+      // The idle watcher detects inactivity. Returning input clears the old alert.
     };
 
     const handleVisibilityOrFocus = () => {
@@ -811,7 +796,7 @@ export default function GlobalTimer() {
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
     };
-  }, [isAdmin, pathname, readStorageState, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, triggerIdleCoachIntervention]);
+  }, [isAdmin, pathname, readStorageState, commitStorageState, getEffectivePath, session?.user?.name, session?.user?.username, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, triggerIdleCoachIntervention]);
 
   // Test Listeners for Idle Coach & Burnout Check
   useEffect(() => {

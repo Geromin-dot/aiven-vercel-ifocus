@@ -356,6 +356,7 @@ export default function CommandCenterPage() {
   const backspaceCountRef = useRef(0);
   const totalKeystrokesRef = useRef(0);
   const anomalyTriggeredRef = useRef(false);
+  const lastTelemetryAlertAtRef = useRef(0);
   const recentKeyTimestampsRef = useRef([]);
 
   // Comprehensive Frustration / Profanity / Anxiety Trigger Words (Legacy Prototype Parity)
@@ -435,6 +436,7 @@ export default function CommandCenterPage() {
   };
 
   const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio, customTitle = "Coach has noticed something") => {
+    lastTelemetryAlertAtRef.current = performance.now();
     const isHesitant = reason.toLowerCase().includes('hesitation') || reason.toLowerCase().includes('fatigue');
     const stateType = isHesitant ? 'Fatigued' : 'Stressed';
     const nowIso = new Date().toISOString();
@@ -578,7 +580,8 @@ export default function CommandCenterPage() {
     if (ignoredKeys.includes(e.key)) return;
 
     const now = performance.now();
-    keydownTimesRef.current[e.code] = now;
+    if (now - lastTelemetryAlertAtRef.current >= 5000) anomalyTriggeredRef.current = false;
+    if (!e.repeat) keydownTimesRef.current[e.code] = now;
 
     // 1. Multiple Simultaneous Keys Down Check (Hammering / Dabog: 5 or more keys held together)
     const simultaneousKeysDown = Object.keys(keydownTimesRef.current).length;
@@ -2070,6 +2073,9 @@ export default function CommandCenterPage() {
             timestamp: new Date().toISOString()
           };
           localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
+          localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemPayload));
+          localStorage.setItem('ifocus_telemetry_insight_anonymous', JSON.stringify(telemPayload));
+          localStorage.removeItem('ifocus_active_idle_alert');
           window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
 
           // Sync reflection sentiment to cloud for multi-device parity
@@ -2140,6 +2146,9 @@ export default function CommandCenterPage() {
           timestamp: new Date().toISOString()
         };
         localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
+        localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemPayload));
+        localStorage.setItem('ifocus_telemetry_insight_anonymous', JSON.stringify(telemPayload));
+        localStorage.removeItem('ifocus_active_idle_alert');
         window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
       } catch (e) {}
       
