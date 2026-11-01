@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { adaptCoachToResilience } from '@/lib/coachResilience';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
@@ -539,6 +540,18 @@ export default function CoachPage() {
         staminaPct = 65;
       }
 
+      // Recovery evidence takes priority over positive reflections and saved timers.
+      const resilienceDiagnostics = adaptCoachToResilience({
+        cognitiveState: cogState,
+        recommendedRhythm: recRhythm,
+        staminaPct,
+        skippedEvents,
+        preserveState: isStress || isIdle || isDistracted || isFatigued,
+      });
+      cogState = resilienceDiagnostics.cognitiveState;
+      recRhythm = resilienceDiagnostics.recommendedRhythm;
+      const recoveryNeeded = resilienceDiagnostics.recoveryNeeded;
+
       // 4. Generate Truly Dynamic Adaptive Coaching Strategy Cards
       const dynamicStrategies = [];
 
@@ -551,7 +564,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'You completed your 5-minute restorative recovery break. Spaced recovery clears cognitive saturation and primes working memory for encoding new concepts.'
         });
-      } else if (isIdle) {
+      } else if (isIdle && !recoveryNeeded) {
         const idleMinsMatch = reasonStr.match(/(\d+)\s*minute/i) || reasonStr.match(/(\d+)m/i);
         const idleMins = telem?.idleMinutes || (idleMinsMatch ? idleMinsMatch[1] : 5);
         dynamicStrategies.push({
@@ -567,7 +580,7 @@ export default function CoachPage() {
           badge: 'Retention Safeguard',
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `You reported feeling energetic and driven, which provides excellent cognitive momentum for study! However, ${skippedEvents} BreakGate recovery intervals were skipped today (${staminaPct}% compliance). In cognitive psychology, studying without spaced recovery creates hidden cognitive saturation and weakens long-term retention. The AI Coach prescribes a steady 25m cadence with completed breaks so your physical endurance sustains your mental motivation.`
+          text: `You reported feeling energetic, but ${skippedEvents} BreakGate challenges were skipped today (${staminaPct}% study resilience). ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
         });
       } else if (skippedEvents === 1) {
         dynamicStrategies.push({
@@ -583,7 +596,7 @@ export default function CoachPage() {
           badge: 'Rest Needed',
           badgeColor: '#dc2626',
           badgeBg: 'rgba(239, 68, 68, 0.1)',
-          text: `You have skipped ${skippedEvents} of your recent BreakGate recovery intervals (${staminaPct}% compliance). Skipping recovery causes cognitive saturation and lowers memory retention. We strongly recommend taking a restorative 5-minute break on your next cycle.`
+          text: `You have skipped ${skippedEvents} BreakGate challenges today (${staminaPct}% study resilience). ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
         });
       } else if (staminaPct >= 80 && totalEvents > 0) {
         dynamicStrategies.push({
@@ -604,7 +617,7 @@ export default function CoachPage() {
       }
 
       // Strategy Card 2: Cognitive Telemetry & Study Protocol
-      if (recoveryCompletedTime >= todayStart && !isStress) {
+      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !isStress) {
         dynamicStrategies.push({
           title: 'Flow State Maintenance',
           badge: 'Optimal Flow',
@@ -612,7 +625,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(95, 143, 94, 0.12)',
           text: 'Cognitive fatigue has been mitigated. Maintain your active focus cadence to maximize uninterrupted knowledge encoding.'
         });
-      } else if (isIdle) {
+      } else if (isIdle && !recoveryNeeded) {
         dynamicStrategies.push({
           title: 'Low-Friction Task Priming Protocol',
           badge: 'Momentum Protocol',
@@ -628,21 +641,29 @@ export default function CoachPage() {
           badgeBg: 'rgba(239, 68, 68, 0.1)',
           text: 'Elevated friction or rapid keystroke corrections detected. Step back from the screen for a moment, hydrate, and ease into your session with a light, simple task first.'
         });
-      } else if (staminaPct < 60) {
+      } else if (recoveryNeeded) {
         dynamicStrategies.push({
           title: 'Restorative Pacing Protocol',
           badge: 'Low Energy Buffer',
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: 'Your current study resilience is below 60%. Stand up, hydrate, and relax your visual field. When resuming, prioritize a light review task rather than heavy exam questions.'
+          text: `Study resilience is ${staminaPct}% with ${skippedEvents} unrecovered BreakGate skips. Take a 5-minute recovery break, then resume with light review and ${recRhythm.title}.`
         });
-      } else if (isMotivated && staminaPct >= 80) {
+      } else if (isMotivated && staminaPct >= 80 && skippedEvents === 0) {
         dynamicStrategies.push({
           title: 'High-Yield Memory Reinforcement',
           badge: 'Peak Flow',
           badgeColor: '#16a34a',
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'Cognitive resilience and motivation are peaked. Practice active verbalization: state the concept reasoning out loud before flipping flashcards to engage dual auditory-visual memory pathways.'
+        });
+      } else if (skippedEvents > 0 || staminaPct < 80) {
+        dynamicStrategies.push({
+          title: 'Rebuild Study Consistency',
+          badge: 'Pacing Advisory',
+          badgeColor: '#d97706',
+          badgeBg: 'rgba(217, 119, 6, 0.12)',
+          text: `Use ${recRhythm.title} and complete your next BreakGate challenge before increasing your study pace.`,
         });
       } else {
         dynamicStrategies.push({
@@ -659,7 +680,9 @@ export default function CoachPage() {
       setTelemetryDiagnostics({
         cognitiveState: cogState,
         studyStamina: stamina,
-        recommendedRhythm: recRhythm
+        recommendedRhythm: recRhythm,
+        recoveryNeeded,
+        pacingNeeded: resilienceDiagnostics.pacingNeeded,
       });
 
     } catch (err) {
@@ -788,7 +811,20 @@ export default function CoachPage() {
                           (insight?.type === 'idle') ||
                           (insight?.state === 'idle');
 
-      if (isIdleAlert) {
+      if (telemetryDiagnostics.recoveryNeeded) {
+        wMin = 15;
+        bMin = 5;
+        targetSessions = 2;
+        cadenceTitle = 'Recovery & Gentle Focus';
+        detectedState = 'Recovery Needed';
+      } else if (telemetryDiagnostics.pacingNeeded) {
+        const match = rhythmTitle.match(/(\d+)m Work \/ (\d+)m Gate/i);
+        wMin = Number(match?.[1]) || 20;
+        bMin = Number(match?.[2]) || 5;
+        targetSessions = wMin <= 15 ? 2 : 3;
+        cadenceTitle = 'Rebuild Study Consistency';
+        detectedState = 'Pacing Advisory';
+      } else if (isIdleAlert) {
         wMin = 15;
         bMin = 5;
         targetSessions = 2;
@@ -832,12 +868,12 @@ export default function CoachPage() {
         String(s.text || '').toLowerCase().includes('restorative 5-minute break')
       );
 
-      const isRestPrescribed = !isIdleAlert && (hasRestStrategy || 
+      const isRestPrescribed = telemetryDiagnostics.recoveryNeeded || (!isIdleAlert && (hasRestStrategy ||
         detectedState === 'Stressed' || 
         combined.includes('rest needed') || 
         combined.includes('break recovery deficit') || 
         (combined.includes('fatigue') && !combined.includes('idle')) || 
-        (insight?.actionPlan && (insight.actionPlan.toLowerCase().includes('hydration') || insight.actionPlan.toLowerCase().includes('take a 5-minute'))));
+        (insight?.actionPlan && (insight.actionPlan.toLowerCase().includes('hydration') || insight.actionPlan.toLowerCase().includes('take a 5-minute')))));
 
       // 2. Persist custom timer schedule so it actually applies to the dashboard
       const customTimer = {
