@@ -112,7 +112,7 @@ export default function ProtectedSessionBoundary({ children }) {
   // Actual signout or an unauthenticated session removes the private subtree.
   return <>
     {(!protectedPage || (signedIn && !signingOut)) && (
-      <div hidden={protectedPage && checking} data-ifocus-private={protectedPage ? 'true' : undefined}
+      <div style={{ width: '100%', minWidth: 0 }} hidden={protectedPage && checking} data-ifocus-private={protectedPage ? 'true' : undefined}
         data-testid={protectedPage ? 'protected-content' : undefined}>{children}</div>
     )}
     {protectedPage && (!signedIn || checking || signingOut) && <div style={{ padding: '3rem', textAlign: 'center' }}>
