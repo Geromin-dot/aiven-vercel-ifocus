@@ -34,11 +34,22 @@ function LoginContent() {
   const [showRegPassword, setShowRegPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [slowLogin, setSlowLogin] = useState(false);
   const [error, setError] = useState("");
   const [holdNotice, setHoldNotice] = useState({ active: false, reason: "" });
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!loading || activeTab !== 'login') return;
+    const timeout = setTimeout(() => setSlowLogin(true), 8000);
+    return () => clearTimeout(timeout);
+  }, [loading, activeTab]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') router.prefetch('/dashboard');
+  }, [status, router]);
 
   const handleSwitchTab = (tab) => {
     setActiveTab(tab);
@@ -114,6 +125,7 @@ function LoginContent() {
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    setSlowLogin(false);
     setLoading(true);
     setError("");
 
@@ -865,6 +877,12 @@ function LoginContent() {
                   <span>Sign In to Dashboard</span>
                 )}
               </button>
+
+              {loading && slowLogin && (
+                <p role="status" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>
+                  Sign-in is taking longer than usual. Waiting for the server to respond; please keep this page open.
+                </p>
+              )}
 
               {/* Quick Fill Student Testing Account (For Evaluation & Defense) */}
               <button

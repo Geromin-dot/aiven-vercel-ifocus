@@ -94,7 +94,7 @@ const TUTORIAL_TOPICS = [
       },
       {
         title: 'Customizing Intervals & Safe Testing',
-        description: 'Open Settings > Focus Preferences to choose the Active Presence interval and preview the presence popup. Presence and burnout intervals are locked while a timer session is ongoing.',
+        description: 'Open Settings > Focus Preferences to choose the Active Presence interval and preview the presence popup. Active Presence and Study Progress Check intervals are locked while a timer session is ongoing.',
         tip: 'The test popup has a blue Test badge and will never interrupt your running timer.',
         image: '/images/tutorials/current/presence-settings.webp'
       }

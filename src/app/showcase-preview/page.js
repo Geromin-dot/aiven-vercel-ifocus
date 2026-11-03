@@ -446,7 +446,7 @@ export default async function ShowcasePreviewPage({ searchParams }) {
               <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "1.1rem", boxShadow: "0 4px 18px -2px rgba(0,0,0,0.04)", border: "1px solid #e2e8f0" }}>
                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Recommended Rhythm</span>
                 <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#d97706", margin: "4px 0" }}>25m Work / 5m Gate</div>
-                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Prevents cognitive burnout during study</div>
+                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Supports a steady study pace with regular breaks</div>
               </div>
             </div>
 

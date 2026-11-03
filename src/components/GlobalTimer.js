@@ -738,7 +738,8 @@ export default function GlobalTimer() {
       try {
         localStorage.setItem('ifocus_last_user_activity', String(now));
         const userName = session?.user?.name || session?.user?.username || localStorage.getItem('ifocus_user_name') || 'Student';
-        const resumed = clearIdleOnActivity(localStorage, userName, now);
+        // Let the student read or open the alert before clearing its evidence.
+        const resumed = showIdleCoachModal ? null : clearIdleOnActivity(localStorage, userName, now);
         if (resumed) {
           window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: resumed }));
           fetch('/api/user/telemetry', {
@@ -2547,6 +2548,7 @@ export default function GlobalTimer() {
                   state: 'idle',
                   sentiment: 'Inactivity & Task Friction',
                   idleMinutes: idleModalMinutes,
+                  coachingRequested: true,
                   timestamp: new Date().toISOString(),
                   reason: `Inactivity detected: You have been idle for ${minText} with no active timer. Student appears stuck, hesitant, or experiencing task friction.`,
                   actionPlan: `You have been idle for ${minText} without starting a focus session. Feeling stuck on where to begin? Break your upcoming task into just one simple step, or start a gentle 15m focus session to build momentum.`,
@@ -2559,6 +2561,10 @@ export default function GlobalTimer() {
                   localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(insightData));
                   localStorage.setItem('ifocus_active_idle_alert', JSON.stringify(insightData));
                   window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: insightData }));
+                  fetch('/api/user/telemetry', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telemetryState: { latestTelemetry: insightData, activeIdleAlert: insightData } }),
+                  }).catch(() => {});
                 } catch (e) {}
 
                 if (pathname !== "/coach") {
@@ -2660,7 +2666,7 @@ export default function GlobalTimer() {
               }}
             >
               <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: isTestBurnoutModal ? "#2563eb" : "#d97706", boxShadow: "0 0 8px rgba(217, 119, 6, 0.6)" }} />
-              {isTestBurnoutModal ? "Burnout Test Preview" : "AI Study Coach Check-in"}
+              {isTestBurnoutModal ? "Study Progress Check Preview" : "Study Progress Check"}
             </div>
 
             {/* Title & Body */}
@@ -2684,7 +2690,7 @@ export default function GlobalTimer() {
                   margin: 0,
                 }}
               >
-                You have been focusing for {burnoutModalMinutes} minutes without completing a task from your list. If you are experiencing task friction or feeling stuck, consider breaking your task into smaller steps or taking a brief mental pause.
+                Your focus timer has been active for {burnoutModalMinutes} minutes, and no task from your list has been marked complete yet. Still working on a longer task? You can keep going. If you feel stuck, try a smaller step or a brief pause.
               </p>
             </div>
 

@@ -64,6 +64,23 @@ test('invalid, prior-day, and pre-recovery signals cannot become current', () =>
   assert.equal(latestCoachSignal([{ state: 'idle', timestamp: 'invalid' }, signal('Stressed', 0)], { since: start + 1 }), null);
 });
 
+test('opening idle coaching survives the pointer and click activity on the coach page', () => {
+  const idle = signal('idle', 2000, { coachingRequested: true, idleMinutes: 1 });
+  const values = new Map(['ifocus_latest_telemetry', 'ifocus_active_idle_alert',
+    'ifocus_telemetry_insight_Student', 'ifocus_telemetry_insight_anonymous'].map(key => [key, JSON.stringify(idle)]));
+  const storage = { getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+  assert.equal(clearIdleOnActivity(storage, 'Student', start + 3000), null);
+  const current = latestCoachSignal([...values.values()].map(JSON.parse), { lastActivity: start + 3000 });
+  assert.equal(current.state, 'idle');
+  assert.equal(formatCoachInsight(current).protocolTitle, 'Focus Kickstart Steps');
+  assert.equal(currentCoachResilience({ signal: current, isIdle: true }).staminaPct, 80);
+  const reflection = signal('Distracted', 4000, { source: 'reflection_submission' });
+  assert.equal(latestCoachSignal([current, reflection]), reflection);
+  assert.equal(currentCoachResilience({ signal: reflection, isDistracted: true }).staminaPct, 80);
+  assert.equal(latestCoachSignal([current], { since: start + 4000 }), null);
+});
+
 test('stress overrides earlier BreakGate deductions without deleting history', () => {
   const events = [{ status: 'skipped', timestamp: start }];
   const result = currentCoachResilience({ signal: signal('Stressed', 1000), events, isStress: true });

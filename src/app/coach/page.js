@@ -124,21 +124,21 @@ export default function CoachPage() {
   // Dynamic Live Diagnostics State
   const [telemetryDiagnostics, setTelemetryDiagnostics] = useState({
     cognitiveState: {
-      title: 'In the Zone',
-      status: 'Active',
+      title: 'Observing',
+      status: 'Awaiting signal',
       color: '#27522d',
       dotColor: '#16a34a',
-      subtext: 'Silent observation: Attention levels optimal'
+      subtext: 'No recent interaction to assess yet'
     },
     studyStamina: {
-      title: '100% Resilience',
+      title: 'Awaiting signal',
       color: '#2e7d32',
-      subtext: 'BreakGate cycle compliance on track'
+      subtext: 'Resilience is an estimate from recent interactions and BreakGate activity'
     },
     recommendedRhythm: {
       title: '25m Work / 5m Gate',
       color: '#059669',
-      subtext: 'Prevents cognitive burnout during intense study sessions'
+      subtext: 'Supports a steady study pace with regular breaks'
     }
   });
 
@@ -327,19 +327,19 @@ export default function CoachPage() {
       } : null));
 
       let cogState = {
-        title: 'In the Zone',
-        status: 'Optimal',
+        title: telem ? 'Steady Study Pace' : 'Observing',
+        status: telem ? 'Active' : 'Awaiting signal',
         color: '#27522d',
         dotColor: '#16a34a',
         subtext: telem ? 'Based on your latest interaction: a steady study pace.' : recoveryCompletedTime >= todayStart
           ? 'Restorative break completed: cognitive baseline restored and ready for study'
-          : 'Silent observation: Attention levels optimal'
+          : 'No recent interaction to assess yet'
       };
 
       let recRhythm = {
         title: '25m Work / 5m Gate',
         color: '#059669',
-        subtext: 'Prevents cognitive burnout during intense study sessions'
+        subtext: 'Supports a steady study pace with regular breaks'
       };
 
       if (isIdle) {
@@ -443,7 +443,7 @@ export default function CoachPage() {
       });
       const { staminaPct, totalEvents, completedEvents, skippedEvents } = currentResilience;
       const stamina = {
-        title: `${staminaPct}% Resilience`,
+        title: !telem && totalEvents === 0 && recoveryCompletedTime < todayStart ? 'Awaiting signal' : `${staminaPct}% Resilience`,
         color: staminaPct < 60 ? '#dc2626' : staminaPct < 80 || skippedEvents ? '#d97706' : '#16a34a',
         subtext: currentResilience.subtext,
       };
@@ -527,8 +527,8 @@ export default function CoachPage() {
       // Strategy Card 2: Cognitive Telemetry & Study Protocol
       if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !telem) {
         dynamicStrategies.push({
-          title: 'Flow State Maintenance',
-          badge: 'Optimal Flow',
+          title: 'Return to Your Study Goal',
+          badge: 'Recovery Completed',
           badgeColor: '#27522d',
           badgeBg: 'rgba(95, 143, 94, 0.12)',
           text: 'Cognitive fatigue has been mitigated. Maintain your active focus cadence to maximize uninterrupted knowledge encoding.'
@@ -575,11 +575,11 @@ export default function CoachPage() {
         });
       } else {
         dynamicStrategies.push({
-          title: 'Flow State Maintenance',
-          badge: 'Optimal Flow',
+          title: telem ? 'Flow State Maintenance' : 'Choose Your Next Study Goal',
+          badge: telem ? 'Steady Pace' : 'Awaiting Signal',
           badgeColor: '#27522d',
           badgeBg: 'rgba(95, 143, 94, 0.12)',
-          text: 'Attention markers are stable. Keep external distractions out of reach and maintain your current Pomodoro cadence to maximize uninterrupted knowledge encoding.'
+          text: telem ? 'Keep external distractions out of reach and maintain a comfortable study cadence.' : 'Start a focus session or share a quick reflection so your coach can suggest a pace based on recent activity.'
         });
       }
 

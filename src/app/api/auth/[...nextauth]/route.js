@@ -32,6 +32,11 @@ export const authOptions = {
               { username: { equals: cleanIdentifier, mode: "insensitive" } },
               { name: cleanIdentifier }
             ]
+          },
+          // Study history and synchronized telemetry are large and not needed to sign in.
+          select: {
+            id: true, name: true, username: true, email: true, image: true,
+            password: true, role: true, status: true, statusReason: true,
           }
         });
 
@@ -97,6 +102,9 @@ export const authOptions = {
             data: { currentSessionId: newSessionId }
           });
           console.log(`[AUTH SESSION] New active session created for user ${user.id} (${newSessionId})`);
+          // This sign-in already checked the account and saved its session.
+          // Subsequent requests still perform live account/session verification below.
+          return token;
         } catch (err) {
           console.error("Failed saving currentSessionId to user:", err);
         }

@@ -1488,8 +1488,8 @@ export default function SettingsPage() {
               {/* Task Stagnation & Burnout Check Toggle & Options (While Timer Running) */}
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Task Stagnation & Burnout Check</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Automatically checks in if the focus timer has been active for the set threshold without any task completed.</p>
+                  <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Study Progress Check</h4>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Offers a gentle check-in after the selected focus time if no task has been marked complete.</p>
                 </div>
                 <label className="toggle-switch">
                   <input 
@@ -1513,14 +1513,14 @@ export default function SettingsPage() {
               </div>
 
               {checkIntervalsLocked && <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-                Burnout interval is locked during your session, including pauses. Finish or reset the timer to change it.
+                Study progress check interval is locked during your session, including pauses. Finish or reset the timer to change it.
               </p>}
 
               {burnoutCheckEnabled && (
                 <div style={{ padding: '0.35rem 0 0.15rem 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                     <label className="settings-label" style={{ fontSize: '0.82rem', margin: 0, fontWeight: 700 }}>
-                      Burnout Check Interval (During Focus Session)
+                      Study Progress Check Interval (During Focus Session)
                     </label>
                     <span style={{ fontSize: '0.74rem', color: 'var(--primary-accent)', fontWeight: 600 }}>
                       After {burnoutCheckMinutes} mins without completed task
@@ -1777,7 +1777,7 @@ export default function SettingsPage() {
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
-                  <span>Test Burnout Check</span>
+                  <span>Preview Study Progress Check</span>
                 </button>
               </div>
 

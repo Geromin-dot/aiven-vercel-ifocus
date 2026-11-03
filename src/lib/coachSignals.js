@@ -11,7 +11,7 @@ export function isIdleSignal(signal) {
 // Read every source by time rather than giving a storage key permanent priority.
 export function latestCoachSignal(signals, { since = 0, lastActivity = 0 } = {}) {
   return signals.filter(signal => signal && signalTime(signal) > since &&
-    !(isIdleSignal(signal) && lastActivity > signalTime(signal)))
+    !(isIdleSignal(signal) && !signal.coachingRequested && lastActivity > signalTime(signal)))
     .sort((a, b) => signalTime(b) - signalTime(a))[0] || null;
 }
 
@@ -65,7 +65,7 @@ export function clearIdleOnActivity(storage, userName, now) {
     `ifocus_telemetry_insight_${userName}`, 'ifocus_telemetry_insight_anonymous'];
   for (const key of keys) {
     const value = JSON.parse(storage.getItem(key) || 'null');
-    if (isIdleSignal(value) && signalTime(value) <= now) {
+    if (isIdleSignal(value) && !value.coachingRequested && signalTime(value) <= now) {
       storage.removeItem(key);
       cleared = true;
     }
