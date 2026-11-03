@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ifocus-pwa-v9';
+const CACHE_NAME = 'ifocus-pwa-v10';
 
 const STATIC_ASSETS = [
   '/',
@@ -50,6 +50,13 @@ self.addEventListener('fetch', (event) => {
 
   // Network-first for page navigations, fallback to cache
   if (request.mode === 'navigate') {
+    const privatePage = ['/dashboard', '/flashcards', '/coach', '/analytics', '/settings', '/admin']
+      .some(path => url.pathname === path || url.pathname.startsWith(`${path}/`));
+    if (privatePage) {
+      // Protected pages must reach the server; never restore account HTML offline.
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(
       fetch(request).catch(() => {
         return caches.match(request).then((cachedResponse) => {

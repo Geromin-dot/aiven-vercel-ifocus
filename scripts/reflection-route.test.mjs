@@ -6,8 +6,8 @@ const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(source).t
 const plans = await import(moduleUrl(await readFile(new URL('../src/lib/reflectionPlan.js', import.meta.url), 'utf8')));
 const input = await import(moduleUrl(await readFile(new URL('../src/lib/reflectionInput.js', import.meta.url), 'utf8')));
 const route = await readFile(new URL('../src/app/api/ai/coach/route.js', import.meta.url), 'utf8');
-function endpoint(callGemini) {
-  const context = vm.createContext({ ...plans, ...input, callGemini,
+function endpoint(callGemini, session = { user: { id: 'student' } }) {
+  const context = vm.createContext({ ...plans, ...input, callGemini, getServerSession: async () => session, authOptions: {},
     console: { warn() {} }, NextResponse: { json: (data, options) => ({ data, status: options?.status || 200 }) },
   });
   vm.runInContext(route.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
@@ -32,7 +32,7 @@ test('valid repeated reflections are accepted without a new app cooldown or cach
     assert.equal(options.maxRetries, 0);
     assert.equal(options.totalTimeoutMs, 45000);
     assert.ok(options.timeoutMs >= 15000, 'backup models need time to produce detailed guidance');
-    assert.match(options.parts[0].text, /120-180 words/);
+    assert.match(options.parts[0].text, /60-90 words/);
     assert.match(options.parts[0].text, /Previous advice/);
     return { state: 'Motivated', orderedIds: ['b', 'b', 'unknown'], actionPlan: `Specific advice ${calls}` };
   });
@@ -47,4 +47,9 @@ test('valid repeated reflections are accepted without a new app cooldown or cach
 test('invalid reflections require context instead of inventing a successful AI result', async () => {
   const post = endpoint(async () => assert.fail('invalid input must not call the provider'));
   assert.equal((await post({ text: 'hi', tasks: null })).status, 422);
+});
+
+test('signed-out users cannot invoke the AI Coach', async () => {
+  const post = endpoint(async () => assert.fail('signed-out requests must not reach the AI provider'), null);
+  assert.equal((await post({ text: 'I am ready to study', tasks })).status, 401);
 });

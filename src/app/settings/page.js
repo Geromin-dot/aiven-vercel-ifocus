@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { logoutAccount } from '@/lib/logoutAccount';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import TimerNotificationSettings from '@/components/TimerNotificationSettings';
@@ -554,7 +555,7 @@ export default function SettingsPage() {
       const dest = pendingNavigation;
       setPendingNavigation(null);
       if (dest === 'SIGNOUT') {
-        signOut({ callbackUrl: '/login' });
+        logoutAccount();
       } else {
         router.push(dest);
       }
@@ -591,7 +592,7 @@ export default function SettingsPage() {
       const dest = pendingNavigation;
       setPendingNavigation(null);
       if (dest === 'SIGNOUT') {
-        signOut({ callbackUrl: '/login' });
+        logoutAccount();
       } else {
         router.push(dest);
       }
@@ -1222,7 +1223,7 @@ export default function SettingsPage() {
           {/* Dedicated Sign Out Button */}
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={() => logoutAccount()}
             style={{
               marginTop: '0.65rem',
               width: '100%',

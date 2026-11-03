@@ -1,7 +1,8 @@
 "use client";
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useSession, signOut, signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { logoutAccount } from '@/lib/logoutAccount';
 import { useEffect, useState } from 'react';
 import IFocusLogo from './IFocusLogo';
 
@@ -34,25 +35,7 @@ export default function Sidebar() {
 
   const handleSignOutAndClear = (e) => {
     if (e && !handleNavClick(e, 'SIGNOUT')) return;
-    try {
-      const keys = [
-        'ifocus_active_breakgate_deck',
-        'ifocus_current_user_id',
-        'ifocus_session_history',
-        'ifocus_focus_stats',
-        'ifocus_latest_telemetry',
-        'ifocus_pending_study_sessions',
-        'ifocus_ai_adjusted_active',
-        'ifocus_ai_adjusted_details',
-        'ifocus_applied_toast',
-        'ifocus_timer_state',
-        'ifocus_custom_timer',
-        'ifocus_prefill_reflection',
-      ];
-      keys.forEach((k) => localStorage.removeItem(k));
-      window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
-    } catch (err) {}
-    signOut({ callbackUrl: '/login' });
+    logoutAccount();
   };
 
   // Detect Account Switching on same browser and purge previous student's cache
@@ -90,9 +73,7 @@ export default function Sidebar() {
         try {
           localStorage.removeItem('ifocus_active_breakgate_deck');
         } catch (e) {}
-        signOut({ redirect: false }).then(() => {
-          router.replace(`/login?error=ACCOUNT_ON_HOLD&reason=${encodeURIComponent(reason)}`);
-        });
+        logoutAccount(`/login?error=ACCOUNT_ON_HOLD&reason=${encodeURIComponent(reason)}`);
         return;
       }
 

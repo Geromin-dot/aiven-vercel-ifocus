@@ -110,4 +110,11 @@ test('login protocol works with the installed NextAuth handler and creates a rea
   });
   assert.match((await rejected.json()).url, /csrf=true/);
   assert.equal(authorized, 1, 'invalid CSRF must never reach password verification');
+
+  const csrf = await (await request('/api/auth/csrf')).json();
+  await request('/api/auth/signout', {
+    method: 'POST', body: new URLSearchParams({ csrfToken: csrf.csrfToken, callbackUrl: '/login', json: 'true' }),
+  });
+  const signedOutSession = await (await request('/api/auth/session')).json();
+  assert.equal(signedOutSession?.user, undefined, 'after signout the same cookie jar must no longer authenticate');
 });

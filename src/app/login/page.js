@@ -6,6 +6,7 @@ import { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import IFocusLogo from "@/components/IFocusLogo";
 import { credentialsLogin } from '@/lib/credentialsLogin';
+import { announceAuthChange, clearPrivateCache } from '@/lib/logoutAccount';
 
 const YEAR_LEVEL_OPTIONS = [
   { value: "1st Year", label: "1st Year (Level I)" },
@@ -140,25 +141,11 @@ function LoginContent() {
         }
         throw new Error(res.error === "CredentialsSignin" ? "Invalid email or password" : res.error);
       }
-      try {
-        const keys = [
-          'ifocus_active_breakgate_deck',
-          'ifocus_current_user_id',
-          'ifocus_session_history',
-          'ifocus_focus_stats',
-          'ifocus_latest_telemetry',
-          'ifocus_ai_adjusted_active',
-          'ifocus_ai_adjusted_details',
-          'ifocus_applied_toast',
-          'ifocus_timer_state',
-          'ifocus_custom_timer',
-          'ifocus_prefill_reflection',
-        ];
-        keys.forEach((k) => localStorage.removeItem(k));
-      } catch (e) { }
+      try { clearPrivateCache(localStorage); } catch {}
+      announceAuthChange('signin');
 
       // Reload to discard any pre-login session response still in flight.
-      window.location.assign(res.url);
+      window.location.replace(res.url);
       navigating = true;
     } catch (err) {
       setError(err.message);
@@ -205,7 +192,8 @@ function LoginContent() {
       const signInRes = await credentialsLogin.submit(cleanEmail, cleanPassword);
       if (signInRes?.error) throw new Error("Login failed after registration");
 
-      window.location.assign(signInRes.url);
+      announceAuthChange('signin');
+      window.location.replace(signInRes.url);
       navigating = true;
     } catch (err) {
       setError(err.message);

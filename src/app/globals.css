@@ -4337,3 +4337,7 @@ textarea:focus {
     box-shadow: 0 4px 16px rgba(46, 125, 50, 0.35) !important;
   }
 }
+/* A history snapshot must not reveal private UI before session validation. */
+html[data-ifocus-auth-pending="true"] [data-ifocus-private="true"] {
+  visibility: hidden !important;
+}

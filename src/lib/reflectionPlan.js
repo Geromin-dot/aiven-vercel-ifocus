@@ -42,14 +42,12 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
     : state === 'Distracted' ? 'Put your phone aside, close unrelated tabs, and work on one concrete step.'
     : state === 'Motivated' ? 'Use your energy for your priority task and check your understanding as you go.'
     : 'Set a clear outcome for this block and check your progress before the next task.';
-  const strategy = state === 'Stressed' ? 'Pick just one section or problem rather than trying to finish the whole task at once. Work through that small goal, then briefly explain what you understood before continuing.'
-    : state === 'Distracted' ? 'Choose one visible outcome for this block and keep only the materials needed for it in front of you. If another task comes to mind, note it down and return to your current goal.'
-    : state === 'Motivated' ? 'Use the first block for focused practice or explaining a concept in your own words, then check your work against your notes. This gives you a concrete way to judge progress before moving to another task.'
-    : 'Break the task into a small, clear outcome and test what you remember after working through it. Use what you missed to decide what needs another pass.';
-  const followUp = ordered[1] ? `After that checkpoint, continue with “${String(ordered[1].text).slice(0, 100)}” if you are ready.`
-    : 'After that checkpoint, decide whether to continue the same material or choose your next study goal.';
+  const strategy = state === 'Stressed' ? 'Choose one small section or problem, then explain what you understood in your own words before continuing.'
+    : state === 'Distracted' ? 'Choose one visible outcome, keep only the materials needed for it open, and note unrelated thoughts for later.'
+    : state === 'Motivated' ? 'Work through a practice problem or explain a concept without your notes, then check your understanding before moving on.'
+    : 'Set a clear outcome for this block and test what you remember before deciding what needs another pass.';
   return { state, orderedIds: ordered.map(task => task.id), targetSessions, workMinutes, breakMinutes,
-    actionPlan: `${first} ${advice} ${strategy}\n\nTry ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks. Use each break to step away briefly and return with one clear goal. ${followUp} Treat this rhythm as a starting point and reassess your pace after the first block.`,
+    actionPlan: `${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block.`,
     responseSource: 'fallback' };
 }
 
