@@ -5,6 +5,27 @@ const ignoredWords = new Set(['a', 'an', 'the', 'of', 'and', 'for', 'to', 'my', 
 const moodWords = /\b(stress\w*|tired|exhaust\w*|anxious|overwhelm\w*|frustrat\w*|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan|distract\w*|bored?|scroll\w*|phone|lazy|procrastinat\w*|tinatamad|motivat\w*|ready|energ\w*|excit\w*|masigla|gaganahan)\b/i;
 const levelValue = value => ({ low: 1, easy: 1, medium: 2, med: 2, high: 3, hard: 3 }[value]);
 
+function unsupportedHealthClaim(advice, reflection) {
+  const text = String(advice || '').replace(/[’']/g, '').toLowerCase();
+  const conditions = '(?:anxiety(?: disorder)?|depression|adhd|autism|bipolar(?: disorder)?|ocd|ptsd|schizophrenia|insomnia|dyslexia|diabetes|hypertension|hypoglycemia|anemia|asthma|migraine|an? (?:[a-z-]+ ){0,4}(?:disorder|condition|illness|disease|syndrome))';
+  const diagnosis = new RegExp(`\\b(?:you (?:have|likely have|probably have|definitely have|clearly have|suffer from|are suffering from)|youve got|you might have|you may have) ${conditions}\\b`);
+  const assertions = /\b(?:you (?:are|were|have been) diagnosed|youve been diagnosed|your diagnosis|you (?:are|re) (?:clinically )?(?:depressed|bipolar|autistic|diabetic|anemic|schizophrenic|dehydrated)|you (?:are|re) (?:perfectly )?healthy|nothing (?:is )?wrong with you|you (?:dont|do not|cannot|cant) have (?:a disorder|adhd|anxiety|depression|diabetes)|diagnosed ka|may (?:adhd|anxiety|depression|diabetes|sakit|disorder) ka)\b/;
+  const causal = /\b(?:your (?:anxiety|depression|adhd|disorder|condition|illness) (?:is causing|causes|explains)|(?:because of|due to) your (?:anxiety|depression|adhd|disorder|condition|illness)|(?:typing|inactivity|study performance|symptoms) (?:confirms?|proves?|diagnoses?))\b/;
+  const inferredAnxiety = /\b(?:you (?:are|re|seem|appear) (?:to be )?anxious|you have anxiety)\b/.test(text)
+    && !/\b(?:anxiety|anxious|kinakabahan)\b/i.test(reflection);
+  return diagnosis.test(text) || assertions.test(text) || causal.test(text) || inferredAnxiety;
+}
+
+// This routes explicit safety language to human support; it is not a diagnosis.
+export function generateSafetySupport(value, requested = false) {
+  const text = String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const explicit = /\b(?:i (?:really |just )?(?:want|wanna|wish|plan|intend|need) (?:to )?(?:die|kill myself|end my life|hurt myself|harm myself)|i (?:am|feel|feeling) suicidal|im (?:feeling )?suicidal|i (?:dont|do not) want to (?:live|be alive)|i (?:might|will|may|am going to|am about to) (?:kill myself|hurt myself|end my life)|wish i (?:was|were) dead|gusto ko (?:na |nang |ng )?(?:mamatay|magpakamatay)|(?:ayoko|ayaw ko|di ko gusto|hindi ko gusto) (?:na |nang )?(?:mabuhay)|(?:sasaktan|papatayin) ko (?:ang )?sarili ko)\b/.test(text)
+    || /^(?:suicidal|kill myself|self harm|magpakamatay)$/.test(text);
+  if (!requested && !explicit) return null;
+  return { supportOnly: true, supportKind: 'safety', responseSource: 'safety', title: 'Your safety comes first',
+    actionPlan: 'You deserve support with this. Please reach out now to a qualified mental health professional, school counselor, or doctor, and tell someone you trust what is happening. Are you safe right now? If you might act on these thoughts or have already hurt yourself, contact local emergency services or go to the nearest emergency department; ask someone you trust to stay with you and move away from anything you could use to hurt yourself.' };
+}
+
 export function requestedPriorityOrder(text) {
   const reflection = normalize(text);
   const start = reflection.match(/\b(?:start|begin|unahin|simulan)\s+(?:(?:with|sa|ang|the|a|mga)\s+)*(low|medium|high|easy|hard)\b/)
@@ -54,6 +75,8 @@ export function orderReflectionTasks(tasks, state, text = '') {
 }
 
 export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
+  const safety = generateSafetySupport(rawText);
+  if (safety) return safety;
   const text = String(rawText || '').toLowerCase();
   const activeTasks = Array.isArray(tasks) ? tasks.filter(task => task && task.id != null && !task.completed) : [];
   let state = 'Engaged';
@@ -84,6 +107,12 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
 }
 
 export function normalizeReflectionPlan(parsed, text, tasks = []) {
+  const healthSupport = parsed?.healthSupport === true || parsed?.supportKind === 'health';
+  const safety = generateSafetySupport(text, parsed?.supportOnly === true && !healthSupport);
+  if (safety) return safety;
+  if (healthSupport) return { supportOnly: true, supportKind: 'health', responseSource: 'support',
+    title: 'Health questions need professional advice',
+    actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
   const fallback = generateCognitiveFallback(text, tasks, parsed?.state);
   const activeTasks = tasks.filter(task => task && task.id != null && !task.completed);
   const byId = new Map(activeTasks.map(task => [String(task.id), task]));
@@ -100,7 +129,8 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   const correctedState = isNeutralOrderRequest(text) && parsed?.state && parsed.state !== 'Engaged';
   const invalidOrder = activeTasks.length > 0 && ids.length === 0;
   const contradictedPreference = orderedIds.some((id, index) => id !== originalOrder[index]);
-  const useFallback = correctedState || invalidOrder || contradictedPreference || !parsed?.actionPlan?.trim?.();
+  const clinicalLanguage = unsupportedHealthClaim(parsed?.actionPlan, text);
+  const useFallback = correctedState || invalidOrder || contradictedPreference || clinicalLanguage || !parsed?.actionPlan?.trim?.();
   if (useFallback) return { ...fallback, fallbackReason: 'invalid_plan' };
   const bounded = (value, min, max, defaultValue) => {
     const number = Number(value);

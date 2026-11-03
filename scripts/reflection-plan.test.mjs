@@ -2,12 +2,61 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('../src/lib/reflectionPlan.js', import.meta.url), 'utf8');
-const { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const tasks = [
   { id: 'hard', text: 'Solve physiology problems', priority: 'High' },
   { id: 'easy', text: 'Review anatomy terms', priority: 'Low' },
   { id: 'medium', text: 'Read biology notes', priority: 'Medium' },
 ];
+
+test('explicit safety disclosures bypass study plans in English and Tagalog, including offline fallback', () => {
+  for (const text of ['I want to die', 'I wanna die', 'I want to kill myself', 'I am suicidal', 'suicidal', 'I don’t want to live', 'Gusto ko nang mamatay', 'Ayoko nang mabuhay', 'Papatayin ko ang sarili ko']) {
+    for (const result of [generateCognitiveFallback(text, tasks), normalizeReflectionPlan({ state: 'Motivated', actionPlan: 'Start studying.' }, text, tasks)]) {
+      assert.equal(result.supportOnly, true, text);
+      assert.match(result.actionPlan, /mental health professional, school counselor, or doctor/);
+      assert.match(result.actionPlan, /emergency services/);
+      assert.equal(result.orderedIds, undefined);
+      assert.equal(result.workMinutes, undefined);
+      assert.equal(result.state, undefined);
+    }
+  }
+});
+
+test('clearly negated and academic references do not become safety disclosures', () => {
+  for (const text of ['I do not want to die', "I don't want to hurt myself", 'I am not suicidal', 'I am studying suicide prevention for class', 'Ayoko mamatay']) {
+    assert.equal(generateSafetySupport(text), null, text);
+  }
+});
+
+test('diagnoses and unsupported health claims are replaced with ordinary study guidance', () => {
+  for (const actionPlan of ['Your anxiety is causing this.', 'You are depressed.', 'You have an anxiety disorder.',
+    'You have ADHD.', 'You have insomnia.', 'You have diabetes.', 'You are dehydrated.', 'You are perfectly healthy.',
+    'You have a neurological syndrome.', 'You are diagnosed with something.', 'May ADHD ka.']) {
+    const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['easy', 'medium', 'hard'], actionPlan }, 'I am tired from studying', tasks);
+    assert.equal(result.responseSource, 'fallback');
+    assert.doesNotMatch(result.actionPlan, /anxiety|anxious|depress|disorder|ADHD|insomnia|diabetes|dehydrat|healthy/i);
+    assert.match(result.actionPlan, /Review anatomy/);
+  }
+});
+
+test('self-reported anxiety can be acknowledged without asserting a diagnosis', () => {
+  const actionPlan = 'You mentioned feeling anxious about your exams. Start with Review anatomy terms and one manageable study goal.';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['easy', 'medium', 'hard'], actionPlan }, 'I feel anxious about exams', tasks);
+  assert.equal(result.responseSource, 'ai');
+  assert.equal(result.actionPlan, actionPlan);
+});
+
+test('health assessment requests get a professional referral without diagnoses or a crisis assumption', () => {
+  for (const text of ['Do I have ADHD?', 'Do I have diabetes?', 'May sakit ba ako?']) {
+    const result = normalizeReflectionPlan({ healthSupport: true }, text, tasks);
+    assert.equal(result.supportKind, 'health');
+    assert.equal(result.supportOnly, true);
+    assert.match(result.actionPlan, /qualified healthcare professional/);
+    assert.doesNotMatch(result.actionPlan, /ADHD|diabet|emergency|suicid/);
+    assert.equal(result.workMinutes, undefined);
+    assert.deepEqual(normalizeReflectionPlan(result, text, tasks), result);
+  }
+});
 
 test('fallback adapts English and Tagalog reflections with task-specific advice', () => {
   for (const text of ['I feel stressed about my exams', 'Pagod ako at nahihirapan mag aral']) {

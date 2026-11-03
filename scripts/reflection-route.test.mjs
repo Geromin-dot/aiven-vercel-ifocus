@@ -15,6 +15,40 @@ function endpoint(callGemini, session = { user: { id: 'student' } }) {
 }
 const tasks = [{ id: 'a', text: 'Review anatomy', priority: 'Low' }, { id: 'b', text: 'Solve physiology', priority: 'High' }];
 
+test('safety disclosures return professional support immediately without calling the provider', async () => {
+  const post = endpoint(async () => assert.fail('explicit safety language must not wait for the provider'));
+  for (const text of ['I want to die', 'suicidal', 'Gusto ko nang mamatay']) {
+    const result = await post({ text, tasks });
+    assert.equal(result.status, 200);
+    assert.equal(result.data.supportOnly, true);
+    assert.equal(result.data.orderedIds, undefined);
+  }
+});
+
+test('provider-detected indirect safety language uses the same support-only response', async () => {
+  const post = endpoint(async options => {
+    assert.match(options.parts[0].text, /not a clinician or therapist/);
+    assert.match(options.parts[0].text, /You may acknowledge feelings the student explicitly reports, including anxiety/);
+    return { supportOnly: true };
+  });
+  const result = await post({ text: 'I will not be here tomorrow and cannot keep myself safe', tasks });
+  assert.equal(result.data.supportOnly, true);
+  assert.match(result.data.actionPlan, /professional/);
+  assert.equal(result.data.workMinutes, undefined);
+});
+
+test('health assessment requests receive a non-diagnostic professional referral', async () => {
+  const post = endpoint(async options => {
+    assert.match(options.parts[0].text, /ALL mental and physical health conditions/);
+    assert.match(options.parts[0].text, /Never infer an unreported feeling or confirm, invent, suggest, or rule out a diagnosis/);
+    return { healthSupport: true };
+  });
+  const result = await post({ text: 'Does my typing mean I have ADHD?', tasks });
+  assert.equal(result.data.supportKind, 'health');
+  assert.match(result.data.actionPlan, /qualified healthcare professional/);
+  assert.equal(result.data.state, undefined);
+});
+
 test('provider failure still gives a task-specific plan with an explicit fallback status', async () => {
   const post = endpoint(async () => { throw new Error('Provider quota exhausted'); });
   const result = await post({ text: 'Pagod ako, unahin anatomy please', tasks });

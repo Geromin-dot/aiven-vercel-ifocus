@@ -11,7 +11,7 @@ import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } fro
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import { reflectionInputError } from '@/lib/reflectionInput';
-import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder } from '@/lib/reflectionPlan';
+import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport } from '@/lib/reflectionPlan';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
@@ -370,7 +370,7 @@ export default function CommandCenterPage() {
     'stupid', 'hate', 'useless', 'idiot', 'crap', 'sucks', 'annoying', 'pissed',
     'furious', 'trash', 'dumb', 'bullshit', 'screw this'
   ];
-  const anxietyList = [
+  const studyDifficultyWords = [
     'worry', 'worried', 'stress', 'stressed', 'anxious', 'anxiety', 'scared',
     'terrified', 'overwhelmed', 'nervous', 'fail', 'failing', 'failure',
     'hopeless', 'panic', 'panicking', 'paralyzed', 'exhausted', 'burnt out',
@@ -690,6 +690,7 @@ export default function CommandCenterPage() {
 
   const handleTelemetryInput = (e) => {
     const text = e.target.value.toLowerCase();
+    if (generateSafetySupport(text)) return;
     if (anomalyTriggeredRef.current) return;
 
     let triggerWord = null;
@@ -704,7 +705,7 @@ export default function CommandCenterPage() {
     }
 
     if (!triggerWord) {
-      for (let word of anxietyList) {
+      for (let word of studyDifficultyWords) {
         if (text.includes(word)) {
           triggerWord = word;
           isProfanity = false;
@@ -716,11 +717,11 @@ export default function CommandCenterPage() {
     if (triggerWord) {
       anomalyTriggeredRef.current = true;
       const reason = isProfanity
-        ? "Strong emotional frustration detected in your reflection. It is completely okay to feel stuck when studying."
-        : "You seem to be expressing worry or overwhelm. Remember that learning is a gradual process.";
+        ? "Your reflection mentions a difficult study moment. You can choose a more manageable next step."
+        : "If studying feels difficult right now, you can adjust your pace.";
       const actionPlan = isProfanity
-        ? "Frustration blocks effective learning. Walk away for exactly 5 minutes, do something unrelated, and come back fresh."
-        : "When anxiety hits, try a quick grounding exercise or tackle a small bite-sized subtask to rebuild momentum.";
+        ? "Consider a short break if you need one, then choose one small study goal."
+        : "Try one small subtask and decide whether a short break would help.";
 
       const avgDwell = dwellTimesRef.current.length ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length : 0;
       const avgFlight = flightTimesRef.current.length ? flightTimesRef.current.reduce((a, b) => a + b, 0) / flightTimesRef.current.length : 0;
@@ -1935,6 +1936,12 @@ export default function CommandCenterPage() {
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
     const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
+    const safety = generateSafetySupport(text);
+    if (safety) {
+      setReflectionError('');
+      setAiFeedback({ ...safety, message: safety.actionPlan });
+      return;
+    }
     const inputError = reflectionInputError(text);
     setReflectionError(inputError);
     if (inputError) return;
@@ -1968,6 +1975,10 @@ export default function CommandCenterPage() {
         clearTimeout(timeoutId);
       }
 
+      if (data.supportOnly) {
+        setAiFeedback({ ...data, message: data.actionPlan });
+        return;
+      }
       const { state, workMinutes, breakMinutes, targetSessions } = data;
       const currentTodos = todosRef.current;
       const newOrder = applyReflectionTaskOrder(currentTodos, data.orderedIds);
@@ -1981,7 +1992,7 @@ export default function CommandCenterPage() {
         rhythm: `${workMinutes}m Focus / ${breakMinutes}m Rest`, sessions: targetSessions,
         reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource, reflectionText: text,
         statusNote: data.responseSource === 'fallback' ? data.fallbackReason === 'invalid_plan'
-          ? 'The coach response did not match your request. This suggested plan follows your task preference.'
+          ? 'The coach response could not be used. This suggested study plan is based on your reflection and tasks.'
           : 'The live AI could not respond. This suggested plan is based on your reflection and tasks; you can retry the AI below.' : '',
       };
       setIsActive(false);
@@ -3299,7 +3310,16 @@ export default function CommandCenterPage() {
       )}
 
       {/* AI Coach Adaptive Adjustment Modal (Modern Cognitive Design) */}
-      {aiFeedback && (
+      {aiFeedback?.supportOnly && (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(15, 23, 42, 0.72)' }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="safety-support-title" style={{ background: '#fff', borderRadius: '20px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto' }}>
+            <h2 id="safety-support-title" style={{ fontSize: '1.3rem', marginBottom: '1rem' }}>{aiFeedback.title}</h2>
+            <p style={{ lineHeight: 1.65 }}>{aiFeedback.message}</p>
+            <button type="button" className="btn-secondary" onClick={() => setAiFeedback(null)} style={{ marginTop: '1rem' }}>Close</button>
+          </div>
+        </div>
+      )}
+      {aiFeedback && !aiFeedback.supportOnly && (
         <div 
           className="modal-overlay" 
           style={{ 
