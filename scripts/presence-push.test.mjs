@@ -136,8 +136,8 @@ test('new focus session invalidates callbacks for the previous focus session', a
   assert.equal((await h.service.deliver('sub-1', old)).skipped, true);
 });
 
-test('signout, replaced login, suspended account and very late jobs never send', async () => {
-  for (const account of [{ currentSessionId: null }, { currentSessionId: 'login-2' }, { status: 'SUSPENDED' }, {}]) {
+test('suspended accounts and very late jobs never send', async () => {
+  for (const account of [{ status: 'SUSPENDED' }, {}]) {
     const h = harness();
     await h.sync();
     Object.assign(h.user, account);
@@ -197,4 +197,12 @@ test('a failed QStash publish is retried by the next heartbeat with the same gen
   await h.sync(state(), start + 1000);
   assert.equal(h.published.length, 1);
   assert.equal(h.published[0].generation, generation);
+});
+
+test('another device signing in does not cancel this device notification', async () => {
+  const h = harness();
+  await h.sync();
+  h.user.currentSessionId = 'other-device-login';
+  h.time(start + 180000);
+  assert.equal((await h.deliver()).delivered, true);
 });

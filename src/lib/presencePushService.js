@@ -46,11 +46,11 @@ export function createPresencePushService({ db, publish, send, now = Date.now })
   }
 
   async function deliver(subscriptionId, generation) {
-    const job = await db.presencePushJob.findUnique({ where: { subscriptionId }, include: { subscription: { include: { user: { select: { status: true, currentSessionId: true } } } } } });
+    const job = await db.presencePushJob.findUnique({ where: { subscriptionId }, include: { subscription: { include: { user: { select: { status: true } } } } } });
     if (!job || job.generation !== generation || job.status !== 'PENDING') return { skipped: true };
     const subscription = job.subscription;
     const user = subscription.user;
-    if (user.status !== 'ACTIVE' || !job.authSessionId || user.currentSessionId !== job.authSessionId || now() - Number(job.dueAt) > 15 * 60000) {
+    if (user.status !== 'ACTIVE' || !job.authSessionId || now() - Number(job.dueAt) > 15 * 60000) {
       await db.presencePushJob.updateMany({ where: { subscriptionId, generation }, data: { status: 'CANCELLED' } });
       return { skipped: true };
     }

@@ -96,21 +96,9 @@ export const authOptions = {
         token.status = user.status || "ACTIVE";
         token.statusReason = user.statusReason || null;
 
-        // Record active session ID to PostgreSQL to enforce Option A (Single-device active session)
-        try {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { currentSessionId: newSessionId },
-            select: { id: true },
-          });
-          console.log(`[AUTH SESSION] New active session created for user ${user.id} (${newSessionId})`);
-          // This sign-in already checked the account and saved its session.
-          // Subsequent requests still perform live account/session verification below.
-          return token;
-        } catch (err) {
-          console.error("Failed saving currentSessionId to user:", err);
-          throw new Error('Sign-in is temporarily unavailable. Please try again.');
-        }
+        // Each device keeps its own signed login identity. A new login does not
+        // replace another device or require a write to the shared user record.
+        return token;
       }
       if (trigger === "update" && session?.user) {
         if (session.user.name !== undefined) token.name = session.user.name;
@@ -122,40 +110,21 @@ export const authOptions = {
         if (session.user.statusReason !== undefined) token.statusReason = session.user.statusReason;
       }
 
-      // Live verification: Ensure user exists in PostgreSQL and check for concurrent login (Option A)
+      // Keep account existence and restrictions current without enforcing one device.
+      if (token?.error === 'CONCURRENT_LOGIN') delete token.error;
       if (token?.sub) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { id: true, status: true, statusReason: true, role: true, currentSessionId: true }
+            select: { id: true, status: true, statusReason: true, role: true }
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
             return null;
           }
 
-          // If session token exists in JWT and does not match the database active session, kick out!
-          if (token.sessionId && dbUser.currentSessionId && token.sessionId !== dbUser.currentSessionId) {
-            console.log(`[AUTH CONCURRENT] Older session invalidated for user ${token.sub}. DB session: ${dbUser.currentSessionId}, Token session: ${token.sessionId}`);
-            return {
-              ...token,
-              error: 'CONCURRENT_LOGIN'
-            };
-          }
-
-          // Bootstrap existing sessions if token had no sessionId yet
-          if (!token.sessionId) {
-            if (dbUser.currentSessionId) {
-              token.sessionId = dbUser.currentSessionId;
-            } else {
-              const newSessionId = randomUUID();
-              token.sessionId = newSessionId;
-              await prisma.user.update({
-                where: { id: token.sub },
-                data: { currentSessionId: newSessionId }
-              }).catch(() => {});
-            }
-          }
+          // Legacy tokens receive their own identity, never another device's ID.
+          if (!token.sessionId) token.sessionId = randomUUID();
 
           token.status = dbUser.status;
           token.statusReason = dbUser.statusReason;
@@ -173,12 +142,7 @@ export const authOptions = {
       if (!token || !token.sub) {
         return null;
       }
-      if (token.error === 'CONCURRENT_LOGIN') {
-        return {
-          ...session,
-          error: 'CONCURRENT_LOGIN'
-        };
-      }
+      if (token.status === 'ON_HOLD' || token.status === 'BANNED') return null;
       if (session.user) {
         session.user.id = token.sub;
         session.user.sessionId = token.sessionId;
@@ -195,11 +159,11 @@ export const authOptions = {
   },
 };
 
-// Invalidate queued notifications for this login, without invalidating a newer login.
+// Cancel only notification jobs belonging to this device login.
 authOptions.events = {
   async signOut({ token }) {
     if (token?.sub && token?.sessionId) {
-      await prisma.user.updateMany({ where: { id: token.sub, currentSessionId: token.sessionId }, data: { currentSessionId: null } });
+      await prisma.presencePushJob.updateMany({ where: { authSessionId: token.sessionId, subscription: { userId: token.sub } }, data: { status: 'CANCELLED' } });
     }
   },
 };

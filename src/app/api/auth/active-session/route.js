@@ -9,26 +9,11 @@ export async function GET(request) {
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {
-      if (session?.error === 'CONCURRENT_LOGIN') {
-        return NextResponse.json({
-          active: false,
-          conflict: true,
-          reason: 'CONCURRENT_LOGIN'
-        }, { status: 401 });
-      }
       return NextResponse.json({ active: false }, { status: 200 });
     }
 
-    if (session.error === 'CONCURRENT_LOGIN') {
-      return NextResponse.json({
-        active: false,
-        conflict: true,
-        reason: 'CONCURRENT_LOGIN'
-      }, { status: 401 });
-    }
-
     // getServerSession already runs the JWT callback, which verifies the user,
-      // status, and active session against PostgreSQL. Avoid a second lookup here.
+      // status against PostgreSQL. Avoid a second lookup here.
     if (session.user.status === "ON_HOLD" || session.user.status === "BANNED") {
       return NextResponse.json({
         active: false,

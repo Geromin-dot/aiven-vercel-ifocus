@@ -11,7 +11,6 @@ import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
 import GlobalTimer from "@/components/GlobalTimer";
 import PwaRegistrar from "@/components/PwaRegistrar";
-import ConcurrentSessionGuard from "@/components/ConcurrentSessionGuard";
 import BackgroundPushSync from "@/components/BackgroundPushSync";
 
 export const metadata = {
@@ -66,7 +65,6 @@ export default function RootLayout({ children }) {
           </div>
           <GlobalTimer />
           <BackgroundPushSync />
-          <ConcurrentSessionGuard />
           <PwaRegistrar />
         </Providers>
       </body>

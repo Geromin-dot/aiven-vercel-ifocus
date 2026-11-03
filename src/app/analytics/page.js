@@ -47,39 +47,8 @@ export default function AnalyticsPage() {
         .then(() => setForceUpdate(prev => prev + 1))
         .catch(() => {});
 
-      // Hydrate study session history from PostgreSQL database for cross-device parity
-      fetch('/api/study-sessions')
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data?.sessions && Array.isArray(data.sessions)) {
-            try {
-              const localHistory = JSON.parse(localStorage.getItem('ifocus_session_history') || '[]');
-              const existingDates = new Set(localHistory.map(s => s.id || s.date));
-              let added = false;
-              data.sessions.forEach(remote => {
-                const remoteKey = remote.id || remote.createdAt;
-                if (!existingDates.has(remoteKey)) {
-                  localHistory.push({
-                    id: remote.id,
-                    date: remote.createdAt,
-                    duration: remote.duration / 60,
-                    durationSeconds: remote.duration,
-                    score: remote.score,
-                    deckTitle: remote.deck?.title || 'General Focus',
-                    synced: true
-                  });
-                  added = true;
-                }
-              });
-              if (added || localHistory.length === 0) {
-                localHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                localStorage.setItem('ifocus_session_history', JSON.stringify(localHistory));
-                setForceUpdate(prev => prev + 1);
-              }
-            } catch (err) {}
-          }
-        })
-        .catch(() => {});
+      // Study history is loaded once by the authenticated history effect below.
+
     }
   }, [status]);
 

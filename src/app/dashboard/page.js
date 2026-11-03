@@ -11,6 +11,7 @@ import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } fro
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import { reflectionInputError } from '@/lib/reflectionInput';
+import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder } from '@/lib/reflectionPlan';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
@@ -62,6 +63,7 @@ export default function CommandCenterPage() {
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
+  const reflectionPendingRef = useRef(false);
 
   // Past Entries State (LocalStorage)
   const [pastEntries, setPastEntries] = useState([]);
@@ -787,7 +789,7 @@ export default function CommandCenterPage() {
     }
   }, [userName, status]);
 
-  const saveHistory = (newHistory) => {
+  const saveHistory = (newHistory, telemetry = {}) => {
     setPastEntries(newHistory);
     try {
       localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(newHistory));
@@ -798,6 +800,7 @@ export default function CommandCenterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telemetryState: {
+            ...telemetry,
             journalHistory: newHistory,
             updatedAt: new Date().toISOString()
           }
@@ -1909,332 +1912,102 @@ export default function CommandCenterPage() {
 
   // AI Coach Logic
   const submitReflection = async () => {
+    if (reflectionPendingRef.current) return;
     const text = reflectionInput.trim();
     const inputError = reflectionInputError(text);
     setReflectionError(inputError);
     if (inputError) return;
+    reflectionPendingRef.current = true;
     setIsSubmittingReflection(true);
     setAiFeedback(null);
-
-    let feedback = "Keep up the great work!";
-    let state = "Engaged";
-    let timerLabel = "Focus Time";
-    let rhythmStr = "25m Focus / 5m Rest";
-    let targetSessions = 4;
-    let customWork = { min: 25, sec: 0 };
-    let customBreak = { min: 5, sec: 0 };
-
+    const activeTasks = todos.filter(task => !task.completed).map(({ id, text, priority }) => ({ id, text, priority }));
+    let data;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25-second robust timeout
-      
-      const activeTasks = todos.filter(t => !t.completed).map(t => ({ id: t.id, text: t.text, priority: t.priority }));
-      const res = await fetch('/api/ai/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, tasks: activeTasks }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      const data = await res.json();
-      
-      if (res.ok) {
-        feedback = data.actionPlan || "Focus plan optimized.";
-        state = data.state || "Engaged";
-        
-        playAlertSound();
-        
-        // Task Reordering
-        if (data.orderedIds && data.orderedIds.length > 0) {
-            const activeTodos = todos.filter(t => !t.completed);
-            const completedTodos = todos.filter(t => t.completed);
-            const reorderedActive = [];
-            
-            data.orderedIds.forEach(id => {
-                const cleanId = String(id).trim();
-                const todo = activeTodos.find(t => String(t.id).trim() === cleanId);
-                if (todo) reorderedActive.push(todo);
-            });
-            activeTodos.forEach(todo => {
-                if (!reorderedActive.find(t => String(t.id) === String(todo.id))) reorderedActive.push(todo);
-            });
-            const newOrder = [...reorderedActive, ...completedTodos];
-            setTodos(newOrder);
-            
-            // Persist order
-            fetch('/api/todos/reorder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderedIds: newOrder.map(t => t.id) })
-            }).catch(e => console.error("Failed to sync order:", e));
-        }
-        
-        // Adaptive Session & Rhythm Targeting from AI (Strictly 1 to 5)
-        targetSessions = Math.min(5, Math.max(1, parseInt(data.targetSessions, 10) || (state === "Stressed" ? 2 : state === "Distracted" ? 3 : 4)));
-
-        // Adjust Timer based on state and AI returned minutes
-        setIsActive(false);
-        setIsFocus(true);
-        setTimerPreset('Custom');
-
-        const workMin = parseInt(data.workMinutes, 10) || (
-          state === "Stressed" ? 15 :
-          state === "Distracted" ? 20 :
-          state === "Motivated" ? 50 : 25
-        );
-        const breakMin = parseInt(data.breakMinutes, 10) || (
-          workMin >= 50 ? 10 : 5
-        );
-
-        customWork = { min: workMin, sec: 0 };
-        customBreak = { min: breakMin, sec: 0 };
-        rhythmStr = `${workMin}m Focus / ${breakMin}m Rest`;
-        timerLabel = state === "Stressed" ? "Gentle Focus (Stressed)"
-          : state === "Distracted" ? "Strict Pomodoro (Distracted)"
-          : state === "Motivated" ? "Flow State (Motivated)"
-          : `Balanced Cadence (${state})`;
-
-        setCustomWorkTime(customWork);
-        setCustomBreakTime(customBreak);
-        setCustomSessions(targetSessions);
-        setSessionCount(1);
-        setTimeLeft(customWork.min * 60);
-
-        // Persist AI adapted custom timer and sync
-        try {
-          localStorage.setItem('ifocus_custom_timer', JSON.stringify({
-            customWorkTime: customWork,
-            customBreakTime: customBreak,
-            customSessions: targetSessions,
-            customWorkDuration: customWork.min * 60,
-            customBreakDuration: customBreak.min * 60
-          }));
-          const syncPayload = {
-            isRunning: false,
-            isFocus: true,
-            timeLeft: customWork.min * 60,
-            totalTime: customWork.min * 60,
-            timerPreset: 'Custom',
-            customWorkDuration: customWork.min * 60,
-            customBreakDuration: customBreak.min * 60,
-            customSessions: targetSessions,
-            sessionCount: 1,
-            presencePaused: false,
-            lastPresenceElapsed: 0,
-            lastPresenceRemaining: customWork.min * 60,
-            lastPresenceCheckElapsed: 0,
-            breakGatePending: false
-          };
-          localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
-          window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
-        } catch (e) {}
-        
-        const aiReplyData = {
-          title: timerLabel,
-          message: feedback,
-          state: state,
-          rhythm: rhythmStr,
-          sessions: targetSessions,
-          reorderedCount: data.orderedIds?.length || 0
-        };
-
-        setAiFeedback(aiReplyData);
-        setIsAiAdjustedTimer(true);
-        setAiAdjustedDetails(aiReplyData);
-        try {
-          localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-          localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiReplyData));
-        } catch (e) {}
-
-        // Trigger AI Coach Intervention in Local Storage if not Engaged/Motivated
-        if (state === "Stressed" || state === "Distracted") {
-          const telemetryKey = `ifocus_telemetry_insight_${userName}`;
-          localStorage.setItem(telemetryKey, JSON.stringify({
-            reason: `Coach noticed you are feeling ${state.toLowerCase()} based on your journal entry.`,
-            actionPlan: feedback,
-            timestamp: new Date().toISOString()
-          }));
-        }
-
-        // Save latest telemetry payload for Analytics and Coach
-        try {
-          const isTense = state === "Stressed" || state === "Distracted";
-          const telemPayload = {
-            state: state,
-            fatigueLevel: isTense ? "High" : state === "Fatigued" ? "Elevated" : "Low",
-            reason: feedback || text,
-            sentiment: state,
-            errorRate: telemetryStats.errorRate,
-            backspaces: telemetryStats.backspaces,
-            dwell: telemetryStats.dwell,
-            flight: telemetryStats.flight,
-            source: 'reflection_submission',
-            timestamp: new Date().toISOString()
-          };
-          localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
-          localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemPayload));
-          localStorage.setItem('ifocus_telemetry_insight_anonymous', JSON.stringify(telemPayload));
-          localStorage.removeItem('ifocus_active_idle_alert');
-          window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
-
-          // Sync reflection sentiment to cloud for multi-device parity
-          fetch('/api/user/telemetry', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telemetryState: {
-                latestTelemetry: telemPayload,
-                updatedAt: new Date().toISOString()
-              }
-            })
-          }).catch(() => {});
-        } catch (e) {}
-
-        setReflectionInput('');
-        
-        // Save to journal history with AI reply included
-        const newEntry = {
-          id: Date.now().toString(),
-          date: new Date().toISOString(),
-          text: text,
-          state: state,
-          aiReply: aiReplyData
-        };
-        saveHistory([newEntry, ...pastEntries]);
-
-      } else {
-        setReflectionError(data.error || 'Could not analyze this reflection. Please try again.');
-      }
-
-    } catch (err) {
-      console.warn("Reflection submit error:", err);
-      // Save local telemetry fallback if catch triggered
-      const lower = text.toLowerCase();
-      const isStress = lower.includes('stress') || lower.includes('anxi') || lower.includes('worr') || lower.includes('frustrat') || lower.includes('tired') || lower.includes('overwhelm');
-      const isDistracted = lower.includes('distract') || lower.includes('bore') || lower.includes('scroll') || lower.includes('procrastinat');
-      const isMotivated = lower.includes('motivat') || lower.includes('ready') || lower.includes('energ') || lower.includes('excite');
-      
-      const fallbackState = isStress ? "Stressed" : isDistracted ? "Distracted" : isMotivated ? "Motivated" : "Engaged";
-      const fallbackSessions = isStress ? 2 : isDistracted ? 3 : 4;
-      const fallbackWork = isStress ? { min: 15, sec: 0 } : isDistracted ? { min: 20, sec: 0 } : isMotivated ? { min: 50, sec: 0 } : { min: 25, sec: 0 };
-      const fallbackBreak = isMotivated ? { min: 10, sec: 0 } : { min: 5, sec: 0 };
-      const fallbackRhythm = `${fallbackWork.min}m Focus / ${fallbackBreak.min}m Rest`;
-      const fallbackTitle = fallbackState === "Stressed" ? "Gentle Focus (Stressed)" 
-        : fallbackState === "Distracted" ? "Strict Pomodoro (Distracted)"
-        : fallbackState === "Motivated" ? "Flow State (Motivated)"
-        : "Balanced Cadence (Engaged)";
-
-      let fallbackMessage = "Solid reflection logged! Maintain a steady focus pace with periodic restorative micro-breaks.";
-      if (fallbackState === "Stressed") {
-        fallbackMessage = "I noticed friction and pressure in your reflection. I've adjusted your timer to a gentle 15-minute interval across 2 short sessions with lighter tasks first to build calm momentum.";
-      } else if (fallbackState === "Distracted") {
-        fallbackMessage = "Distractions happen—the key is lowering friction. I've set a focused 20-minute Pomodoro across 3 structured cycles to eliminate task-switching.";
-      } else if (fallbackState === "Motivated") {
-        fallbackMessage = "Great energy detected! I've scheduled 50-minute deep work intervals across 4 cycles to capitalize on your peak alertness.";
-      }
-
       try {
-        const telemPayload = {
-          state: fallbackState,
-          fatigueLevel: isStress ? "High" : isDistracted ? "Elevated" : "Low",
-          reason: isStress ? "Frustration / stress sentiment detected in journal reflection." : "Focus reflection logged.",
-          sentiment: fallbackState,
-          errorRate: telemetryStats.errorRate,
-          backspaces: telemetryStats.backspaces,
-          source: 'reflection_submission_fallback',
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem('ifocus_latest_telemetry', JSON.stringify(telemPayload));
-        localStorage.setItem(`ifocus_telemetry_insight_${userName}`, JSON.stringify(telemPayload));
-        localStorage.setItem('ifocus_telemetry_insight_anonymous', JSON.stringify(telemPayload));
-        localStorage.removeItem('ifocus_active_idle_alert');
-        window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemPayload }));
-      } catch (e) {}
-      
-      // In fallback, also smartly reorder tasks locally so tasks NEVER stay stuck
-      const activeTodos = todos.filter(t => !t.completed);
-      const completedTodos = todos.filter(t => t.completed);
-      let reorderedActive = [...activeTodos];
-      if (fallbackState === 'Stressed') {
-        const pMap = { Low: 1, Medium: 2, High: 3 };
-        reorderedActive.sort((a, b) => (pMap[a.priority] || 2) - (pMap[b.priority] || 2));
-      } else {
-        const pMap = { High: 1, Medium: 2, Low: 3 };
-        reorderedActive.sort((a, b) => (pMap[a.priority] || 2) - (pMap[b.priority] || 2));
+        const response = await fetch('/api/ai/coach', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify({ text, tasks: activeTasks, recentAdvice: pastEntries.slice(0, 2).map(entry => entry.aiReply?.message || '') }),
+        });
+        const result = await response.json();
+        if (response.status === 422) {
+          setReflectionError(result.error || 'Please describe how you feel or what you want to study.');
+          return;
+        }
+        if (!response.ok) throw new Error('Coach is temporarily unavailable');
+        data = normalizeReflectionPlan(result, text, activeTasks);
+        if (result.responseSource === 'fallback') data.responseSource = 'fallback';
+      } catch {
+        data = generateCognitiveFallback(text, activeTasks);
+      } finally {
+        clearTimeout(timeoutId);
       }
-      const newOrder = [...reorderedActive, ...completedTodos];
+
+      const { state, workMinutes, breakMinutes, targetSessions } = data;
+      const newOrder = applyReflectionTaskOrder(todos, data.orderedIds);
+      const orderChanged = newOrder.some((task, index) => task.id !== todos[index]?.id);
       setTodos(newOrder);
-      fetch('/api/todos/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderedIds: newOrder.map(t => t.id) })
-      }).catch(() => {});
-
-      const fallbackReply = {
-        title: fallbackTitle,
-        message: fallbackMessage,
-        state: fallbackState,
-        rhythm: fallbackRhythm,
-        sessions: fallbackSessions,
-        reorderedCount: activeTodos.length
+      const timerLabel = state === 'Stressed' ? 'Gentle Focus (Stressed)'
+        : state === 'Distracted' ? 'Strict Pomodoro (Distracted)'
+        : state === 'Motivated' ? 'Flow State (Motivated)' : 'Balanced Cadence (Engaged)';
+      const aiReply = { title: timerLabel, message: data.actionPlan, state,
+        rhythm: `${workMinutes}m Focus / ${breakMinutes}m Rest`, sessions: targetSessions,
+        reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource,
+        statusNote: data.responseSource === 'fallback' ? 'AI unavailable — basic plan based on your reflection and tasks.' : '',
       };
-
-      // In fallback, also ACTUALLY adjust timer so it matches!
+      setIsActive(false);
+      setIsFocus(true);
       setTimerPreset('Custom');
-      setCustomWorkTime(fallbackWork);
-      setCustomBreakTime(fallbackBreak);
-      setCustomSessions(fallbackSessions);
+      setCustomWorkTime({ min: workMinutes, sec: 0 });
+      setCustomBreakTime({ min: breakMinutes, sec: 0 });
+      setCustomSessions(targetSessions);
       setSessionCount(1);
-      setTimeLeft(fallbackWork.min * 60);
-
-      try {
-        localStorage.setItem('ifocus_custom_timer', JSON.stringify({
-          customWorkTime: fallbackWork,
-          customBreakTime: fallbackBreak,
-          customSessions: fallbackSessions,
-          customWorkDuration: fallbackWork.min * 60,
-          customBreakDuration: fallbackBreak.min * 60
-        }));
-        const syncPayload = {
-          isRunning: false,
-          isFocus: true,
-          timeLeft: fallbackWork.min * 60,
-          totalTime: fallbackWork.min * 60,
-          timerPreset: 'Custom',
-          customWorkDuration: fallbackWork.min * 60,
-          customBreakDuration: fallbackBreak.min * 60,
-          customSessions: fallbackSessions,
-          sessionCount: 1,
-          presencePaused: false,
-          lastPresenceElapsed: 0,
-          lastPresenceRemaining: fallbackWork.min * 60,
-          lastPresenceCheckElapsed: 0,
-          breakGatePending: false
-        };
-        localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
-        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
-      } catch (e) {}
-
-      setAiFeedback(fallbackReply);
+      setTimeLeft(workMinutes * 60);
+      setAiFeedback(aiReply);
       setIsAiAdjustedTimer(true);
-      setAiAdjustedDetails(fallbackReply);
+      setAiAdjustedDetails(aiReply);
+      playAlertSound();
+      const timestamp = new Date().toISOString();
+      const customTimer = { customWorkTime: { min: workMinutes, sec: 0 }, customBreakTime: { min: breakMinutes, sec: 0 },
+        customSessions: targetSessions, customWorkDuration: workMinutes * 60, customBreakDuration: breakMinutes * 60 };
+      const timer = { isRunning: false, isFocus: true, timeLeft: workMinutes * 60, totalTime: workMinutes * 60,
+        timerPreset: 'Custom', customWorkDuration: workMinutes * 60, customBreakDuration: breakMinutes * 60,
+        customSessions: targetSessions, sessionCount: 1, presencePaused: false, lastPresenceElapsed: 0,
+        lastPresenceRemaining: workMinutes * 60, lastPresenceCheckElapsed: 0, breakGatePending: false };
+      const telemetry = { state, sentiment: state, reason: data.actionPlan, actionPlan: data.actionPlan,
+        source: data.responseSource === 'fallback' ? 'reflection_submission_fallback' : 'reflection_submission', timestamp };
       try {
+        localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
         localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(fallbackReply));
-      } catch (e) {}
-
+        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiReply));
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(timer));
+        for (const key of ['ifocus_latest_telemetry', `ifocus_telemetry_insight_${userName}`, 'ifocus_telemetry_insight_anonymous']) {
+          localStorage.setItem(key, JSON.stringify(telemetry));
+        }
+        localStorage.removeItem('ifocus_active_idle_alert');
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: timer }));
+        window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemetry }));
+      } catch { /* The current plan remains usable when browser storage is unavailable. */ }
+      // Reflection, telemetry and timer preferences use one cloud save instead of separate writes.
+      saveHistory([{ id: crypto.randomUUID(), date: timestamp, text, state, aiReply }, ...pastEntries], {
+        latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: aiReply,
+      });
       setReflectionInput('');
-
-      const fallbackEntry = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        text: text,
-        state: fallbackState,
-        aiReply: fallbackReply
-      };
-      saveHistory([fallbackEntry, ...pastEntries]);
+      if (orderChanged) {
+        try {
+          const response = await fetch('/api/todos/reorder', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderedIds: newOrder.map(task => task.id) }),
+          });
+          if (!response.ok) throw new Error('Task order was not saved');
+        } catch {
+          setAiFeedback(current => ({ ...current, statusNote: 'Your plan is ready, but task order could not be saved. Keep this page open and try again when connected.' }));
+        }
+      }
     } finally {
+      clearTimeout(timeoutId);
+      reflectionPendingRef.current = false;
       setIsSubmittingReflection(false);
     }
   };
@@ -3664,7 +3437,7 @@ export default function CommandCenterPage() {
                 lineHeight: 1.5,
                 fontWeight: 500
               }}>
-                {aiFeedback.message}
+                {aiFeedback.statusNote && <><span style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem' }} role="status">{aiFeedback.statusNote}</span></>}{aiFeedback.message}
               </p>
             </div>
 

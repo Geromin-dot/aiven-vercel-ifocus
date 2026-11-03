@@ -1,4 +1,5 @@
 import { getTimerDeviceId } from './timerState';
+import { createChangedSync } from './changedSync';
 
 export async function pushRequest(path, body, method = 'POST') {
   const response = await fetch(`/api/push/${path}`, {
@@ -43,15 +44,23 @@ export async function disableBackgroundPush() {
   window.dispatchEvent(new CustomEvent('ifocus_push_subscription_changed'));
 }
 
-export function pushCheckpoint(state) {
-  const deviceId = getTimerDeviceId();
+const syncChangedCheckpoint = createChangedSync(payload => {
   const previousVersion = Number(localStorage.getItem('ifocus_push_version')) || 0;
   const version = Math.max(Date.now(), previousVersion + 1);
   localStorage.setItem('ifocus_push_version', String(version));
+  return pushRequest('timer', { ...payload, version });
+});
+
+export function pushCheckpoint(state, { force = false, sessionId = '' } = {}) {
+  const deviceId = getTimerDeviceId();
   // A cloud checkpoint belongs to its original device; never schedule it on this one.
   const ownsState = state && state.deviceId === deviceId;
-  return pushRequest('timer', { deviceId, version,
-    state: ownsState ? state : { deviceId, isRunning: false },
-    preferences: JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}'),
-  });
+  const timer = ownsState ? state : { deviceId, isRunning: false };
+  const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+  // Countdown ticks do not change the already scheduled deadline.
+  const signature = JSON.stringify([deviceId, sessionId, timer.userId, timer.authSessionId,
+    timer.timerSessionId, timer.isRunning, timer.isFocus, timer.targetEndTime, timer.totalTime,
+    timer.lastPresenceCheckElapsed, timer.presencePaused, timer.breakGatePending,
+    timer.activePresenceIntervalSeconds, preferences.activePresenceEnabled, preferences.activePresenceInterval]);
+  return syncChangedCheckpoint(signature, { deviceId, state: timer, preferences }, force);
 }

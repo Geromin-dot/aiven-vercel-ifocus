@@ -11,11 +11,11 @@ export default function BackgroundPushSync() {
     let disposed = false;
     let enabled = false;
     const report = detail => { if (!disposed) window.dispatchEvent(new CustomEvent('ifocus_push_status', { detail })); };
-    const sync = () => {
+    const sync = (force = false) => {
       if (!enabled || disposed) return;
       try {
         const state = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
-        pushCheckpoint(state).then(result => report({ ...result, error: '' }))
+        pushCheckpoint(state, { force: force === true, sessionId: session.user.sessionId }).then(result => report({ ...result, error: '' }))
           .catch(error => report({ subscribed: true, error: error.message }));
       } catch { report({ subscribed: true, error: 'Could not read the timer checkpoint.' }); }
     };
@@ -25,7 +25,7 @@ export default function BackgroundPushSync() {
         if (disposed) return;
         enabled = status.configured && status.subscribed;
         report(status);
-        sync();
+        sync(true);
       } catch (error) { report({ error: error.message }); }
     };
     refresh();
@@ -42,6 +42,6 @@ export default function BackgroundPushSync() {
       window.removeEventListener('ifocus_push_subscription_changed', refresh);
       document.removeEventListener('visibilitychange', sync);
     };
-  }, [session?.user?.id, session?.error]);
+  }, [session?.user?.id, session?.user?.sessionId, session?.error]);
   return null;
 }

@@ -4,10 +4,11 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../src/app/api/auth/[...nextauth]/route.js', import.meta.url), 'utf8');
-function authWith(userQueries) {
+function authWith(userQueries, jobQueries = {}) {
+  let loginNumber = 0;
   const context = vm.createContext({
-    prisma: { user: userQueries }, process: { env: {} },
-    console: { log() {}, error() {} }, randomUUID: () => 'new-session',
+    prisma: { user: userQueries, presencePushJob: jobQueries }, process: { env: {} },
+    console: { log() {}, error() {} }, randomUUID: () => `login-${++loginNumber}`,
     PrismaAdapter: () => ({}), GoogleProvider: options => options,
     CredentialsProvider: options => options, NextAuth: () => ({}),
     bcrypt: { compare: async (password, hash) => password === 'correct' && hash === 'hash' },
@@ -34,29 +35,24 @@ test('credential login loads only authentication fields and still checks passwor
   await assert.rejects(provider.authorize({ email: 'student', password: 'correct' }), /ACCOUNT_ON_HOLD/);
 });
 
-test('new login saves the session without a redundant account read', async () => {
-  let writes = 0;
+test('multiple devices keep separate valid sessions without updating the user record', async () => {
   const auth = authWith({
-    async update({ where, data, select }) {
-      writes++;
-      assert.equal(where.id, 'student');
-      assert.equal(data.currentSessionId, 'new-session');
-      assert.equal(select.id, true);
-      assert.equal(Object.keys(select).length, 1);
+    async update() { assert.fail('login must not overwrite a shared currentSessionId'); },
+    async findUnique({ select }) {
+      assert.equal(select.currentSessionId, undefined);
+      return { id: 'student', status: 'ACTIVE', role: 'STUDENT', currentSessionId: 'legacy-login' };
     },
-    async findUnique() { assert.fail('account was already verified during sign-in'); },
   });
-  const token = await auth.callbacks.jwt({ token: {}, user: { id: 'student', role: 'STUDENT', status: 'ACTIVE' } });
-  assert.equal(token.sessionId, 'new-session');
-  assert.equal(writes, 1);
+  const first = await auth.callbacks.jwt({ token: {}, user: { id: 'student', status: 'ACTIVE' } });
+  const second = await auth.callbacks.jwt({ token: {}, user: { id: 'student', status: 'ACTIVE' } });
+  assert.notEqual(first.sessionId, second.sessionId);
+  assert.equal((await auth.callbacks.jwt({ token: first })).error, undefined);
+  assert.equal((await auth.callbacks.jwt({ token: second })).error, undefined);
 });
 
-test('subsequent session reads still reject concurrent logins and deleted users', async () => {
-  const auth = authWith({ async findUnique() { return { id: 'student', currentSessionId: 'other-session' }; } });
-  const token = await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'old-session' } });
-  assert.equal(token.error, 'CONCURRENT_LOGIN');
-  const deleted = authWith({ async findUnique() { return null; } });
-  assert.equal(await deleted.callbacks.jwt({ token: { sub: 'student' } }), null);
+test('deleted users remain invalid even when multiple-device login is allowed', async () => {
+  const auth = authWith({ async findUnique() { return null; } });
+  assert.equal(await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'login-1' } }), null);
 });
 
 test('subsequent session reads still refresh account restrictions', async () => {
@@ -66,11 +62,18 @@ test('subsequent session reads still refresh account restrictions', async () => 
   const token = await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'active' } });
   assert.equal(token.status, 'ON_HOLD');
   assert.equal(token.statusReason, 'Review required');
+  assert.equal(await auth.callbacks.session({ token, session: { user: {} } }), null);
 });
 
-test('a failed session write cannot issue a new login token', async () => {
-  const auth = authWith({ async update() { throw new Error('Database unavailable'); } });
-  await assert.rejects(auth.callbacks.jwt({ token: {}, user: { id: 'student' } }), /temporarily unavailable/);
+test('signout cancels only jobs belonging to this login, leaving another device active', async () => {
+  let filter;
+  const auth = authWith({}, { async updateMany({ where, data }) {
+    filter = where;
+    assert.equal(data.status, 'CANCELLED');
+  } });
+  await auth.events.signOut({ token: { sub: 'student', sessionId: 'phone-login' } });
+  assert.equal(filter.authSessionId, 'phone-login');
+  assert.equal(filter.subscription.userId, 'student');
 });
 
 test('a verified current session clears an old conflict marker', async () => {

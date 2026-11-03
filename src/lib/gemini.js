@@ -73,7 +73,9 @@ function getApiKeys() {
   return keys.length > 0 ? keys : [];
 }
 
-export async function callGemini({ parts, generationConfig = {}, preferredModel = null, timeoutMs = 25000 }) {
+export async function callGemini({ parts, generationConfig = {}, preferredModel = null, timeoutMs = 25000,
+  totalTimeoutMs = Infinity, maxRetries = 1, cache = true }) {
+  const deadline = Date.now() + totalTimeoutMs;
   const keys = getApiKeys();
   if (keys.length === 0) {
     throw new Error('Gemini API key is not configured on server. Please check .env or .env.local.');
@@ -95,29 +97,32 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
 
   for (const model of modelQueue) {
     const cacheKey = getCacheKey(model, payload);
-    const cachedResult = getFromCache(cacheKey);
+    const cachedResult = cache ? getFromCache(cacheKey) : null;
     if (cachedResult) {
       return cachedResult;
     }
 
     for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
       const apiKey = keys[keyIndex];
-      const maxRetries = 1;
-
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) throw lastError || new Error('AI response deadline exceeded');
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
+          const timeoutId = setTimeout(() => controller.abort(), Math.min(timeoutMs, remainingMs));
+          let response;
+          try {
+            response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
 
           if (response.ok) {
             const data = await response.json();
@@ -126,17 +131,17 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
             if (generationConfig.responseMimeType === 'application/json') {
               const parsed = extractJsonPayload(text);
               if (parsed !== null) {
-                setToCache(cacheKey, parsed);
+                if (cache) setToCache(cacheKey, parsed);
                 return parsed;
               }
               // If JSON extraction failed on this output, proceed to fallback attempt
               console.warn(`[Gemini Warn] JSON parsing failed for model ${model}. Raw:`, text.slice(0, 150));
             } else {
-              setToCache(cacheKey, text);
+              if (cache) setToCache(cacheKey, text);
               return text;
             }
 
-            setToCache(cacheKey, text);
+            if (cache) setToCache(cacheKey, text);
             return text;
           }
 
