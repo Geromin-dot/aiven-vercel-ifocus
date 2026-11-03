@@ -1911,9 +1911,9 @@ export default function CommandCenterPage() {
   });
 
   // AI Coach Logic
-  const submitReflection = async () => {
+  const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
-    const text = reflectionInput.trim();
+    const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
     const inputError = reflectionInputError(text);
     setReflectionError(inputError);
     if (inputError) return;
@@ -1923,7 +1923,7 @@ export default function CommandCenterPage() {
     const activeTasks = todos.filter(task => !task.completed).map(({ id, text, priority }) => ({ id, text, priority }));
     let data;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 18000);
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
     try {
       try {
         const response = await fetch('/api/ai/coach', {
@@ -1953,8 +1953,8 @@ export default function CommandCenterPage() {
         : state === 'Motivated' ? 'Flow State (Motivated)' : 'Balanced Cadence (Engaged)';
       const aiReply = { title: timerLabel, message: data.actionPlan, state,
         rhythm: `${workMinutes}m Focus / ${breakMinutes}m Rest`, sessions: targetSessions,
-        reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource,
-        statusNote: data.responseSource === 'fallback' ? 'AI unavailable — basic plan based on your reflection and tasks.' : '',
+        reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource, reflectionText: text,
+        statusNote: data.responseSource === 'fallback' ? 'The live AI could not respond. This suggested plan is based on your reflection and tasks; you can retry the AI below.' : '',
       };
       setIsActive(false);
       setIsFocus(true);
@@ -3362,7 +3362,7 @@ export default function CommandCenterPage() {
                     <line x1="12" y1="16" x2="12" y2="12"/>
                     <line x1="12" y1="8" x2="12.01" y2="8"/>
                   </svg>
-                  AI COACH ADAPTATION: {String(aiFeedback.state || 'Pacing').toUpperCase()}
+                  {aiFeedback.responseSource === 'fallback' ? 'SUGGESTED STUDY PLAN' : 'AI COACH ADAPTATION'}: {String(aiFeedback.state || 'Pacing').toUpperCase()}
                 </span>
               </div>
               <h2 style={{ fontSize: '1.18rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
@@ -3435,13 +3435,20 @@ export default function CommandCenterPage() {
                 color: '#334155',
                 fontSize: '0.82rem',
                 lineHeight: 1.5,
-                fontWeight: 500
+                fontWeight: 500,
+                whiteSpace: 'pre-line'
               }}>
                 {aiFeedback.statusNote && <><span style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem' }} role="status">{aiFeedback.statusNote}</span></>}{aiFeedback.message}
               </p>
             </div>
 
             {/* Modal Action Button */}
+            {aiFeedback.responseSource === 'fallback' && aiFeedback.reflectionText && (
+              <button type="button" className="btn-secondary" disabled={isSubmittingReflection}
+                onClick={() => submitReflection(aiFeedback.reflectionText)}>
+                Try AI Again
+              </button>
+            )}
             <button 
               type="button"
               onClick={() => setAiFeedback(null)} 

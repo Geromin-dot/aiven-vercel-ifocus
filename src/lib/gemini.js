@@ -107,12 +107,15 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const remainingMs = deadline - Date.now();
         if (remainingMs <= 0) throw lastError || new Error('AI response deadline exceeded');
+        const attemptTimeoutMs = Math.min(timeoutMs, remainingMs);
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), Math.min(timeoutMs, remainingMs));
+          const timeoutId = setTimeout(() => controller.abort(), attemptTimeoutMs);
           let response;
+          let data;
+          let errorBody;
           try {
             response = await fetch(url, {
               method: 'POST',
@@ -120,12 +123,13 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
               body: JSON.stringify(payload),
               signal: controller.signal
             });
+            if (response.ok) data = await response.json();
+            else errorBody = await response.text();
           } finally {
             clearTimeout(timeoutId);
           }
 
           if (response.ok) {
-            const data = await response.json();
             let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
             if (generationConfig.responseMimeType === 'application/json') {
@@ -146,8 +150,8 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
           }
 
           const status = response.status;
-          const errorBody = await response.text();
           lastError = new Error(`Gemini [${model}] HTTP ${status}: ${errorBody}`);
+          lastError.status = status;
 
           if (status === 503 || status === 429 || status === 500 || status === 502 || status === 504) {
             console.warn(`[Gemini Warn] ${model} returned ${status}. Attempt ${attempt + 1}/${maxRetries + 1}`);
@@ -170,7 +174,7 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
         } catch (err) {
           lastError = err;
           if (err.name === 'AbortError') {
-            console.warn(`[Gemini Warn] Request to ${model} timed out after ${timeoutMs}ms.`);
+            console.warn(`[Gemini Warn] Request to ${model} timed out after ${attemptTimeoutMs}ms.`);
           } else {
             console.warn(`[Gemini Error] Network issue on ${model}:`, err.message);
           }

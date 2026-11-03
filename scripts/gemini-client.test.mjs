@@ -47,3 +47,22 @@ test('the overall AI deadline bounds fallback attempts instead of multiplying th
     if (previousKeys === undefined) delete process.env.GEMINI_API_KEYS; else process.env.GEMINI_API_KEYS = previousKeys;
   }
 });
+
+test('the AI deadline also covers a response body that stalls after headers arrive', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousKeys = process.env.GEMINI_API_KEYS;
+  process.env.GEMINI_API_KEYS = 'test-key';
+  globalThis.fetch = async (_, { signal }) => ({
+    ok: true,
+    json: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('Body stalled', 'AbortError')), { once: true })),
+  });
+  try {
+    const { callGemini } = await load();
+    const start = Date.now();
+    await assert.rejects(callGemini({ parts: [{ text: 'stalled response' }], timeoutMs: 5000, totalTimeoutMs: 30, maxRetries: 0, cache: false }));
+    assert.ok(Date.now() - start < 500);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKeys === undefined) delete process.env.GEMINI_API_KEYS; else process.env.GEMINI_API_KEYS = previousKeys;
+  }
+});

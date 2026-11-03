@@ -3,6 +3,7 @@ import { callGemini } from '@/lib/gemini';
 import { reflectionInputError } from '@/lib/reflectionInput';
 import { generateCognitiveFallback, normalizeReflectionPlan } from '@/lib/reflectionPlan';
 
+export const maxDuration = 60;
 
 export async function POST(request) {
   let body = {};
@@ -33,18 +34,18 @@ ${taskListStr}
 Previous advice (avoid repeating it without a reason):
 ${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'string').slice(0, 2).map(item => item.slice(0, 600)).join('\n') : 'None'}
 
-Return JSON only: {"state":"Stressed|Distracted|Motivated|Engaged","orderedIds":["exact task IDs"],"targetSessions":2,"workMinutes":15,"breakMinutes":5,"actionPlan":"2-3 concise, specific coaching sentences"}.
+Return JSON only: {"state":"Stressed|Distracted|Motivated|Engaged","orderedIds":["exact task IDs"],"targetSessions":2,"workMinutes":15,"breakMinutes":5,"actionPlan":"Detailed, personalized coaching in two short paragraphs"}.
 If the reflection is meaningless or only a greeting, return {"needsContext":true} instead.
 Order all supplied tasks once: honor a named task/subject first; stressed students start with manageable tasks; motivated/engaged students prioritize high-impact tasks; distracted students start with concrete small tasks. With no tasks use [].
 Default rhythm: Stressed 15/5 minutes, 2 sessions; Distracted 20/5, 3 sessions; Engaged 25/5, 4 sessions; Motivated 50/10, 4 sessions. Honor explicitly requested minutes (5-120) and sessions (1-5).
-Tailor advice to this reflection and its first task; give a practical next step. Do not diagnose conditions or claim to know attention from inactivity. Mention flashcards only when relevant to the student's actual request or tasks.`;
+Write warm, substantive mentorship guidance, roughly 120-180 words. Acknowledge the specific situation described in the reflection without inventing feelings or facts. Explain why the first task and the remaining order fit the student's current needs. Give a concrete first step and a study technique suited to that task, such as practice problems, active recall, explaining a concept, or dividing a large task into smaller goals. Explain the recommended work/break rhythm and how to check progress before the next block. Refer to actual task names when tasks exist; avoid claiming to reorder tasks when none were supplied. Honor a shorter answer only if the student explicitly asks for one. Do not diagnose conditions or claim to know attention from inactivity. Mention flashcards only when relevant to the student's actual request or tasks.`;
 
 
     const parsed = await callGemini({
       parts: [{ text: prompt }],
       preferredModel: 'gemini-2.5-flash',
-      timeoutMs: 6000,
-      totalTimeoutMs: 12000,
+      timeoutMs: 18000,
+      totalTimeoutMs: 45000,
       maxRetries: 0,
       cache: false,
       generationConfig: {
