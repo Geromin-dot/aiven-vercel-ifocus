@@ -890,6 +890,12 @@ export default function CoachPage() {
   };
 
   const insightColor = insight?.isIntervention ? '#d97706' : '#27522d';
+  const actionPlan = insight?.actionPlan ? getSynchronizedActionPlan(insight.actionPlan) : '';
+  const normalizeGuidance = text => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const showReason = insight?.reason && (!actionPlan || (
+    normalizeGuidance(insight.reason) !== normalizeGuidance(insight.actionPlan) &&
+    normalizeGuidance(insight.reason) !== normalizeGuidance(actionPlan)
+  ));
   if (loading) return null;
 
   return (
@@ -1015,14 +1021,14 @@ export default function CoachPage() {
                 </div>
 
                 {/* Reason Banner */}
-                <div style={{ background: '#fefcf8', border: '1px solid rgba(217, 119, 6, 0.22)', padding: '0.85rem 1.05rem', borderRadius: '12px', flexShrink: 0 }}>
+                {showReason && <div style={{ background: '#fefcf8', border: '1px solid rgba(217, 119, 6, 0.22)', padding: '0.85rem 1.05rem', borderRadius: '12px', flexShrink: 0 }}>
                   <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5, fontWeight: 500 }}>
                     {insight.reason}
                   </p>
-                </div>
+                </div>}
 
                 {/* Action Plan */}
-                {insight.actionPlan && (
+                {actionPlan && (
                   <div style={{ 
                     flex: '0 0 auto', 
                     background: 'rgba(95, 143, 94, 0.06)', 
@@ -1036,7 +1042,7 @@ export default function CoachPage() {
                       Recommended Action Plan
                     </h4>
                     <div style={{ color: '#374151', fontSize: '0.88rem', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-                      {getSynchronizedActionPlan(insight.actionPlan)}
+                      {actionPlan}
                     </div>
                   </div>
                 )}
