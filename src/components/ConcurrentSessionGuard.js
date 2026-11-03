@@ -1,23 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import IFocusLogo from "@/components/IFocusLogo";
+import { createSessionVerifier } from '@/lib/sessionVerification';
 
 export default function ConcurrentSessionGuard() {
   const { data: session, status } = useSession();
   const pathname = usePathname();
-  const [hasConflict, setHasConflict] = useState(false);
-  const [conflictReason, setConflictReason] = useState("");
-  const isCheckingRef = useRef(false);
+  const [conflict, setConflict] = useState(null);
+  const sessionKey = `${session?.user?.id || ''}:${session?.user?.sessionId || ''}`;
+  const hasConflict = conflict?.sessionKey === sessionKey;
+  const conflictReason = hasConflict ? conflict.reason : '';
 
   // Exempt public pages where authentication guard is not needed
   const isExemptRoute = pathname === "/" || pathname === "/login" || pathname === "/manifest.json";
 
   const triggerLogoutModal = useCallback((reason = "CONCURRENT_LOGIN") => {
-    setHasConflict(true);
-    setConflictReason(reason);
+    setConflict({ sessionKey, reason });
 
     // Stop all audio, timers, and active study processes on this device
     try {
@@ -28,46 +29,17 @@ export default function ConcurrentSessionGuard() {
         localStorage.setItem("ifocus_timer_state", JSON.stringify({ ...parsed, isRunning: false }));
       }
     } catch (e) {}
-  }, []);
-
-  const verifyActiveSession = useCallback(async () => {
-    if (isExemptRoute || status !== "authenticated" || isCheckingRef.current || hasConflict) {
-      return;
-    }
-
-    if (session?.error === "CONCURRENT_LOGIN") {
-      triggerLogoutModal("CONCURRENT_LOGIN");
-      return;
-    }
-
-    isCheckingRef.current = true;
-    try {
-      const res = await fetch("/api/auth/active-session", {
-        method: "GET",
-        headers: { "Cache-Control": "no-cache, no-store" },
-      });
-
-      if (res.status === 401) {
-        const data = await res.json().catch(() => ({}));
-        if (data?.conflict) {
-          triggerLogoutModal("CONCURRENT_LOGIN");
-        }
-      } else if (res.status === 403) {
-        const data = await res.json().catch(() => ({}));
-        if (data?.onHold) {
-          triggerLogoutModal("ACCOUNT_ON_HOLD");
-        }
-      }
-    } catch (e) {
-      // Ignore network errors so transient offline blips don't disconnect user
-    } finally {
-      isCheckingRef.current = false;
-    }
-  }, [isExemptRoute, status, session?.error, hasConflict, triggerLogoutModal]);
+  }, [sessionKey]);
 
   // Check visible tabs periodically; hidden PWA tabs should not generate requests.
   useEffect(() => {
-    if (isExemptRoute || status !== "authenticated") return;
+    if (isExemptRoute || status !== "authenticated" || hasConflict) return;
+
+    const verifier = createSessionVerifier(triggerLogoutModal);
+    const verifyActiveSession = () => {
+      if (session?.error === 'CONCURRENT_LOGIN') triggerLogoutModal('CONCURRENT_LOGIN');
+      else verifier.verify();
+    };
 
     const initialCheck = setTimeout(verifyActiveSession, 0);
     const interval = setInterval(() => {
@@ -83,12 +55,13 @@ export default function ConcurrentSessionGuard() {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      verifier.dispose();
       clearTimeout(initialCheck);
       clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [isExemptRoute, status, verifyActiveSession]);
+  }, [isExemptRoute, status, session?.error, hasConflict, triggerLogoutModal]);
 
   const handleSignOutAndRelogin = async () => {
     try {
@@ -103,7 +76,7 @@ export default function ConcurrentSessionGuard() {
     }
   };
 
-  if (!hasConflict) return null;
+  if (!hasConflict || isExemptRoute) return null;
 
   return (
     <div

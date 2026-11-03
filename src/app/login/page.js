@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import IFocusLogo from "@/components/IFocusLogo";
+import { credentialsLogin } from '@/lib/credentialsLogin';
 
 const YEAR_LEVEL_OPTIONS = [
   { value: "1st Year", label: "1st Year (Level I)" },
@@ -40,6 +41,12 @@ function LoginContent() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef(null);
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    // Prepare the CSRF cookie while the student fills in the form.
+    credentialsLogin.prepare().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!loading || activeTab !== 'login') return;
@@ -103,7 +110,7 @@ function LoginContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && !session?.error && !submittingRef.current) {
       if (session?.user?.role === "ADMIN" || session?.user?.username === "adminUAnursing") {
         router.replace("/admin");
       } else {
@@ -112,26 +119,18 @@ function LoginContent() {
     }
   }, [status, session, router]);
 
-  if (status === "loading") {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#ffffff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <IFocusLogo size={36} />
-          <span style={{ color: '#27522d', fontWeight: 600, fontSize: '1rem', letterSpacing: '-0.01em' }}>Loading iFocus...</span>
-        </div>
-      </div>
-    );
-  }
-
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    let navigating = false;
     setSlowLogin(false);
     setLoading(true);
     setError("");
 
     try {
       const trimmedIdentifier = loginIdentifier.trim();
-      const res = await signIn("credentials", { redirect: false, email: trimmedIdentifier, password: loginPassword });
+      const res = await credentialsLogin.submit(trimmedIdentifier, loginPassword);
       if (res?.error) {
         if (res.error.startsWith("ACCOUNT_ON_HOLD:") || res.error === "ACCOUNT_ON_HOLD") {
           const reasonText = res.error.replace("ACCOUNT_ON_HOLD:", "").trim();
@@ -160,20 +159,24 @@ function LoginContent() {
         keys.forEach((k) => localStorage.removeItem(k));
       } catch (e) { }
 
-      if (trimmedIdentifier.toLowerCase().includes("adminuanursing")) {
-        router.replace("/admin");
-      } else {
-        router.replace("/dashboard");
-      }
+      // Reload to discard any pre-login session response still in flight.
+      window.location.assign(res.url);
+      navigating = true;
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!navigating) {
+        submittingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    let navigating = false;
     setLoading(true);
     setError("");
 
@@ -201,14 +204,18 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Registration failed");
 
-      const signInRes = await signIn("credentials", { redirect: false, email: cleanEmail, password: cleanPassword });
+      const signInRes = await credentialsLogin.submit(cleanEmail, cleanPassword);
       if (signInRes?.error) throw new Error("Login failed after registration");
 
-      router.push("/dashboard");
+      window.location.assign(signInRes.url);
+      navigating = true;
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!navigating) {
+        submittingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 

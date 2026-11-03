@@ -84,6 +84,7 @@ export const authOptions = {
     },
     async jwt({ token, user, trigger, session }) {
       if (user) {
+        delete token.error;
         const newSessionId = randomUUID();
         token.sub = user.id;
         token.sessionId = newSessionId;
@@ -99,7 +100,8 @@ export const authOptions = {
         try {
           await prisma.user.update({
             where: { id: user.id },
-            data: { currentSessionId: newSessionId }
+            data: { currentSessionId: newSessionId },
+            select: { id: true },
           });
           console.log(`[AUTH SESSION] New active session created for user ${user.id} (${newSessionId})`);
           // This sign-in already checked the account and saved its session.
@@ -107,6 +109,7 @@ export const authOptions = {
           return token;
         } catch (err) {
           console.error("Failed saving currentSessionId to user:", err);
+          throw new Error('Sign-in is temporarily unavailable. Please try again.');
         }
       }
       if (trigger === "update" && session?.user) {
@@ -157,6 +160,8 @@ export const authOptions = {
           token.status = dbUser.status;
           token.statusReason = dbUser.statusReason;
           token.role = dbUser.role;
+          // A previously observed conflict must not stick after live verification succeeds.
+          delete token.error;
         } catch (e) {
           // If DB is temporarily unreachable, maintain cached token
         }

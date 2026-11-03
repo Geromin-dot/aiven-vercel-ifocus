@@ -37,10 +37,12 @@ test('credential login loads only authentication fields and still checks passwor
 test('new login saves the session without a redundant account read', async () => {
   let writes = 0;
   const auth = authWith({
-    async update({ where, data }) {
+    async update({ where, data, select }) {
       writes++;
       assert.equal(where.id, 'student');
       assert.equal(data.currentSessionId, 'new-session');
+      assert.equal(select.id, true);
+      assert.equal(Object.keys(select).length, 1);
     },
     async findUnique() { assert.fail('account was already verified during sign-in'); },
   });
@@ -64,4 +66,20 @@ test('subsequent session reads still refresh account restrictions', async () => 
   const token = await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'active' } });
   assert.equal(token.status, 'ON_HOLD');
   assert.equal(token.statusReason, 'Review required');
+});
+
+test('a failed session write cannot issue a new login token', async () => {
+  const auth = authWith({ async update() { throw new Error('Database unavailable'); } });
+  await assert.rejects(auth.callbacks.jwt({ token: {}, user: { id: 'student' } }), /temporarily unavailable/);
+});
+
+test('a verified current session clears an old conflict marker', async () => {
+  const auth = authWith({ async findUnique() {
+    return { id: 'student', currentSessionId: 'active', status: 'ACTIVE', role: 'STUDENT' };
+  } });
+  const token = await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'active', error: 'CONCURRENT_LOGIN' } });
+  assert.equal(token.error, undefined);
+  const session = await auth.callbacks.session({ token, session: { user: {} } });
+  assert.equal(session.user.id, 'student');
+  assert.equal(session.error, undefined);
 });
