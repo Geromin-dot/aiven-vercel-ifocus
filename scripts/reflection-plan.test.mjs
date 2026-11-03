@@ -135,3 +135,72 @@ test('explicit category sequences are respected and Med is not mistaken for medi
   const result = generateCognitiveFallback('Start with medium first, then low, then high.', tasks);
   assert.deepEqual(result.orderedIds, ['science', 'fil', 'medtech', 'med', 'it', 'archi']);
 });
+
+test('medium task preferences need not use the literal words start or first', () => {
+  for (const text of ['I am stressed, I prefer medium tasks', 'I am stressed but I want to work on medium tasks',
+    'Stressed ako, gusto ko ng medium tasks', 'I am stressed, medium priority before the high tasks']) {
+    const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'],
+      actionPlan: 'Start with Science.' }, text, screenshotTasks);
+    assert.deepEqual(result.orderedIds.slice(0, 2), ['science', 'fil'], text);
+    assert.equal(result.state, 'Stressed');
+    assert.equal(result.workMinutes, 15);
+  }
+});
+
+test('the reported stressed-only reflection cannot leave low effort behind medium and high tasks', () => {
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'],
+    actionPlan: 'Start with Science to keep things comfortable.' }, 'I feel stressed', screenshotTasks);
+  assert.deepEqual(result.orderedIds, ['medtech', 'science', 'fil', 'it', 'archi']);
+  assert.match(result.actionPlan, /Start with “Medtech”/);
+});
+
+test('low first then IDK keeps the requested first group and uses a sensible order for the rest', () => {
+  const result = generateCognitiveFallback('I feel stressed. I want to start with low then IDK', screenshotTasks);
+  assert.deepEqual(result.orderedIds, ['medtech', 'science', 'fil', 'it', 'archi']);
+});
+
+test('the coach may choose unspecified follow-up tasks without losing valid personalized advice', () => {
+  const text = 'I want to start with low then IDK';
+  const actionPlan = 'Start with Medtech, then build up through the medium tasks at a comfortable pace.';
+  const result = normalizeReflectionPlan({ state: 'Engaged', orderedIds: ['medtech', 'science', 'fil', 'it', 'archi'],
+    taskPreference: { evidence: text, priorityOrder: ['low'] }, actionPlan }, text, screenshotTasks);
+  assert.equal(result.responseSource, 'ai');
+  assert.equal(result.actionPlan, actionPlan);
+  assert.equal(result.orderedIds[0], 'medtech');
+});
+
+test('semantic preferences work without fixed keywords and survive server/client normalization', () => {
+  const text = 'Ang bigat ng araw ko. Pwede yung pinakagaan muna para makausad?';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['medtech', 'science', 'fil', 'it', 'archi'],
+    taskPreference: { evidence: 'Pwede yung pinakagaan muna para makausad?', priorityOrder: ['low'] },
+    actionPlan: 'Start with Medtech and one small study goal.' }, text, screenshotTasks);
+  assert.equal(result.responseSource, 'ai');
+  assert.equal(result.orderedIds[0], 'medtech');
+  assert.deepEqual(normalizeReflectionPlan(result, text, screenshotTasks), result);
+});
+
+test('semantic intent can defer a named task instead of promoting every task mentioned', () => {
+  const text = 'Stressed ako. Ayoko muna ng Science, sa dulo na siya.';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'],
+    taskPreference: { evidence: 'Ayoko muna ng Science, sa dulo na siya.', deferredTaskIds: ['science'] },
+    actionPlan: 'Start with Science.' }, text, screenshotTasks);
+  assert.deepEqual(result.orderedIds, ['medtech', 'fil', 'it', 'archi', 'science']);
+  assert.match(result.actionPlan, /Start with “Medtech”/);
+});
+
+test('invented preference evidence cannot override mood defaults', () => {
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['it', 'archi', 'science', 'fil', 'medtech'],
+    taskPreference: { evidence: 'Start with high', priorityOrder: ['high'] }, actionPlan: 'Start with IT.' }, 'I feel stressed', screenshotTasks);
+  assert.equal(result.orderedIds[0], 'medtech');
+  assert.equal(result.taskPreference, undefined);
+});
+
+test('a category preference cannot invent named tasks to pin or defer', () => {
+  const text = 'I feel stressed. Pwede yung pinakagaan muna?';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['medtech', 'science', 'fil', 'it', 'archi'],
+    taskPreference: { evidence: 'Pwede yung pinakagaan muna?', priorityOrder: ['low'], taskIds: ['fil'], deferredTaskIds: ['science'] },
+    actionPlan: 'Start with Medtech and one manageable goal.' }, text, screenshotTasks);
+  assert.equal(result.responseSource, 'ai');
+  assert.deepEqual(result.taskPreference.taskIds, []);
+  assert.deepEqual(result.taskPreference.deferredTaskIds, []);
+});

@@ -29,7 +29,8 @@ export function generateSafetySupport(value, requested = false) {
 export function requestedPriorityOrder(text) {
   const reflection = normalize(text);
   const start = reflection.match(/\b(?:start|begin|unahin|simulan)\s+(?:(?:with|sa|ang|the|a|mga)\s+)*(low|medium|high|easy|hard)\b/)
-    || reflection.match(/\b(low|medium|high|easy|hard)(?:\s+(?:priority|difficulty|effort|tasks?))*\s+(?:first|muna)\b/);
+    || reflection.match(/\b(low|medium|high|easy|hard)(?:\s+(?:priority|difficulty|effort|tasks?))*\s+(?:first|muna|before)\b/)
+    || reflection.match(/\b(?:i prefer|id prefer|i want|id like|i would like|gusto ko|mas gusto ko)\s+(?:(?:to|work|on|do|study|tackle|the|a|with|ang|mga|ng|na)\s+)*(low|medium|high|easy|hard)\b/);
   if (!start) return [];
   const order = [levelValue(start[1])];
   // Uncertainty such as "then idk if low or high" is not a second instruction.
@@ -44,10 +45,31 @@ export function isNeutralOrderRequest(text) {
   return requestedPriorityOrder(text).length > 0 && !moodWords.test(text);
 }
 
-function preferenceComparator(text) {
+function validatedTaskPreference(value, text, tasks) {
+  const evidence = typeof value?.evidence === 'string' ? value.evidence.trim() : '';
+  if (normalize(evidence).length < 3 || !(` ${normalize(text)} `).includes(` ${normalize(evidence)} `)) return null;
+  const validIds = new Set(tasks.map(task => String(task.id)));
+  const namesTask = id => {
+    const title = normalize(tasks.find(task => String(task.id) === id)?.text);
+    const quote = ` ${normalize(evidence)} `;
+    return title && (quote.includes(` ${title} `) || title.split(' ').some(word => word.length >= 3 && !ignoredWords.has(word) && quote.includes(` ${word} `)));
+  };
+  const ids = values => [...new Set(Array.isArray(values) ? values.filter(id => typeof id === 'string' && validIds.has(id) && namesTask(id)) : [])];
+  const priorityOrder = [...new Set(Array.isArray(value.priorityOrder) ? value.priorityOrder.filter(level => ['low', 'medium', 'high'].includes(level)) : [])];
+  const taskIds = ids(value.taskIds);
+  const deferredTaskIds = ids(value.deferredTaskIds).filter(id => !taskIds.includes(id));
+  if (!priorityOrder.length && !taskIds.length && !deferredTaskIds.length) return null;
+  return { evidence, priorityOrder, taskIds, deferredTaskIds };
+}
+
+function preferenceComparator(text, taskPreference = null, state = null) {
   const reflection = normalize(text);
-  const requested = requestedPriorityOrder(text);
+  const requested = taskPreference ? taskPreference.priorityOrder.map(levelValue) : requestedPriorityOrder(text);
   const named = task => {
+    if (taskPreference) {
+      const index = taskPreference.taskIds.indexOf(String(task.id));
+      return index < 0 ? Infinity : index;
+    }
     const title = normalize(task.text);
     if (!title) return Infinity;
     const full = (` ${reflection} `).indexOf(` ${title} `);
@@ -57,16 +79,25 @@ function preferenceComparator(text) {
     return positions.length ? Math.min(...positions) : Infinity;
   };
   return (a, b) => {
+    if (taskPreference) {
+      const aDeferred = taskPreference.deferredTaskIds.indexOf(String(a.id));
+      const bDeferred = taskPreference.deferredTaskIds.indexOf(String(b.id));
+      if ((aDeferred >= 0) !== (bDeferred >= 0)) return aDeferred >= 0 ? 1 : -1;
+      if (aDeferred >= 0 && bDeferred >= 0) return aDeferred - bDeferred;
+      const aNamed = named(a), bNamed = named(b);
+      if (aNamed !== bNamed) return aNamed < bNamed ? -1 : 1;
+    }
     const aLevel = requested.indexOf(priority(a)), bLevel = requested.indexOf(priority(b));
     const aRank = aLevel < 0 ? Infinity : aLevel, bRank = bLevel < 0 ? Infinity : bLevel;
     if (aRank !== bRank) return aRank < bRank ? -1 : 1;
     const aNamed = named(a), bNamed = named(b);
-    return aNamed === bNamed ? 0 : aNamed < bNamed ? -1 : 1;
+    if (aNamed !== bNamed) return aNamed < bNamed ? -1 : 1;
+    return state ? (state === 'Stressed' || state === 'Distracted' ? priority(a) - priority(b) : priority(b) - priority(a)) : 0;
   };
 }
 
-export function orderReflectionTasks(tasks, state, text = '') {
-  const comparePreference = preferenceComparator(text);
+export function orderReflectionTasks(tasks, state, text = '', taskPreference = null) {
+  const comparePreference = preferenceComparator(text, taskPreference, state);
   return [...tasks].sort((a, b) => {
     const preference = comparePreference(a, b);
     if (preference) return preference;
@@ -74,7 +105,7 @@ export function orderReflectionTasks(tasks, state, text = '') {
   });
 }
 
-export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
+export function generateCognitiveFallback(rawText, tasks = [], forcedState, taskPreference = null) {
   const safety = generateSafetySupport(rawText);
   if (safety) return safety;
   const text = String(rawText || '').toLowerCase();
@@ -83,7 +114,8 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
   if (/stress|tired|exhaust|anxious|overwhelm|frustrat|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan/.test(text)) state = 'Stressed';
   else if (/distract|bore|scroll|phone|lazy|procrastinat|tinatamad|di makafocus|hindi makafocus/.test(text)) state = 'Distracted';
   else if (/motivat|ready|energ|excite|let.s go|masigla|gaganahan/.test(text)) state = 'Motivated';
-  if (states.includes(forcedState) && !isNeutralOrderRequest(text)) state = forcedState;
+  const neutralRequest = isNeutralOrderRequest(text);
+  if (states.includes(forcedState) && !neutralRequest) state = forcedState;
   let targetSessions = state === 'Stressed' ? 2 : state === 'Distracted' ? 3 : 4;
   let workMinutes = state === 'Stressed' ? 15 : state === 'Distracted' ? 20 : state === 'Motivated' ? 50 : 25;
   const sessionMatch = text.match(/(\d+)\s*(?:sessions?|rounds?|cycles?)/i);
@@ -91,7 +123,7 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
   const minuteMatch = text.match(/(\d+)\s*(?:mins?|minutes?|m\b)/i);
   if (minuteMatch && Number(minuteMatch[1]) >= 5 && Number(minuteMatch[1]) <= 120) workMinutes = Number(minuteMatch[1]);
   const breakMinutes = workMinutes >= 50 ? 10 : 5;
-  const ordered = orderReflectionTasks(activeTasks, state, text);
+  const ordered = orderReflectionTasks(activeTasks, state, text, taskPreference);
   const first = ordered[0] ? `Start with “${String(ordered[0].text).slice(0, 120)}”.` : 'Choose one manageable study goal.';
   const advice = state === 'Stressed' ? 'Use a smaller first step and give yourself room to work at a gentler pace.'
     : state === 'Distracted' ? 'Put your phone aside, close unrelated tabs, and work on one concrete step.'
@@ -103,7 +135,7 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState) {
     : 'Set a clear outcome for this block and test what you remember before deciding what needs another pass.';
   return { state, orderedIds: ordered.map(task => task.id), targetSessions, workMinutes, breakMinutes,
     actionPlan: `${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block.`,
-    responseSource: 'fallback' };
+    responseSource: 'fallback', ...(taskPreference ? { taskPreference } : {}) };
 }
 
 export function normalizeReflectionPlan(parsed, text, tasks = []) {
@@ -113,8 +145,9 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   if (healthSupport) return { supportOnly: true, supportKind: 'health', responseSource: 'support',
     title: 'Health questions need professional advice',
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
-  const fallback = generateCognitiveFallback(text, tasks, parsed?.state);
   const activeTasks = tasks.filter(task => task && task.id != null && !task.completed);
+  const taskPreference = validatedTaskPreference(parsed?.taskPreference, text, activeTasks);
+  const fallback = generateCognitiveFallback(text, tasks, parsed?.state, taskPreference);
   const byId = new Map(activeTasks.map(task => [String(task.id), task]));
   const resolve = value => {
     const identifier = String(value?.id ?? value?.text ?? value ?? '').trim();
@@ -125,7 +158,10 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   const ids = Array.isArray(parsed?.orderedIds) ? parsed.orderedIds.map(resolve).filter(Boolean) : [];
   const candidates = [...new Set([...ids, ...fallback.orderedIds.map(String)])].map(id => byId.get(id));
   const originalOrder = candidates.map(task => String(task.id));
-  const orderedIds = candidates.sort(preferenceComparator(text)).map(task => String(task.id));
+  // Enforce the requested first/last groups; let the coach choose unspecified
+  // follow-up tasks. Mood defaults apply when the student gave no order.
+  const hasOrderPreference = taskPreference || requestedPriorityOrder(text).length > 0;
+  const orderedIds = candidates.sort(preferenceComparator(text, taskPreference, hasOrderPreference ? null : fallback.state)).map(task => String(task.id));
   const correctedState = isNeutralOrderRequest(text) && parsed?.state && parsed.state !== 'Engaged';
   const invalidOrder = activeTasks.length > 0 && ids.length === 0;
   const contradictedPreference = orderedIds.some((id, index) => id !== originalOrder[index]);
