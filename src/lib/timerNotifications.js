@@ -10,6 +10,43 @@ export function formatNotificationTime(seconds) {
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
 }
 
+export async function sendTestNotification(body) {
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+    return { accepted: false, registered: false };
+  }
+  const tag = `ifocus-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const options = { body, tag, icon: '/icons/icon-192x192.png', badge: '/icons/icon-192x192.png',
+    timestamp: Date.now(), requireInteraction: true, silent: false, data: { url: '/settings' } };
+  try {
+    if (navigator.serviceWorker?.register) {
+      let registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+      if (!registration.active) {
+        let timeout;
+        try {
+          registration = await Promise.race([navigator.serviceWorker.ready,
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Notification worker is not ready. Reopen the app and retry.')), 10000); })]);
+        } finally { clearTimeout(timeout); }
+      }
+      // A fresh tag creates a new test rather than silently updating an old one.
+      const previous = await registration.getNotifications?.() || [];
+      previous.filter(item => item.tag === 'ifocus-test' || item.tag?.startsWith('ifocus-test-')).forEach(item => item.close());
+      try { await registration.showNotification('iFocus Notification Test', options); }
+      catch (error) {
+        if (error.name !== 'TypeError' && error.name !== 'NotSupportedError') throw error;
+        await registration.showNotification('iFocus Notification Test', { body, tag, icon: options.icon, data: options.data });
+      }
+      let registered = null;
+      try { if (registration.getNotifications) registered = (await registration.getNotifications({ tag })).length > 0; } catch {}
+      return { accepted: true, registered, tag };
+    }
+    const notification = new Notification('iFocus Notification Test', options);
+    notification.onclick = () => { window.focus(); notification.close(); };
+    return { accepted: true, registered: null, tag };
+  } catch (error) {
+    return { accepted: false, registered: false, error: error.message };
+  }
+}
+
 // Deduplicate one check, not every notification that shares the presence tag.
 const pending = new Map();
 export function sendSystemNotification(title, body, tag = 'ifocus-presence', actions = [], state = null) {

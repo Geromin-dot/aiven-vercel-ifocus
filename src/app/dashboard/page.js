@@ -46,6 +46,9 @@ export default function CommandCenterPage() {
 
   // To-Do State
   const [todos, setTodos] = useState([]);
+  const todosRef = useRef(todos);
+  const [taskOrderSync, setTaskOrderSync] = useState('loading');
+  useEffect(() => { todosRef.current = todos; }, [todos]);
   const [todoInput, setTodoInput] = useState('');
   const [todoPriority, setTodoPriority] = useState('medium');
   const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
@@ -761,12 +764,14 @@ export default function CommandCenterPage() {
     // Fetch Todos from Database
     if (status === 'authenticated') {
       fetch('/api/todos')
-        .then(res => res.json())
+        .then(res => { if (!res.ok) throw new Error('Could not load tasks'); return res.json(); })
         .then(data => {
-          if (Array.isArray(data)) setTodos(data);
+          if (Array.isArray(data)) { setTodos(data); setTaskOrderSync('synced'); }
+          else setTaskOrderSync('load-error');
           setLoadingTodos(false);
         })
         .catch(err => {
+          setTaskOrderSync('load-error');
           console.error("Failed to load todos:", err);
           setLoadingTodos(false);
         });
@@ -1910,6 +1915,22 @@ export default function CommandCenterPage() {
     return true;
   });
 
+  const persistTaskOrder = async (orderedTasks) => {
+    setTaskOrderSync('saving');
+    try {
+      const response = await fetch('/api/todos/reorder', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: orderedTasks.map(task => task.id) }),
+      });
+      if (!response.ok) throw new Error('Task order was not saved');
+      setTaskOrderSync('synced');
+      return true;
+    } catch {
+      setTaskOrderSync('error');
+      return false;
+    }
+  };
+
   // AI Coach Logic
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
@@ -1937,7 +1958,10 @@ export default function CommandCenterPage() {
         }
         if (!response.ok) throw new Error('Coach is temporarily unavailable');
         data = normalizeReflectionPlan(result, text, activeTasks);
-        if (result.responseSource === 'fallback') data.responseSource = 'fallback';
+        if (result.responseSource === 'fallback') {
+          data.responseSource = 'fallback';
+          data.fallbackReason = result.fallbackReason;
+        }
       } catch {
         data = generateCognitiveFallback(text, activeTasks);
       } finally {
@@ -1945,8 +1969,10 @@ export default function CommandCenterPage() {
       }
 
       const { state, workMinutes, breakMinutes, targetSessions } = data;
-      const newOrder = applyReflectionTaskOrder(todos, data.orderedIds);
-      const orderChanged = newOrder.some((task, index) => task.id !== todos[index]?.id);
+      const currentTodos = todosRef.current;
+      const newOrder = applyReflectionTaskOrder(currentTodos, data.orderedIds);
+      const orderChanged = newOrder.some((task, index) => task.id !== currentTodos[index]?.id);
+      todosRef.current = newOrder;
       setTodos(newOrder);
       const timerLabel = state === 'Stressed' ? 'Gentle Focus (Stressed)'
         : state === 'Distracted' ? 'Strict Pomodoro (Distracted)'
@@ -1954,7 +1980,9 @@ export default function CommandCenterPage() {
       const aiReply = { title: timerLabel, message: data.actionPlan, state,
         rhythm: `${workMinutes}m Focus / ${breakMinutes}m Rest`, sessions: targetSessions,
         reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource, reflectionText: text,
-        statusNote: data.responseSource === 'fallback' ? 'The live AI could not respond. This suggested plan is based on your reflection and tasks; you can retry the AI below.' : '',
+        statusNote: data.responseSource === 'fallback' ? data.fallbackReason === 'invalid_plan'
+          ? 'The coach response did not match your request. This suggested plan follows your task preference.'
+          : 'The live AI could not respond. This suggested plan is based on your reflection and tasks; you can retry the AI below.' : '',
       };
       setIsActive(false);
       setIsFocus(true);
@@ -1994,16 +2022,8 @@ export default function CommandCenterPage() {
         latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: aiReply,
       });
       setReflectionInput('');
-      if (orderChanged) {
-        try {
-          const response = await fetch('/api/todos/reorder', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderedIds: newOrder.map(task => task.id) }),
-          });
-          if (!response.ok) throw new Error('Task order was not saved');
-        } catch {
-          setAiFeedback(current => ({ ...current, statusNote: 'Your plan is ready, but task order could not be saved. Keep this page open and try again when connected.' }));
-        }
+      if (orderChanged && !await persistTaskOrder(newOrder)) {
+        setAiFeedback(current => ({ ...current, statusNote: 'Your plan is ready, but task order could not be saved. Use Retry save beside your task list when connected.' }));
       }
     } finally {
       clearTimeout(timeoutId);
@@ -2083,9 +2103,14 @@ export default function CommandCenterPage() {
                 Clear Done
               </button>
             )}
-            <div className="sync-badge" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>
+            {taskOrderSync === 'load-error' && <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+              onClick={() => window.location.reload()}>Reload tasks</button>}
+            {taskOrderSync === 'error' && <button type="button" className="btn-secondary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.72rem' }}
+              onClick={() => persistTaskOrder(todosRef.current)}>Retry save</button>}
+            <div className="sync-badge" role="status" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem',
+              ...(['error', 'load-error'].includes(taskOrderSync) ? { color: '#a13c25', background: '#fff2ed' } : {}) }}>
               <span className="dot"></span>
-              Cloud Synced
+              {taskOrderSync === 'saving' ? 'Saving order…' : taskOrderSync === 'error' ? 'Order not saved' : taskOrderSync === 'load-error' ? 'Could not load tasks' : taskOrderSync === 'loading' ? 'Loading tasks…' : 'Cloud Synced'}
             </div>
           </div>
         </div>

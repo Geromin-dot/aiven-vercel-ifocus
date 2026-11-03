@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { remainingTime, settlePresence, presenceInterval } from '../lib/timerState';
-import { formatNotificationTime, sendSystemNotification } from '../lib/timerNotifications';
+import { formatNotificationTime, sendTestNotification } from '../lib/timerNotifications';
 import { getBackgroundPushStatus, enableBackgroundPush, disableBackgroundPush, pushRequest } from '../lib/pushNotifications';
 import { getTimerDeviceId } from '../lib/timerState';
 import styles from './TimerNotificationSettings.module.css';
@@ -99,16 +99,13 @@ export default function TimerNotificationSettings() {
         setStatus(result === 'default' ? 'Tap Request Permission first, then send a test.' : 'Allow notifications in your phone or browser settings, then try again.');
         return;
       }
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
-        if (!registration.active) await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Please reopen the app and try again.')), 10000)),
-        ]);
-      }
-      const delivered = await sendSystemNotification('iFocus Notification Test',
-        `Timer: ${formatNotificationTime(snapshot?.remaining || 0)} remaining. Presence alerts open Pause and Continue controls.`, 'ifocus-test');
-      setStatus(delivered ? 'Test sent. Check your notifications.' : 'Could not send the test. Check notification permissions and reopen the app.');
+      const delivery = await sendTestNotification(
+        `Timer: ${formatNotificationTime(snapshot?.remaining || 0)} remaining. This test confirms notification delivery on this device.`);
+      setStatus(delivery.registered === true
+        ? 'The browser registered the test notification. If no banner appears, check your notification center and the settings below.'
+        : delivery.accepted ? 'The browser accepted the test, but a visible notification could not be verified. Check the settings below.'
+          : delivery.error || 'Could not register the test notification. Check permissions and reopen the app.');
+      setShowPermissionHelp(true);
     } catch (error) { setStatus(error.message || 'Could not send the test. Please reopen the app.'); }
     finally { setBusy(false); }
   };
@@ -143,7 +140,8 @@ export default function TimerNotificationSettings() {
       {status && <p role="status" className={styles.status}>{status}</p>}
       {(showPermissionHelp || permission === 'denied') && (
         <div className={styles.help}>
-          <h5>Allow notifications again</h5>
+          <h5>{permission === 'granted' ? 'No notification banner?' : 'Allow notifications again'}</h5>
+          {permission === 'granted' && <p><strong>Windows:</strong> Open Settings → System → Notifications. Turn off Do not disturb / Focus assist and allow Google Chrome notifications and banners. Site permission alone does not control Windows banners.</p>}
           <p><strong>iPhone:</strong> Open Settings → Notifications → iFocus → Allow Notifications. Use iFocus from your Home Screen.</p>
           <p><strong>Web / Android:</strong> Open this site’s controls beside the address bar → Site settings or Permissions → Notifications → Allow.</p>
           <p>Return here, then tap Request Permission to check again. A blocked permission must be changed in your device or browser settings.</p>
