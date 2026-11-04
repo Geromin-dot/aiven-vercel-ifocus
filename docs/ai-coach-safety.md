@@ -35,6 +35,8 @@ Contacts are labeled for the Philippines, with local-service guidance for studen
 
 ## Verification and limits
 
+Anatomy-reflection correction verified November 4, 2026: 138 coach checks and 16 ordering/safety browser tests pass; production build and focused lint pass. Reported nervousness can be acknowledged without being mistaken for an unsupported anxiety inference; easier/easiest wording is recognized as easy-first. When an explicitly stated quiz subject has no corresponding saved tasks, valid topic-specific advice can be retained while preserving the unrelated task list. Fallback guidance acknowledges the study goal instead of assigning unrelated Writing. Clinical diagnoses remain rejected. A two-case synthetic live check returned AI guidance with both matching anatomy tasks and an unrelated Writing task; see [ai-coach-anatomy-check.json](./ai-coach-anatomy-check.json). This does not identify the exact rejection reason from a historical screenshot or guarantee all future outputs.
+
 Fatigue correction verified November 4, 2026: 132 coach checks and 10 browser tests pass, including the three-session mental-tiredness disclosure, rest responses without study recommendations, and the pending-response animation. Production build and focused lint pass. The loading animation is CSS-only, respects reduced-motion settings, and does not change AI timing or generation settings.
 
 Run `npm run test:coach` for deterministic, API and fallback checks. The safety regression file includes Taglish, typos, short disclosures, coercive instructions, high motivation with danger, medication misuse, indirect self-harm, academic controls, normalization and unsafe AI output. API tests simulate provider behavior; these do not establish a live model detection rate.

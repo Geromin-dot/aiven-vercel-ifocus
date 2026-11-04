@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-04",
+  "synthetic": true,
+  "reflection": "My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.",
+  "results": [
+    {
+      "name": "Matching anatomy tasks",
+      "data": {
+        "state": "Stressed",
+        "orderedIds": [
+          "terms",
+          "cardio",
+          "practice"
+        ],
+        "targetSessions": 4,
+        "workMinutes": 25,
+        "breakMinutes": 5,
+        "actionPlan": "You mentioned feeling nervous about your anatomy quiz tomorrow, and starting with the terminology review lets you build confidence before diving into the cardiovascular system and practice questions. Begin by reviewing the anatomy terminology to warm up your memory with the more familiar concepts. We will use a steady 25-minute focus session followed by a short 5-minute break to help you maintain a productive, manageable pace as you prepare.",
+        "responseSource": "ai",
+        "taskPreference": {
+          "evidence": "would like to start with the easier task before tackling practice questions",
+          "priorityOrder": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "taskIds": [],
+          "deferredTaskIds": []
+        }
+      },
+      "status": 200
+    },
+    {
+      "name": "Only unrelated Writing task",
+      "data": {
+        "state": "Stressed",
+        "orderedIds": [
+          "writing"
+        ],
+        "targetSessions": 4,
+        "workMinutes": 25,
+        "breakMinutes": 5,
+        "actionPlan": "You mentioned feeling nervous about your anatomy quiz tomorrow, and it is completely understandable given the cardiovascular system focus. Since you prefer beginning with the easier terminology review before moving to practice questions, we will kick things off with that lighter review while keeping your writing task in order. We will use a steady 25-minute focus block followed by a 5-minute break to help you ease into your study session comfortably.",
+        "responseSource": "ai"
+      },
+      "status": 200
+    }
+  ]
+}

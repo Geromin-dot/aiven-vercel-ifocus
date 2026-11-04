@@ -10,6 +10,42 @@ const coachResponse = { state: 'Engaged', orderedIds: ['Science', 'Fil', 'IT Mod
   targetSessions: 4, workMinutes: 25, breakMinutes: 5, responseSource: 'ai',
   actionPlan: 'Start with Science and Fil because you asked for medium tasks first. Use a concrete study goal before tackling the higher-priority tasks. Try 25-minute blocks with 5-minute breaks.' };
 const expected = ['Science', 'Fil', 'IT Module 10', 'Archi', 'Medtech'];
+const anatomyReflection = 'My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.';
+
+test('nervous easier-first anatomy reflection keeps personalized AI advice and the real task order', async ({ page, context }) => {
+  const anatomyTasks = [{ id: 'practice', text: 'Answer cardiovascular practice questions', priority: 'high' },
+    { id: 'terms', text: 'Review anatomy terminology', priority: 'low' },
+    { id: 'cardio', text: 'Review the cardiovascular system', priority: 'medium' }];
+  const actionPlan = 'You are anxious about your anatomy quiz tomorrow. Start with Review anatomy terminology, then tackle cardiovascular practice questions when ready.';
+  const account = await accountFixture(context, true, { tasks: anatomyTasks, coachResponse: {
+    state: 'Stressed', workMinutes: 15, breakMinutes: 5, targetSessions: 2,
+    orderedIds: ['terms', 'cardio', 'practice'], actionPlan,
+    taskPreference: { evidence: 'start with the easier task', priorityOrder: ['low'] },
+  } });
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill(anatomyReflection);
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI Coach adaptation' });
+  await expect(dialog).toContainText(actionPlan);
+  await expect(dialog).not.toContainText('The coach response could not be used');
+  await expect(dialog).toContainText('15m Focus / 5m Rest');
+  await expect(page.locator('.todo-text')).toHaveText(['Review anatomy terminology', 'Review the cardiovascular system', 'Answer cardiovascular practice questions']);
+  await expect.poll(() => account.savedOrder()).toEqual(['terms', 'cardio', 'practice']);
+});
+
+test('fallback for an anatomy reflection does not tell the student to start unrelated Writing', async ({ page, context }) => {
+  await accountFixture(context, true, { tasks: [{ id: 'writing', text: 'Writing', priority: 'high' }] });
+  await context.route('**/api/ai/coach', route => route.fulfill({ status: 503, json: { error: 'Synthetic provider outage' } }));
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill(anatomyReflection);
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI Coach adaptation' });
+  await expect(dialog).toContainText('feeling nervous');
+  await expect(dialog).toContainText('anatomy quiz tomorrow');
+  await expect(dialog).toContainText('Add a matching task');
+  await expect(dialog).not.toContainText('Start with “Writing”');
+  await expect(page.locator('.todo-text')).toHaveText(['Writing']);
+});
 async function submit(page, text = 'I want to start with medium first then idk if low or high?') {
   await page.goto('/dashboard');
   await expect(page.locator('.todo-text')).toHaveCount(5);

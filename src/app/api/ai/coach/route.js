@@ -43,6 +43,7 @@ Rest takes precedence over every study cadence: when the student reports mental 
 Reflection: ${JSON.stringify(userText)}
 Current tasks (use these exact IDs):
 ${taskListStr}
+The student's reflection may describe a subject or quiz absent from their saved tasks. Do not equate an unrelated saved task (for example, Writing) with anatomy, terminology, or practice questions. When the saved tasks are unrelated, preserve their supplied IDs in their current order, describe the student's actual study goal instead of telling them to start an unrelated saved task, and suggest adding the relevant task without claiming it already exists. This is an exception to the first-task narration rule below. Never invent task IDs. Acknowledge reported nervousness as a feeling without inferring a disorder. Easier/easiest/simpler/simplest are easy-first preferences.
 Task preferences alone are not reports of motivation or energy. If the student reports only a task preference, use Engaged with the balanced 25/5 rhythm unless a duration is requested; do not invent positive energy or enthusiasm.
 Previous advice (avoid repeating it without a reason):
 ${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'string').slice(0, 2).map(item => item.slice(0, 600)).join('\n') : 'None'}

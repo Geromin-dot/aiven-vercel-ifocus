@@ -2,7 +2,7 @@ const states = ['Stressed', 'Distracted', 'Motivated', 'Engaged'];
 const priority = task => ({ low: 1, medium: 2, normal: 2, high: 3 }[String(task.priority || '').toLowerCase()] || 2);
 const normalize = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const ignoredWords = new Set(['a', 'an', 'the', 'of', 'and', 'for', 'to', 'my', 'review', 'study', 'read', 'task', 'ang', 'ng', 'sa', 'ko']);
-const moodWords = /\b(stress\w*|tired|exhaust\w*|anxious|overwhelm\w*|frustrat\w*|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan|distract\w*|bored?|scroll\w*|phone|lazy|procrastinat\w*|tinatamad|motivat\w*|ready|energ\w*|excit\w*|masigla|gaganahan)\b/i;
+const moodWords = /\b(stress\w*|tired|exhaust\w*|anxious|nervous|worried|uneasy|overwhelm\w*|frustrat\w*|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan|distract\w*|bored?|scroll\w*|phone|lazy|procrastinat\w*|tinatamad|motivat\w*|ready|energ\w*|excit\w*|masigla|gaganahan)\b/i;
 const levelValue = value => ({ low: 1, easy: 1, medium: 2, med: 2, high: 3, hard: 3 }[value]);
 
 function unsupportedHealthClaim(advice, reflection) {
@@ -12,7 +12,7 @@ function unsupportedHealthClaim(advice, reflection) {
   const assertions = /\b(?:you (?:are|were|have been) diagnosed|youve been diagnosed|your diagnosis|you (?:are|re) (?:clinically )?(?:depressed|bipolar|autistic|diabetic|anemic|schizophrenic|dehydrated)|you (?:are|re) (?:perfectly )?healthy|nothing (?:is )?wrong with you|you (?:dont|do not|cannot|cant) have (?:a disorder|adhd|anxiety|depression|diabetes)|diagnosed ka|may (?:adhd|anxiety|depression|diabetes|sakit|disorder) ka)\b/;
   const causal = /\b(?:your (?:anxiety|depression|adhd|disorder|condition|illness) (?:is causing|causes|explains)|(?:because of|due to) your (?:anxiety|depression|adhd|disorder|condition|illness)|(?:typing|inactivity|study performance|symptoms) (?:confirms?|proves?|diagnoses?))\b/;
   const inferredAnxiety = /\b(?:you (?:are|re|seem|appear) (?:to be )?anxious|you have anxiety)\b/.test(text)
-    && !/\b(?:anxiety|anxious|kinakabahan)\b/i.test(reflection);
+    && !/\b(?:anxiety|anxious|nervous|worried|uneasy|kinakabahan)\b/i.test(reflection);
   const unsafeAdvice = /\b(?:(?:take|double|increase|start taking|stop taking) (?:your |some |an? |the )?(?:dose|medication|medicine|pills?|stimulants?|antidepressants?|adderall|ritalin)|(?:skip|avoid|sacrifice) (?:sleep|meals|food|water)|(?:ignore|push through) (?:the |your )?(?:pain|bleeding|symptoms)|(?:you (?:must|should|need to)|you have to) (?:finish|complete).{0,45}before (?:you (?:can )?)?(?:rest|sleep|drink|eat|seek help))\b/.test(text);
   return diagnosis.test(text) || assertions.test(text) || causal.test(text) || inferredAnxiety || unsafeAdvice;
 }
@@ -111,7 +111,7 @@ export function generateSafetySupport(value, requested = false) {
 }
 
 export function requestedPriorityOrder(text) {
-  const reflection = normalize(text);
+  const reflection = normalize(text).replace(/\b(?:easier|easiest|simpler|simplest)\b/g, 'easy').replace(/\b(?:harder|hardest)\b/g, 'hard');
   const start = reflection.match(/\b(?:start|begin|unahin|simulan)\s+(?:(?:with|sa|ang|the|a|mga)\s+)*(low|medium|high|easy|hard)\b/)
     || reflection.match(/\b(low|medium|high|easy|hard)(?:\s+(?:priority|difficulty|effort|tasks?))*\s+(?:first|muna|before)\b/)
     || reflection.match(/\b(?:i prefer|id prefer|i want|id like|i would like|gusto ko|mas gusto ko)\s+(?:(?:to|work|on|do|study|tackle|the|a|with|ang|mga|ng|na)\s+)*(low|medium|high|easy|hard)\b/);
@@ -189,17 +189,29 @@ export function orderReflectionTasks(tasks, state, text = '', taskPreference = n
   });
 }
 
+function reflectionStudyGoal(text, tasks) {
+  const match = String(text || '').toLowerCase().match(/\bmy ([a-z][a-z -]{0,60}?) (quiz|exam|test) is (today|tomorrow)\b/);
+  if (!match) return null;
+  const goalWords = match[1].split(/[ -]+/).filter(word => word.length >= 3 && !ignoredWords.has(word));
+  const reflectionWords = normalize(text).split(' ');
+  const unmatched = goalWords.length > 0 && !tasks.some(task => {
+    const titleWords = normalize(task.text).split(' ');
+    return goalWords.some(word => titleWords.includes(word)) || titleWords.some(word => word.length >= 4 && !ignoredWords.has(word) && reflectionWords.includes(word));
+  });
+  return { topic: match[1], assessment: match[2], when: match[3], unmatched };
+}
+
 export function generateCognitiveFallback(rawText, tasks = [], forcedState, taskPreference = null) {
   const safety = generateSafetySupport(rawText);
   if (safety) return safety;
   const text = String(rawText || '').toLowerCase();
   const activeTasks = Array.isArray(tasks) ? tasks.filter(task => task && task.id != null && !task.completed) : [];
   let state = 'Engaged';
-  if (/stress|tired|exhaust|anxious|overwhelm|frustrat|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan/.test(text)) state = 'Stressed';
+  if (/stress|tired|exhaust|anxious|nervous|worried|uneasy|overwhelm|frustrat|pressure|pagod|antok|inaantok|kinakabahan|nahihirapan/.test(text)) state = 'Stressed';
   else if (/distract|bore|scroll|phone|lazy|procrastinat|tinatamad|di makafocus|hindi makafocus/.test(text)) state = 'Distracted';
   else if (/motivat|ready|energ|excite|let.s go|masigla|gaganahan/.test(text)) state = 'Motivated';
   const neutralRequest = isNeutralOrderRequest(text);
-  if (states.includes(forcedState) && !neutralRequest) state = forcedState;
+  if (states.includes(forcedState) && !neutralRequest && state !== 'Stressed') state = forcedState;
   let targetSessions = state === 'Stressed' ? 2 : state === 'Distracted' ? 3 : 4;
   let workMinutes = state === 'Stressed' ? 15 : state === 'Distracted' ? 20 : state === 'Motivated' ? 50 : 25;
   const sessionMatch = text.match(/(\d+)\s*(?:sessions?|rounds?|cycles?)/i);
@@ -207,18 +219,24 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState, task
   const minuteMatch = text.match(/(\d+)\s*(?:mins?|minutes?|m\b)/i);
   if (minuteMatch && Number(minuteMatch[1]) >= 5 && Number(minuteMatch[1]) <= 120) workMinutes = Number(minuteMatch[1]);
   const breakMinutes = workMinutes >= 50 ? 10 : 5;
-  const ordered = orderReflectionTasks(activeTasks, state, text, taskPreference);
-  const first = ordered[0] ? `Start with “${String(ordered[0].text).slice(0, 120)}”.` : 'Choose one manageable study goal.';
+  const studyGoal = reflectionStudyGoal(text, activeTasks);
+  const unmatchedGoal = studyGoal?.unmatched;
+  const ordered = unmatchedGoal ? activeTasks : orderReflectionTasks(activeTasks, state, text, taskPreference);
+  const first = unmatchedGoal
+    ? `For your ${studyGoal.topic} ${studyGoal.assessment} ${studyGoal.when}, ${requestedPriorityOrder(text)[0] === 1 ? 'begin with the easier review you identified' : 'choose one small section to review'}. Add a matching task to your list so it reflects this study goal.`
+    : ordered[0] ? `Start with “${String(ordered[0].text).slice(0, 120)}”.` : 'Choose one manageable study goal.';
   const advice = state === 'Stressed' ? 'Use a smaller first step and give yourself room to work at a gentler pace.'
     : state === 'Distracted' ? 'Put your phone aside, close unrelated tabs, and work on one concrete step.'
     : state === 'Motivated' ? 'Use your energy for your priority task and check your understanding as you go.'
-    : 'Set a clear outcome for this block and check your progress before the next task.';
+    : 'Work at a comfortable pace and keep this block focused on one goal.';
+  const emotion = /\b(?:nervous|kinakabahan)\b/i.test(text) ? 'You mentioned feeling nervous.'
+    : /\b(?:worried|uneasy)\b/i.test(text) ? 'You mentioned feeling worried or uneasy.' : '';
   const strategy = state === 'Stressed' ? 'Choose one small section or problem, then explain what you understood in your own words before continuing.'
     : state === 'Distracted' ? 'Choose one visible outcome, keep only the materials needed for it open, and note unrelated thoughts for later.'
     : state === 'Motivated' ? 'Work through a practice problem or explain a concept without your notes, then check your understanding before moving on.'
     : 'Set a clear outcome for this block and test what you remember before deciding what needs another pass.';
   return { state, orderedIds: ordered.map(task => task.id), targetSessions, workMinutes, breakMinutes,
-    actionPlan: `${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block.`,
+    actionPlan: `${emotion ? `${emotion} ` : ''}${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block.`,
     responseSource: 'fallback', ...(taskPreference ? { taskPreference } : {}) };
 }
 
@@ -234,6 +252,7 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
     title: 'Health questions need professional advice',
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
   const activeTasks = tasks.filter(task => task && task.id != null && !task.completed);
+  const unmatchedGoal = reflectionStudyGoal(text, activeTasks)?.unmatched;
   const taskPreference = validatedTaskPreference(parsed?.taskPreference, text, activeTasks);
   const fallback = generateCognitiveFallback(text, tasks, parsed?.state, taskPreference);
   const byId = new Map(activeTasks.map(task => [String(task.id), task]));
@@ -249,13 +268,17 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   // Enforce the requested first/last groups; let the coach choose unspecified
   // follow-up tasks. Mood defaults apply when the student gave no order.
   const hasOrderPreference = taskPreference || requestedPriorityOrder(text).length > 0;
-  const orderedIds = candidates.sort(preferenceComparator(text, taskPreference, hasOrderPreference ? null : fallback.state)).map(task => String(task.id));
+  const orderedIds = unmatchedGoal ? activeTasks.map(task => String(task.id))
+    : candidates.sort(preferenceComparator(text, taskPreference, hasOrderPreference ? null : fallback.state)).map(task => String(task.id));
   const correctedState = isNeutralOrderRequest(text) && parsed?.state && parsed.state !== 'Engaged';
-  const invalidOrder = activeTasks.length > 0 && ids.length === 0;
-  const contradictedPreference = orderedIds.some((id, index) => id !== originalOrder[index]);
+  const invalidOrder = !unmatchedGoal && activeTasks.length > 0 && ids.length === 0;
+  const contradictedPreference = !unmatchedGoal && orderedIds.some((id, index) => id !== originalOrder[index]);
   const clinicalLanguage = unsupportedHealthClaim(parsed?.actionPlan, text);
-  const useFallback = correctedState || invalidOrder || contradictedPreference || clinicalLanguage || !parsed?.actionPlan?.trim?.();
-  if (useFallback) return { ...fallback, fallbackReason: 'invalid_plan' };
+  const unrelatedAdvice = unmatchedGoal && activeTasks.some(task => new RegExp(`\\b(?:start|begin|focus on|work on)\\s+(?:(?:with|your|the|task)\\s+)*${normalize(task.text).replace(/ /g, '\\s+')}\\b`).test(normalize(parsed?.actionPlan)));
+  const validationIssues = [correctedState && 'state_contradicts_reflection', invalidOrder && 'missing_task_ids',
+    contradictedPreference && 'task_order_conflict', clinicalLanguage && 'unsupported_health_advice', unrelatedAdvice && 'unrelated_task_advice',
+    !parsed?.actionPlan?.trim?.() && 'missing_advice'].filter(Boolean);
+  if (validationIssues.length) return { ...fallback, fallbackReason: 'invalid_plan', validationIssues };
   const bounded = (value, min, max, defaultValue) => {
     const number = Number(value);
     return Number.isInteger(number) && number >= min && number <= max ? number : defaultValue;

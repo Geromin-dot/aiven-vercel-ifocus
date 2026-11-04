@@ -9,6 +9,68 @@ const tasks = [
   { id: 'medium', text: 'Read biology notes', priority: 'Medium' },
 ];
 
+const anatomyReflection = 'My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.';
+const anatomyTasks = [
+  { id: 'practice', text: 'Answer cardiovascular practice questions', priority: 'High' },
+  { id: 'terms', text: 'Review anatomy terminology', priority: 'Low' },
+  { id: 'cardio', text: 'Review the cardiovascular system', priority: 'Medium' },
+];
+
+test('nervousness and easier-first wording retain a safe personalized anatomy response', () => {
+  const actionPlan = 'You are anxious about your anatomy quiz tomorrow. Start with Review anatomy terminology, then tackle cardiovascular practice questions when ready.';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['terms', 'cardio', 'practice'],
+    taskPreference: { evidence: 'start with the easier task', priorityOrder: ['low'] }, actionPlan }, anatomyReflection, anatomyTasks);
+  assert.equal(result.responseSource, 'ai');
+  assert.equal(result.actionPlan, actionPlan);
+  assert.equal(result.state, 'Stressed');
+  assert.equal(result.orderedIds[0], 'terms');
+  assert.deepEqual(normalizeReflectionPlan(result, anatomyReflection, anatomyTasks), result);
+});
+
+test('offline nervous easier-first reflection gets a gentler plan with the actual easier task', () => {
+  const result = generateCognitiveFallback(anatomyReflection, anatomyTasks);
+  assert.equal(result.state, 'Stressed');
+  assert.equal(result.workMinutes, 15);
+  assert.equal(result.orderedIds[0], 'terms');
+  assert.match(result.actionPlan, /feeling nervous/);
+});
+
+test('an unrelated Writing task is not presented as anatomy review in fallback', () => {
+  const unrelatedTasks = [{ id: 'writing', text: 'Writing', priority: 'High' }];
+  const result = generateCognitiveFallback(anatomyReflection, unrelatedTasks);
+  assert.match(result.actionPlan, /anatomy quiz tomorrow/);
+  assert.match(result.actionPlan, /easier review/);
+  assert.match(result.actionPlan, /Add a matching task/);
+  assert.doesNotMatch(result.actionPlan, /Start with “Writing”/);
+  assert.deepEqual(result.orderedIds, ['writing']);
+});
+
+test('valid anatomy coaching without saved anatomy tasks is retained rather than rejected for an empty order', () => {
+  const unrelated = [{ id: 'writing', text: 'Writing', priority: 'High' }, { id: 'project', text: 'Project', priority: 'Low' }];
+  const actionPlan = 'You are anxious about your anatomy quiz tomorrow. Begin with terminology, then try a cardiovascular practice question. Add these topics to your task list; your saved Writing and Project tasks are separate.';
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: [], actionPlan }, anatomyReflection, unrelated);
+  assert.equal(result.responseSource, 'ai');
+  assert.equal(result.actionPlan, actionPlan);
+  assert.deepEqual(result.orderedIds, ['writing', 'project']);
+  assert.deepEqual(normalizeReflectionPlan(result, anatomyReflection, unrelated), result);
+});
+
+test('an anatomy reflection cannot be redirected to unrelated Writing by AI prose', () => {
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['writing'], actionPlan: 'Start with your Writing task.' },
+    anatomyReflection, [{ id: 'writing', text: 'Writing', priority: 'High' }]);
+  assert.equal(result.responseSource, 'fallback');
+  assert.ok(result.validationIssues.includes('unrelated_task_advice'));
+  assert.match(result.actionPlan, /anatomy quiz tomorrow/);
+  assert.doesNotMatch(result.actionPlan, /Start with your Writing/);
+});
+
+test('allowing reported nervousness still rejects a clinical diagnosis', () => {
+  const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['terms', 'cardio', 'practice'],
+    actionPlan: 'You have an anxiety disorder.' }, anatomyReflection, anatomyTasks);
+  assert.equal(result.responseSource, 'fallback');
+  assert.ok(result.validationIssues.includes('unsupported_health_advice'));
+});
+
 test('explicit safety disclosures bypass study plans in English and Tagalog, including offline fallback', () => {
   for (const text of ['I want to die', 'I wanna die', 'I want to kill myself', 'I am suicidal', 'suicidal', 'I don’t want to live', 'Gusto ko nang mamatay', 'Ayoko nang mabuhay', 'Papatayin ko ang sarili ko']) {
     for (const result of [generateCognitiveFallback(text, tasks), normalizeReflectionPlan({ state: 'Motivated', actionPlan: 'Start studying.' }, text, tasks)]) {
