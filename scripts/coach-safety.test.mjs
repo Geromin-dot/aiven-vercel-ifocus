@@ -154,3 +154,17 @@ test('an unknown provider safety category cannot silently become a study plan', 
   assert.equal(result.supportOnly, true);
   assert.equal(result.workMinutes, undefined);
 });
+
+test('mental health support includes every supplied alternate line with the correct call target', () => {
+  const calls = ['tel:+631553?oai_link_source=model_response_hotline', 'tel:180018881553',
+    'tel:09190571553', 'tel:09178998727', 'tel:09663514518'];
+  for (const text of ['I want to die', 'I feel worthless.', 'I am having a panic attack.']) {
+    const result = generateSafetySupport(text);
+    for (const href of calls) assert.ok(result.contacts.some(contact => contact.href === href), `${text}: ${href}`);
+    assert.equal(result.workMinutes, undefined);
+    assert.deepEqual(normalizeReflectionPlan(result, text, tasks), result);
+  }
+  assert.deepEqual(generateSafetySupport('I am mentally tired.').contacts, []);
+  assert.deepEqual(generateSafetySupport('I am bleeding.').contacts.map(contact => contact.href), ['tel:911']);
+  assert.equal(generateSafetySupport('I feel nervous about my exam.'), null);
+});

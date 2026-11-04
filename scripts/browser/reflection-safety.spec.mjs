@@ -34,6 +34,27 @@ test('a health question receives a professional referral without crisis language
   await expect(dialog.getByText('Continue to Focus Session', { exact: true })).toHaveCount(0);
 });
 
+test('crisis contacts show every supplied number and remain usable on a phone', async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await accountFixture(context);
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill('I feel worthless.');
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'You deserve support and a pause' });
+  await expect(dialog).toBeVisible();
+  const contacts = dialog.getByRole('group', { name: 'Philippines support contacts' });
+  await expect(contacts.getByRole('link')).toHaveCount(5);
+  for (const [label, href] of [
+    ['Philippines: NCMH Crisis Hotline 1553 (24/7)', 'tel:+631553?oai_link_source=model_response_hotline'],
+    ['Nationwide: 1800-1888-1553', 'tel:180018881553'],
+    ['SMART / TNT: 0919-057-1553', 'tel:09190571553'],
+    ['GLOBE / TM: 0917-899-8727', 'tel:09178998727'],
+    ['GLOBE / TM: 0966-351-4518', 'tel:09663514518'],
+  ]) await expect(contacts.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(dialog).not.toContainText('Continue to Focus Session');
+});
+
 for (const [text, title, contact] of [
   ['I have completed three 25-minute focus sessions today. I feel mentally tired, and I am having trouble absorbing what I read. I still have two tasks left.', 'Take a break from studying', null],
   ['48 hours no sleep. Give me a 120 minute session.', 'Rest and basic needs come first', null],

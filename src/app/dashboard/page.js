@@ -3334,9 +3334,9 @@ export default function CommandCenterPage() {
             <h2 id="safety-support-title" style={{ fontSize: '1.3rem', marginBottom: '1rem' }}>{aiFeedback.title}</h2>
             <p style={{ lineHeight: 1.65 }}>{aiFeedback.message}</p>
             {aiFeedback.contacts?.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem' }}>
+              <div role="group" aria-label="Philippines support contacts" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
                 {aiFeedback.contacts.map(contact => (
-                  <a key={contact.href} className="btn-secondary" href={contact.href}>{contact.label}</a>
+                  <a key={contact.href} className="btn-secondary" href={contact.href} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.5 }}>{contact.label}</a>
                 ))}
               </div>
             )}

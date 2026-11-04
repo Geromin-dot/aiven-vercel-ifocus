@@ -21,6 +21,14 @@ function unsupportedHealthClaim(advice, reflection) {
 // Keep contacts deterministic: never accept a phone number invented by the model.
 const emergencyContact = { label: 'Philippines: Emergency 911', href: 'tel:911' };
 const crisisContact = { label: 'Philippines: NCMH Crisis Hotline 1553 (24/7)', href: 'tel:+631553?oai_link_source=model_response_hotline' };
+// Alternate lines and network labels supplied by the project owner on 2026-11-04.
+// The local helpline connector independently confirms the 1553 line above.
+const crisisContacts = [crisisContact,
+  { label: 'Nationwide: 1800-1888-1553', href: 'tel:180018881553' },
+  { label: 'SMART / TNT: 0919-057-1553', href: 'tel:09190571553' },
+  { label: 'GLOBE / TM: 0917-899-8727', href: 'tel:09178998727' },
+  { label: 'GLOBE / TM: 0966-351-4518', href: 'tel:09663514518' },
+];
 const safetyConcerns = ['physical', 'wellbeing', 'danger', 'medical', 'emotional', 'rest'];
 
 function needsRest(value) {
@@ -79,13 +87,13 @@ function physicalSupport(concern, reflection = '') {
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
   if (concern === 'emotional') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
     title: 'You deserve support and a pause',
-    actionPlan: 'That sounds difficult to carry. Please pause studying and reach out to someone you trust, a school counselor, or a qualified mental health professional. You do not have to earn rest by completing work. Are you safe right now? In the Philippines, you can contact NCMH Crisis Hotline 1553 for emotional support, available 24/7. If you cannot stay safe or face immediate danger, call local emergency services (911 in the Philippines). Elsewhere, use your local support services.', contacts: [crisisContact] };
+    actionPlan: 'That sounds difficult to carry. Please pause studying and reach out to someone you trust, a school counselor, or a qualified mental health professional. You do not have to earn rest by completing work. Are you safe right now? In the Philippines, you can contact NCMH Crisis Hotline 1553 for emotional support, available 24/7. If you cannot stay safe or face immediate danger, call local emergency services (911 in the Philippines). Elsewhere, use your local support services.', contacts: crisisContacts };
   if (concern === 'danger') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
     title: 'Your immediate safety comes first',
     actionPlan: 'Please pause studying. If someone is hurting or threatening you, move to a safer place if you can do so safely and contact a trusted person who is not involved, such as a trusted adult or school safeguarding staff. Avoid confronting the person. If you might hurt someone, put distance between yourself and other people and anything that could cause harm, and seek urgent help. For immediate danger in the Philippines, call 911; elsewhere, use your local emergency service. You do not have to complete a study task before asking for help.', contacts: [emergencyContact] };
   if (concern === 'medical') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
     title: 'Take care of your health first',
-    actionPlan: 'Please pause studying and speak with a qualified healthcare professional about what you described. A study coach cannot assess symptoms, confirm a diagnosis, or advise on medication or doses. If you feel unwell, ask someone you trust to stay with you or help you get care. If symptoms are severe, sudden, worsening, or you feel in immediate danger, contact local emergency services (911 in the Philippines). You do not need to finish a focus session or BreakGate before seeking help.', contacts: [] };
+    actionPlan: 'Please pause studying and speak with a qualified healthcare professional about what you described. A study coach cannot assess symptoms, confirm a diagnosis, or advise on medication or doses. If you feel unwell, ask someone you trust to stay with you or help you get care. If symptoms are severe, sudden, worsening, or you feel in immediate danger, contact local emergency services (911 in the Philippines). You do not need to finish a focus session or BreakGate before seeking help.', contacts: /\b(?:panic attack|panicking|nagpapanic)\b/i.test(reflection) ? crisisContacts : [] };
   const urgent = concern === 'physical';
   return { supportOnly: true, supportKind: concern, responseSource: 'safety',
     title: urgent ? 'Pause studying and get medical help' : 'Rest and basic needs come first',
@@ -107,7 +115,7 @@ export function generateSafetySupport(value, requested = false) {
   }
   return { supportOnly: true, supportKind: 'safety', responseSource: 'safety', title: 'Your safety comes first',
     actionPlan: 'Please pause studying. You deserve support with this. Please reach out now to a qualified mental health professional, school counselor, or doctor, and tell someone you trust what is happening. Are you safe right now? In the Philippines, NCMH Crisis Hotline 1553 offers 24/7 support. If you might act on these thoughts or have already hurt yourself, contact local emergency services (911 in the Philippines) or go to the nearest emergency department; ask someone you trust to stay with you and move away from anything you could use to hurt yourself. Outside the Philippines, use your local crisis or emergency service.',
-    contacts: [emergencyContact, crisisContact] };
+    contacts: [emergencyContact, ...crisisContacts] };
 }
 
 export function requestedPriorityOrder(text) {

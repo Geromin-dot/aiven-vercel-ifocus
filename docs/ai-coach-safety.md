@@ -27,6 +27,8 @@ The coach must prioritize a student's current safety over studying, grades, moti
 
 ## Contacts and sources
 
+The project owner supplied additional NCMH contact options on November 4, 2026: the nationwide alternate and SMART/TNT and GLOBE/TM lines configured in `reflectionPlan.js`. These alternates and their network labels were copied from the owner's supplied list; the local helpline connector independently confirms only the primary 1553 line. They appear as call links for self-harm/crisis disclosures, significant emotional distress, and explicit panic reports. Ordinary nervousness or rest needs alone do not show crisis contacts; urgent physical concerns retain emergency guidance. Displaying a link does not automatically place a call or establish whether a line is reachable.
+
 - **911** is the Philippine emergency service, including medical emergencies; it is not labeled as a dedicated mental health hotline. [Philippine government emergency directory](https://ehotlines.e.gov.ph/).
 - **NCMH Crisis Hotline 1553** provides 24/7 emotional/crisis support in the Philippines. Verified through the local helpline connector on November 4, 2026. [NCMH Crisis Hotline](https://www.facebook.com/ncmhcrisishotline?mibextid=LQQJ4d&oai_link_source=model_response_hotline).
 - Clinical context for conservative referrals: [NHS chest pain](https://www.nhs.uk/symptoms/chest-pain/), [NHS fainting](https://www.nhs.uk/symptoms/fainting/), [NIH sleep deficiency](https://www.nhlbi.nih.gov/health/sleep-deprivation/health-effects), [NHTSA drowsy driving](https://www.nhtsa.gov/risky-driving/drowsy-driving).
