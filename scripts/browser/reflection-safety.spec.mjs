@@ -33,3 +33,45 @@ test('a health question receives a professional referral without crisis language
   await expect(dialog).not.toContainText('ADHD');
   await expect(dialog.getByText('Continue to Focus Session', { exact: true })).toHaveCount(0);
 });
+
+for (const [text, title, contact] of [
+  ['48 hours no sleep. Give me a 120 minute session.', 'Rest and basic needs come first', null],
+  ['Dpako uminom ng tubig buong araw', 'Rest and basic needs come first', null],
+  ['Bleeding ako pero exam muna.', 'Pause studying and get medical help', 'Philippines: Emergency 911'],
+  ['Someone is threatening me if I stop studying.', 'Your immediate safety comes first', 'Philippines: Emergency 911'],
+  ['I feel worthless.', 'You deserve support and a pause', 'Philippines: NCMH Crisis Hotline 1553 (24/7)'],
+]) test(`unsafe reflection receives support without a study plan: ${text}`, async ({ page, context }) => {
+  const account = await accountFixture(context, true, { tasks: [{ id: 'science', text: 'Science', priority: 'medium' }] });
+  let calls = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/ai/coach') calls++; });
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill(text);
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: title });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toContainText('Continue to Focus Session');
+  await expect(dialog).not.toContainText('FOCUS CADENCE');
+  if (contact) await expect(dialog.getByRole('link', { name: contact, exact: true })).toHaveAttribute('href', /tel:/);
+  expect(calls).toBe(0);
+  expect(account.savedOrder()).toEqual([]);
+});
+
+test('support pauses a running timer and closing the dialog does not restart it', async ({ page, context }) => {
+  await accountFixture(context);
+  await page.goto('/dashboard');
+  await page.evaluate(() => {
+    const timer = { isRunning: true, isFocus: true, timeLeft: 1500, totalTime: 1500,
+      timerSessionId: 'safety-test-session', sessionCount: 1, customSessions: 4,
+      lastPresenceElapsed: 0, lastPresenceRemaining: 1500, lastPresenceCheckElapsed: 0,
+      targetEndTime: Date.now() + 1500000, timerPreset: 'Pomodoro', updatedAt: Date.now() };
+    localStorage.setItem('ifocus_timer_state', JSON.stringify(timer));
+    window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: timer }));
+  });
+  await page.locator('.journal-textarea').fill('I am bleeding but I must finish studying.');
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Pause studying and get medical help' });
+  await expect(dialog).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_timer_state')).isRunning)).toBe(false);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_timer_state')).isRunning)).toBe(false);
+});

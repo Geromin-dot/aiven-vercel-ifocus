@@ -1933,13 +1933,27 @@ export default function CommandCenterPage() {
   };
 
   // AI Coach Logic
+  const showSupportFeedback = (support) => {
+    setIsActive(false);
+    try {
+      const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+      if (current?.isRunning) {
+        const paused = { ...current, timeLeft: remainingTime(current), isRunning: false, targetEndTime: null, updatedAt: Date.now() };
+        localStorage.setItem('ifocus_timer_state', JSON.stringify(paused));
+        window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: paused }));
+        void syncTimerCheckpoint(paused).catch(() => {});
+      }
+    } catch { /* Support remains available when storage is unavailable. */ }
+    setAiFeedback({ ...support, message: support.actionPlan });
+  };
+
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
     const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
     const safety = generateSafetySupport(text);
     if (safety) {
       setReflectionError('');
-      setAiFeedback({ ...safety, message: safety.actionPlan });
+      showSupportFeedback(safety);
       return;
     }
     const inputError = reflectionInputError(text);
@@ -1976,7 +1990,7 @@ export default function CommandCenterPage() {
       }
 
       if (data.supportOnly) {
-        setAiFeedback({ ...data, message: data.actionPlan });
+        showSupportFeedback(data);
         return;
       }
       const { state, workMinutes, breakMinutes, targetSessions } = data;
@@ -3315,6 +3329,13 @@ export default function CommandCenterPage() {
           <div role="dialog" aria-modal="true" aria-labelledby="safety-support-title" style={{ background: '#fff', borderRadius: '20px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto' }}>
             <h2 id="safety-support-title" style={{ fontSize: '1.3rem', marginBottom: '1rem' }}>{aiFeedback.title}</h2>
             <p style={{ lineHeight: 1.65 }}>{aiFeedback.message}</p>
+            {aiFeedback.contacts?.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem' }}>
+                {aiFeedback.contacts.map(contact => (
+                  <a key={contact.href} className="btn-secondary" href={contact.href}>{contact.label}</a>
+                ))}
+              </div>
+            )}
             <button type="button" className="btn-secondary" onClick={() => setAiFeedback(null)} style={{ marginTop: '1rem' }}>Close</button>
           </div>
         </div>

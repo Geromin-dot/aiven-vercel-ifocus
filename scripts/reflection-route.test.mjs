@@ -25,6 +25,32 @@ test('safety disclosures return professional support immediately without calling
   }
 });
 
+test('health and safety risks bypass the provider even when it is unavailable', async () => {
+  const post = endpoint(async () => assert.fail('a detected risk must not call the provider'));
+  for (const text of ['48 hours no sleep', 'Bleeding ako pero pinapag aral parin ako',
+    'Dpako uminom ng tubig buong araw', 'Hindi pa ako nakakain buong araw',
+    'I took too many pills', 'I feel dizzy', 'Someone is threatening me',
+    'I want to hurt my classmate', 'Everyone would be better off without me',
+    'I feel worthless', 'How can I stay awake for 72 hours?']) {
+    const result = await post({ text, tasks });
+    assert.equal(result.status, 200, text);
+    assert.equal(result.data.supportOnly, true, text);
+    assert.equal(result.data.workMinutes, undefined);
+    assert.equal(result.data.orderedIds, undefined);
+  }
+});
+
+test('semantic flags handle indirect risks and discard unsafe provider text', async () => {
+  for (const safetyConcern of ['physical', 'wellbeing', 'danger', 'medical', 'emotional']) {
+    const post = endpoint(async () => ({ safetyConcern, actionPlan: 'Keep studying!', workMinutes: 120 }));
+    const result = await post({ text: 'A situation only the semantic check recognizes', tasks });
+    assert.equal(result.data.supportKind, safetyConcern);
+    assert.equal(result.data.supportOnly, true);
+    assert.doesNotMatch(result.data.actionPlan, /Keep studying/);
+    assert.equal(result.data.workMinutes, undefined);
+  }
+});
+
 test('provider-detected indirect safety language uses the same support-only response', async () => {
   const post = endpoint(async options => {
     assert.match(options.parts[0].text, /not a clinician or therapist/);

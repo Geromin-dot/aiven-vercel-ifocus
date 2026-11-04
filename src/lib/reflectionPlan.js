@@ -13,17 +13,82 @@ function unsupportedHealthClaim(advice, reflection) {
   const causal = /\b(?:your (?:anxiety|depression|adhd|disorder|condition|illness) (?:is causing|causes|explains)|(?:because of|due to) your (?:anxiety|depression|adhd|disorder|condition|illness)|(?:typing|inactivity|study performance|symptoms) (?:confirms?|proves?|diagnoses?))\b/;
   const inferredAnxiety = /\b(?:you (?:are|re|seem|appear) (?:to be )?anxious|you have anxiety)\b/.test(text)
     && !/\b(?:anxiety|anxious|kinakabahan)\b/i.test(reflection);
-  return diagnosis.test(text) || assertions.test(text) || causal.test(text) || inferredAnxiety;
+  const unsafeAdvice = /\b(?:(?:take|double|increase|start taking|stop taking) (?:your |some |an? |the )?(?:dose|medication|medicine|pills?|stimulants?|antidepressants?|adderall|ritalin)|(?:skip|avoid|sacrifice) (?:sleep|meals|food|water)|(?:ignore|push through) (?:the |your )?(?:pain|bleeding|symptoms)|(?:you (?:must|should|need to)|you have to) (?:finish|complete).{0,45}before (?:you (?:can )?)?(?:rest|sleep|drink|eat|seek help))\b/.test(text);
+  return diagnosis.test(text) || assertions.test(text) || causal.test(text) || inferredAnxiety || unsafeAdvice;
 }
 
-// This routes explicit safety language to human support; it is not a diagnosis.
+// Verified 2026-11-04: PH emergency directory and the local helpline connector.
+// Keep contacts deterministic: never accept a phone number invented by the model.
+const emergencyContact = { label: 'Philippines: Emergency 911', href: 'tel:911' };
+const crisisContact = { label: 'Philippines: NCMH Crisis Hotline 1553 (24/7)', href: 'tel:+631553?oai_link_source=model_response_hotline' };
+const safetyConcerns = ['physical', 'wellbeing', 'danger', 'medical', 'emotional'];
+
+function physicalSafetyConcern(value) {
+  const text = String(value || '').toLowerCase().replace(/[’']/g, '')
+    .replace(/\bdpako\b/g, 'di pa ako').replace(/\bd\s*pa\b/g, 'di pa')
+    .replace(/\b(?:di|hindi) pa ko\b/g, 'di pa ako')
+    .replace(/\bnattulog\b/g, 'natutulog').replace(/\s+/g, ' ');
+  if (/^(?:bleeding|dumudugo|nagdurugo|overdosed?|chest pain|cant breathe|cannot breathe|di makahinga|hindi makahinga)[.!?]*$/.test(text.trim())) return 'physical';
+  if (/^(?:nahihilo|dizzy|panic attack|nanginginig|nilalagnat|nasusuka)[.!?]*$/.test(text.trim())) return 'medical';
+  // Match personal disclosures rather than health topics in tasks or coursework.
+  const bleeding = /\b(?:i(?:m| am) (?:still |currently )?bleeding|bleeding (?:pa )?ako|(?:dumudugo|nagdurugo) (?:pa )?ako|(?:may|meron akong) (?:dugo|sugat))\b/.test(text);
+  const emergency = bleeding || /\b(?:i (?:cant|cannot|can not) breathe|(?:hindi|di) ako makahinga|(?:i have|im having) (?:severe chest pain|a seizure)|(?:i just|i have) (?:fainted|collapsed))\b/.test(text);
+  const poisoning = /\b(?:i (?:took|swallowed|drank|ingested|overdosed on) (?:too many|too much|a handful of|extra|all (?:my|the)|bleach|poison)|(?:nakainom|uminom) ako ng (?:maraming gamot|sobrang gamot|lason|bleach))\b/.test(text);
+  const acute = /\b(?:my chest (?:hurts|is hurting)|(?:masakit|sumasakit|naninikip) (?:ang )?dibdib ko|(?:i am|im) (?:coughing|vomiting|throwing up) blood|(?:nagsusuka|umuubo) ako ng dugo|(?:namamanhid|nanghihina) (?:ang )?(?:isang bahagi|kalahati) ng katawan ko|(?:i am|im) having (?:trouble|difficulty) breathing|(?:my (?:lips|tongue|throat|face)) (?:is |are )?swelling|(?:i have|im having) an? (?:asthma|allergic) attack)\b/.test(text);
+  if (emergency || poisoning || acute) return 'physical';
+  const danger = /\b(?:i (?:am|feel) unsafe|im unsafe|someone is (?:hurting|threatening|hitting|abusing|forcing) me|(?:my (?:parent|partner|teacher|father|mother|boyfriend|girlfriend)) (?:is )?(?:hitting|hurting|threatening|abusing) me|(?:sinasaktan|binubugbog|inaabuso|pinagbabantaan|ginagahasa) (?:ako|ni)|(?:i (?:want|plan|intend) to|im going to) (?:hurt|kill|attack) (?:someone|my classmates?|my teacher|them))\b/.test(text);
+  if (danger) return 'danger';
+  const sleep = /\b(?:(?:i (?:have not|havent|did not|didnt)|i still havent) (?:slept|sleep)|(?:hindi|di) (?:pa )?ako (?:natutulog|nakatulog|natulog)|(?:hindi|di) pa(?:ko| ako) (?:natutulog|nakatulog|natulog)|(?:walang|wala akong) tulog|(?:no|without) sleep|awake for)\b/.test(text);
+  const hydration = /\b(?:(?:i (?:have not|havent|did not|didnt)) (?:had (?:any )?water|drunk (?:any )?water|drank (?:any )?water)|(?:hindi|di) (?:pa )?ako (?:uminom|nakainom) (?:ng )?(?:tubig|water)|(?:hindi|di) pa(?:ko| ako) (?:uminom|nakainom) (?:ng )?(?:tubig|water)|(?:no|without) water)\b/.test(text);
+  const food = /\b(?:i (?:havent|have not|didnt|did not) (?:eaten|eat)|(?:hindi|di) (?:pa )?ako (?:kumain|nakakain)|(?:wala akong|walang) kain|(?:i (?:will|want to|plan to)|ill) (?:skip (?:sleep|meals|food|water)|stay awake|pull an all nighter)|magpupuyat ako|(?:ayoko|ayaw ko) (?:munang? )?(?:kumain|matulog|uminom))\b/.test(text);
+  const unsafeStudy = /\b(?:(?:how (?:can|do|should) i|help me|teach me to).{0,60}(?:stay awake (?:for |all )|study (?:for )?(?:24|48|72) hours|(?:skip|avoid|without) (?:sleep|food|water))|(?:anong|ano ang|what) (?:gamot|pills?|drugs?|dose|dosage).{0,60}(?:study|aral|focus|gising|awake)|(?:i (?:want|plan|need) to|should i|can i).{0,35}(?:double|increase|take extra|take someone elses).{0,35}(?:dose|medication|pills?|adderall|ritalin)|(?:i (?:am|feel)|im) (?:drunk|intoxicated|high on).{0,60}(?:study|drive|exam))\b/.test(text);
+  const stimulants = /\b(?:(?:i (?:drank|had|took|need|want)|ive had).{0,25}(?:too much (?:coffee|caffeine)|(?:[5-9]|\d{2,}) (?:cups? of coffee|coffees?|energy drinks?))|(?:i (?:want|plan|need) to|help me).{0,35}(?:study|work).{0,25}(?:24|48|72) hours|(?:i (?:will|plan to)|ill) (?:not sleep|avoid sleep|stop eating))\b/.test(text);
+  const depleted = /\b(?:i (?:only )?(?:slept|had) (?:only )?(?:[0-3]|one|two|three) hours?(?: of sleep)?|(?:isa|dalawa|tatlo|[0-3])(?:ng)? oras lang (?:ang )?tulog ko|i (?:havent|have not) (?:had a meal|had anything to drink|drunk anything)|(?:i (?:drank|had)|ive had) (?:several|too many) energy drinks)\b/.test(text);
+  if (sleep || hydration || food || unsafeStudy || stimulants || depleted) return 'wellbeing';
+  // Personal symptoms deserve a health referral even when not obviously urgent.
+  if (/\b(?:(?:do i|could i|might i) have (?:adhd|anxiety|depression|diabetes|a disorder|a disease)|diagnose me|am i (?:depressed|bipolar|autistic|diabetic)|may (?:sakit|disorder) ba ako)\b/.test(text)) return 'health';
+  const symptoms = /\b(?:(?:i (?:am|feel|have|keep)|im) (?:very |really |so )?(?:dizzy|faint|shaking|trembling|vomiting|sick|feverish|in pain|hallucinating|hearing voices|seeing things|dehydrated)|i have (?:a (?:high )?fever|a (?:severe )?headache|blurred vision|heart palpitations|severe pain)|(?:nahihilo|nanginginig|nasusuka|nilalagnat|nanghihina|may sakit) ako|(?:masakit|sumasakit) (?:ang )?(?:ulo|tiyan|katawan) ko|(?:i (?:am|feel)|im) (?:having a panic attack|panicking)|nagpapanic ako|my heart is (?:racing|pounding)|(?:i (?:cant|cannot|can not)) (?:keep (?:food|water|fluids) down|stop vomiting))\b/.test(text);
+  const healthRequest = /\b(?:(?:do i|could i|might i) have (?:adhd|anxiety|depression|diabetes|a disorder|a disease)|(?:diagnose me|am i (?:depressed|bipolar|autistic|diabetic))|may (?:sakit|disorder) ba ako|(?:should i|can i|how (?:much|many)).{0,35}(?:medication|medicine|pills?|antidepressants?|adderall|ritalin)|(?:i (?:want|need) to|help me).{0,35}(?:stop eating|starve myself|purge|make myself vomit))\b/.test(text);
+  if (symptoms || healthRequest) return 'medical';
+  if (/\b(?:i feel (?:worthless|hopeless)|i (?:cant|cannot) stop crying|(?:wala akong kwenta|wala nang pag asa|hindi ko na kaya|di ko na kaya)|(?:i havent|i have not) slept.{0,30}(?:days|hours))\b/.test(text)) return 'emotional';
+  return null;
+}
+
+function physicalSupport(concern) {
+  if (concern === 'health') return { supportOnly: true, supportKind: 'health', responseSource: 'support',
+    title: 'Health questions need professional advice',
+    actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
+  if (concern === 'emotional') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
+    title: 'You deserve support and a pause',
+    actionPlan: 'That sounds difficult to carry. Please pause studying and reach out to someone you trust, a school counselor, or a qualified mental health professional. You do not have to earn rest by completing work. Are you safe right now? In the Philippines, you can contact NCMH Crisis Hotline 1553 for emotional support, available 24/7. If you cannot stay safe or face immediate danger, call local emergency services (911 in the Philippines). Elsewhere, use your local support services.', contacts: [crisisContact] };
+  if (concern === 'danger') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
+    title: 'Your immediate safety comes first',
+    actionPlan: 'Please pause studying. If someone is hurting or threatening you, move to a safer place if you can do so safely and contact a trusted person who is not involved, such as a trusted adult or school safeguarding staff. Avoid confronting the person. If you might hurt someone, put distance between yourself and other people and anything that could cause harm, and seek urgent help. For immediate danger in the Philippines, call 911; elsewhere, use your local emergency service. You do not have to complete a study task before asking for help.', contacts: [emergencyContact] };
+  if (concern === 'medical') return { supportOnly: true, supportKind: concern, responseSource: 'safety',
+    title: 'Take care of your health first',
+    actionPlan: 'Please pause studying and speak with a qualified healthcare professional about what you described. A study coach cannot assess symptoms, confirm a diagnosis, or advise on medication or doses. If you feel unwell, ask someone you trust to stay with you or help you get care. If symptoms are severe, sudden, worsening, or you feel in immediate danger, contact local emergency services (911 in the Philippines). You do not need to finish a focus session or BreakGate before seeking help.', contacts: [] };
+  const urgent = concern === 'physical';
+  return { supportOnly: true, supportKind: concern, responseSource: 'safety',
+    title: urgent ? 'Pause studying and get medical help' : 'Rest and basic needs come first',
+    actionPlan: urgent
+      ? 'Please stop studying and seek urgent medical help now. Tell someone nearby whom you trust and ask them to stay with you and help you get care. For severe or ongoing bleeding, trouble breathing, chest pain, possible poisoning or overdose, or immediate danger, call 911 in the Philippines or go to the nearest emergency department. Do not drive yourself if you feel unwell. Outside the Philippines, use your local emergency number. You do not need to finish a study task or BreakGate first.'
+      : 'Please pause studying now and take care of your basic needs. Make time for sleep, food, and water rather than pushing through a study challenge. Do not use extra medication, stimulants, alcohol, or more caffeine to force yourself to keep studying, and avoid driving if sleepy or impaired. You do not need to finish a focus session or BreakGate first. If you feel unwell or have been awake for a prolonged period, ask someone you trust to help you contact a qualified healthcare professional. For immediate danger, contact local emergency services.',
+    contacts: urgent ? [emergencyContact] : [] };
+}
+
+// Shared by the browser, API, normalization and offline fallback before any plan.
 export function generateSafetySupport(value, requested = false) {
   const text = String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const explicit = /\b(?:i (?:really |just )?(?:want|wanna|wish|plan|intend|need) (?:to )?(?:die|kill myself|end my life|hurt myself|harm myself)|i (?:am|feel|feeling) suicidal|im (?:feeling )?suicidal|i (?:dont|do not) want to (?:live|be alive)|i (?:might|will|may|am going to|am about to) (?:kill myself|hurt myself|end my life)|wish i (?:was|were) dead|gusto ko (?:na |nang |ng )?(?:mamatay|magpakamatay)|(?:ayoko|ayaw ko|di ko gusto|hindi ko gusto) (?:na |nang )?(?:mabuhay)|(?:sasaktan|papatayin) ko (?:ang )?sarili ko)\b/.test(text)
-    || /^(?:suicidal|kill myself|self harm|magpakamatay)$/.test(text);
-  if (!requested && !explicit) return null;
+    || /^(?:suicidal|kill myself|self harm|magpakamatay)$/.test(text)
+    || /\b(?:i (?:cant|cannot|can not) (?:keep myself|stay) safe|(?:everyone|they|my family) would be better off without me|i (?:want|plan) to end it all|i (?:just )?(?:cut|hurt|harmed) myself|sana (?:hindi|di) na ako magising|gusto ko (?:nang? )?mawala (?:na |nang )?(?:forever|tuluyan))\b/.test(text);
+  if (!requested && !explicit) {
+    const concern = physicalSafetyConcern(value);
+    return concern ? physicalSupport(concern) : null;
+  }
   return { supportOnly: true, supportKind: 'safety', responseSource: 'safety', title: 'Your safety comes first',
-    actionPlan: 'You deserve support with this. Please reach out now to a qualified mental health professional, school counselor, or doctor, and tell someone you trust what is happening. Are you safe right now? If you might act on these thoughts or have already hurt yourself, contact local emergency services or go to the nearest emergency department; ask someone you trust to stay with you and move away from anything you could use to hurt yourself.' };
+    actionPlan: 'Please pause studying. You deserve support with this. Please reach out now to a qualified mental health professional, school counselor, or doctor, and tell someone you trust what is happening. Are you safe right now? In the Philippines, NCMH Crisis Hotline 1553 offers 24/7 support. If you might act on these thoughts or have already hurt yourself, contact local emergency services (911 in the Philippines) or go to the nearest emergency department; ask someone you trust to stay with you and move away from anything you could use to hurt yourself. Outside the Philippines, use your local crisis or emergency service.',
+    contacts: [emergencyContact, crisisContact] };
 }
 
 export function requestedPriorityOrder(text) {
@@ -139,9 +204,13 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState, task
 }
 
 export function normalizeReflectionPlan(parsed, text, tasks = []) {
+  const concern = safetyConcerns.includes(parsed?.safetyConcern) ? parsed.safetyConcern
+    : safetyConcerns.includes(parsed?.supportKind) ? parsed.supportKind : null;
   const healthSupport = parsed?.healthSupport === true || parsed?.supportKind === 'health';
-  const safety = generateSafetySupport(text, parsed?.supportOnly === true && !healthSupport);
+  const safety = generateSafetySupport(text, parsed?.supportOnly === true && !healthSupport && !concern);
   if (safety) return safety;
+  if (concern) return physicalSupport(concern);
+  if (typeof parsed?.safetyConcern === 'string' && parsed.safetyConcern.trim()) return physicalSupport('medical');
   if (healthSupport) return { supportOnly: true, supportKind: 'health', responseSource: 'support',
     title: 'Health questions need professional advice',
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
