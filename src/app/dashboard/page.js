@@ -2909,7 +2909,7 @@ export default function CommandCenterPage() {
       </div>
 
       {/* Column 3: Daily Progress + Quick Reflection & AI Coach */}
-      <div className="dashboard-column-3" style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', height: '100%', minHeight: 0 }}>
+      <div className="dashboard-column-3" style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', height: 'auto', minHeight: 0 }}>
         
         {/* Top Card: Enlarged Daily Progress & Luxury Inspiring Quote */}
         <div className="glass-panel dashboard-daily-progress-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1.35rem 1.45rem' }}>

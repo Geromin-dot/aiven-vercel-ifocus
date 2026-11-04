@@ -4167,6 +4167,24 @@ textarea:focus {
   }
 }
 
+/* Let the desktop dashboard grow when browser chrome, zoom or display scaling
+   leaves too little height for both cards. Main already provides page scrolling. */
+@media (min-width: 1281px) {
+  .command-center-layout {
+    height: auto;
+    min-height: calc(100dvh - 2.7rem);
+    max-height: none;
+  }
+}
+
+/* Keep all form controls in normal flow instead of clipping or shrinking Submit. */
+#quick-reflection-card {
+  height: auto !important;
+  min-height: min-content !important;
+  overflow: visible !important;
+}
+#quick-reflection-card > * { flex-shrink: 0; }
+
 /* Extra safety for very narrow split screen (<= 880px) */
 @media (min-width: 769px) and (max-width: 880px) {
   .dashboard-timer-column,
