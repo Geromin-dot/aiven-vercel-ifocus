@@ -32,7 +32,7 @@ test('diagnoses and unsupported health claims are replaced with ordinary study g
   for (const actionPlan of ['Your anxiety is causing this.', 'You are depressed.', 'You have an anxiety disorder.',
     'You have ADHD.', 'You have insomnia.', 'You have diabetes.', 'You are dehydrated.', 'You are perfectly healthy.',
     'You have a neurological syndrome.', 'You are diagnosed with something.', 'May ADHD ka.']) {
-    const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['easy', 'medium', 'hard'], actionPlan }, 'I am tired from studying', tasks);
+    const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['easy', 'medium', 'hard'], actionPlan }, 'I feel stressed about studying', tasks);
     assert.equal(result.responseSource, 'fallback');
     assert.doesNotMatch(result.actionPlan, /anxiety|anxious|depress|disorder|ADHD|insomnia|diabetes|dehydrat|healthy/i);
     assert.match(result.actionPlan, /Review anatomy/);
@@ -59,7 +59,7 @@ test('health assessment requests get a professional referral without diagnoses o
 });
 
 test('fallback adapts English and Tagalog reflections with task-specific advice', () => {
-  for (const text of ['I feel stressed about my exams', 'Pagod ako at nahihirapan mag aral']) {
+  for (const text of ['I feel stressed about my exams', 'Kinakabahan ako sa exam']) {
     const result = generateCognitiveFallback(text, tasks);
     assert.equal(result.state, 'Stressed');
     assert.deepEqual(result.orderedIds, ['easy', 'medium', 'hard']);

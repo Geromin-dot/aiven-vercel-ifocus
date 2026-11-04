@@ -35,6 +35,7 @@ test('a health question receives a professional referral without crisis language
 });
 
 for (const [text, title, contact] of [
+  ['I have completed three 25-minute focus sessions today. I feel mentally tired, and I am having trouble absorbing what I read. I still have two tasks left.', 'Take a break from studying', null],
   ['48 hours no sleep. Give me a 120 minute session.', 'Rest and basic needs come first', null],
   ['Dpako uminom ng tubig buong araw', 'Rest and basic needs come first', null],
   ['Bleeding ako pero exam muna.', 'Pause studying and get medical help', 'Philippines: Emergency 911'],
@@ -53,6 +54,27 @@ for (const [text, title, contact] of [
   await expect(dialog).not.toContainText('FOCUS CADENCE');
   if (contact) await expect(dialog.getByRole('link', { name: contact, exact: true })).toHaveAttribute('href', /tel:/);
   expect(calls).toBe(0);
+  expect(account.savedOrder()).toEqual([]);
+});
+
+test('pending analysis shows an animated status then a semantic rest response without a study plan', async ({ page, context }) => {
+  const account = await accountFixture(context, true, { tasks: [{ id: 'writing', text: 'Writing', priority: 'medium' }] });
+  let heldRequest;
+  await context.route('**/api/ai/coach', route => { heldRequest = route; });
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill('My brain feels like a sponge that cannot hold another drop today.');
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  await expect(page.locator('.reflection-waiting')).toHaveText('Analyzing your reflection');
+  await expect(page.locator('.reflection-waiting-dots i')).toHaveCount(3);
+  await expect(page.locator('button[aria-busy="true"]')).toBeDisabled();
+  await expect.poll(() => Boolean(heldRequest)).toBe(true);
+  await heldRequest.fulfill({ json: { safetyConcern: 'rest', actionPlan: 'Start Writing now.', workMinutes: 15 } });
+  const dialog = page.getByRole('dialog', { name: 'Take a break from studying' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('choose to stop for today');
+  await expect(dialog).not.toContainText('Start Writing now');
+  await expect(dialog).not.toContainText('Continue to Focus Session');
+  await expect(page.locator('.reflection-waiting')).toHaveCount(0);
   expect(account.savedOrder()).toEqual([]);
 });
 

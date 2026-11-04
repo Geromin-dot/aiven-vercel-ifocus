@@ -21,7 +21,22 @@ function unsupportedHealthClaim(advice, reflection) {
 // Keep contacts deterministic: never accept a phone number invented by the model.
 const emergencyContact = { label: 'Philippines: Emergency 911', href: 'tel:911' };
 const crisisContact = { label: 'Philippines: NCMH Crisis Hotline 1553 (24/7)', href: 'tel:+631553?oai_link_source=model_response_hotline' };
-const safetyConcerns = ['physical', 'wellbeing', 'danger', 'medical', 'emotional'];
+const safetyConcerns = ['physical', 'wellbeing', 'danger', 'medical', 'emotional', 'rest'];
+
+function needsRest(value) {
+  const text = String(value || '').toLowerCase().replace(/[’']/g, '');
+  return text.split(/[.!?;\n]+|\bbut\b|\bpero\b/).some(clause => {
+    // A denied or resolved feeling is not a current request to stop.
+    const current = clause.replace(/\b(?:i (?:am|feel)|im) (?:not|no longer) (?:mentally |mentally and physically )?(?:tired|exhausted|drained|fatigued|burned out|burnt out)/g, '')
+      .replace(/\b(?:i dont|i do not) (?:feel (?:mentally )?(?:tired|exhausted|drained)|need (?:a break|to rest))/g, '');
+    return /\b(?:i (?:am|feel|am feeling)|im) (?:so |very |really |completely |totally )?(?:(?:mentally (?:and physically )?)?(?:tired|exhausted|drained|fatigued)|burned out|burnt out)\b/.test(current)
+      || /\b(?:i (?:cant|cannot|can no longer)|im unable to|i am unable to) (?:absorb|process|take in|understand|retain)\b/.test(current)
+      || (/\b(?:i|im)\b/.test(current) && /\b(?:having trouble|struggling with|struggling to) (?:absorbing|processing|taking in|absorb|process|take in)\b/.test(current))
+      || /\b(?:i (?:need|want) (?:a (?:proper |real )?break|to rest|to stop studying)|(?:mentally (?:tired|exhausted)|pagod na pagod|ubos na (?:ang )?energy) ako|pagod (?:na )?(?:ang )?(?:utak|isip) ko|(?:hindi|di) ko na (?:ma absorb|maabsorb|maintindihan|maproseso)|(?:kailangan|gusto) ko (?:munang? )?(?:magpahinga|huminto))\b/.test(current)
+      || /\bpagod (?:na |na pagod )?ako\b/.test(current.replace(/\b(?:hindi|di) (?:ako )?pagod(?: ako)?\b/g, ''))
+      || /^\s*(?:tired|pagod|mentally tired|mentally exhausted|exhausted|burned out|burnt out)\s*$/.test(current);
+  });
+}
 
 function physicalSafetyConcern(value) {
   const text = String(value || '').toLowerCase().replace(/[’']/g, '')
@@ -51,10 +66,14 @@ function physicalSafetyConcern(value) {
   const healthRequest = /\b(?:(?:do i|could i|might i) have (?:adhd|anxiety|depression|diabetes|a disorder|a disease)|(?:diagnose me|am i (?:depressed|bipolar|autistic|diabetic))|may (?:sakit|disorder) ba ako|(?:should i|can i|how (?:much|many)).{0,35}(?:medication|medicine|pills?|antidepressants?|adderall|ritalin)|(?:i (?:want|need) to|help me).{0,35}(?:stop eating|starve myself|purge|make myself vomit))\b/.test(text);
   if (symptoms || healthRequest) return 'medical';
   if (/\b(?:i feel (?:worthless|hopeless)|i (?:cant|cannot) stop crying|(?:wala akong kwenta|wala nang pag asa|hindi ko na kaya|di ko na kaya)|(?:i havent|i have not) slept.{0,30}(?:days|hours))\b/.test(text)) return 'emotional';
+  if (needsRest(value)) return 'rest';
   return null;
 }
 
-function physicalSupport(concern) {
+function physicalSupport(concern, reflection = '') {
+  if (concern === 'rest') return { supportOnly: true, supportKind: 'rest', responseSource: 'safety',
+    title: 'Take a break from studying',
+    actionPlan: `${/absorb|process|taking in|maintindihan|maproseso/i.test(reflection) ? 'You described having difficulty taking in what you read.' : /tired|exhaust|fatigu|drained|pagod/i.test(reflection) ? 'You mentioned feeling tired or drained.' : /burn/i.test(reflection) ? 'You described feeling burned out.' : 'It is okay to take the rest you need.'} Please step away from your study materials and give yourself a real break. Your remaining tasks can wait; you do not need to complete another task, focus session, or BreakGate first. There is no set countdown for feeling ready again, and you can choose to stop for today. If this keeps happening or feels difficult to manage, consider talking with someone you trust or your school counselor.`, contacts: [] };
   if (concern === 'health') return { supportOnly: true, supportKind: 'health', responseSource: 'support',
     title: 'Health questions need professional advice',
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
@@ -84,7 +103,7 @@ export function generateSafetySupport(value, requested = false) {
     || /\b(?:i (?:cant|cannot|can not) (?:keep myself|stay) safe|(?:everyone|they|my family) would be better off without me|i (?:want|plan) to end it all|i (?:just )?(?:cut|hurt|harmed) myself|sana (?:hindi|di) na ako magising|gusto ko (?:nang? )?mawala (?:na |nang )?(?:forever|tuluyan))\b/.test(text);
   if (!requested && !explicit) {
     const concern = physicalSafetyConcern(value);
-    return concern ? physicalSupport(concern) : null;
+    return concern ? physicalSupport(concern, value) : null;
   }
   return { supportOnly: true, supportKind: 'safety', responseSource: 'safety', title: 'Your safety comes first',
     actionPlan: 'Please pause studying. You deserve support with this. Please reach out now to a qualified mental health professional, school counselor, or doctor, and tell someone you trust what is happening. Are you safe right now? In the Philippines, NCMH Crisis Hotline 1553 offers 24/7 support. If you might act on these thoughts or have already hurt yourself, contact local emergency services (911 in the Philippines) or go to the nearest emergency department; ask someone you trust to stay with you and move away from anything you could use to hurt yourself. Outside the Philippines, use your local crisis or emergency service.',
@@ -209,7 +228,7 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   const healthSupport = parsed?.healthSupport === true || parsed?.supportKind === 'health';
   const safety = generateSafetySupport(text, parsed?.supportOnly === true && !healthSupport && !concern);
   if (safety) return safety;
-  if (concern) return physicalSupport(concern);
+  if (concern) return physicalSupport(concern, text);
   if (typeof parsed?.safetyConcern === 'string' && parsed.safetyConcern.trim()) return physicalSupport('medical');
   if (healthSupport) return { supportOnly: true, supportKind: 'health', responseSource: 'support',
     title: 'Health questions need professional advice',

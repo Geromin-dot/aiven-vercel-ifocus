@@ -41,7 +41,7 @@ test('health and safety risks bypass the provider even when it is unavailable', 
 });
 
 test('semantic flags handle indirect risks and discard unsafe provider text', async () => {
-  for (const safetyConcern of ['physical', 'wellbeing', 'danger', 'medical', 'emotional']) {
+  for (const safetyConcern of ['physical', 'wellbeing', 'danger', 'medical', 'emotional', 'rest']) {
     const post = endpoint(async () => ({ safetyConcern, actionPlan: 'Keep studying!', workMinutes: 120 }));
     const result = await post({ text: 'A situation only the semantic check recognizes', tasks });
     assert.equal(result.data.supportKind, safetyConcern);
@@ -77,7 +77,7 @@ test('health assessment requests receive a non-diagnostic professional referral'
 
 test('provider failure still gives a task-specific plan with an explicit fallback status', async () => {
   const post = endpoint(async () => { throw new Error('Provider quota exhausted'); });
-  const result = await post({ text: 'Pagod ako, unahin anatomy please', tasks });
+  const result = await post({ text: 'Kinakabahan ako, unahin anatomy please', tasks });
   assert.equal(result.status, 200);
   assert.equal(result.data.responseSource, 'fallback');
   assert.equal(result.data.orderedIds[0], 'a');

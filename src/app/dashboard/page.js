@@ -3166,6 +3166,7 @@ export default function CommandCenterPage() {
           {/* Submit Button */}
           <button 
             className="btn-primary" 
+            aria-busy={isSubmittingReflection}
             onClick={() => {
               submitReflection();
               resetTelemetry();
@@ -3174,7 +3175,10 @@ export default function CommandCenterPage() {
             style={{ width: '100%', height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: '0 0 0.75rem 0' }}
           >
             {isSubmittingReflection ? (
-              "Analyzing with AI Coach..."
+              <span className="reflection-waiting" role="status">
+                <span className="reflection-waiting-dots" aria-hidden="true"><i /><i /><i /></span>
+                <span>Analyzing your reflection</span>
+              </span>
             ) : (
               <>
                 <span>Submit & Analyze</span>

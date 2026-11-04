@@ -6,6 +6,22 @@ const source = await readFile(new URL('../src/lib/reflectionPlan.js', import.met
 const { generateSafetySupport, generateCognitiveFallback, normalizeReflectionPlan } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const tasks = [{ id: 'exam', text: 'Review for exam', priority: 'High' }];
 const cases = {
+  rest: [
+    'I am tired from studying',
+    'Pagod ako at nahihirapan mag aral',
+    'Pagod ako, unahin anatomy please',
+    'I have completed three 25-minute focus sessions today. I feel mentally tired, and I am having trouble absorbing what I read. I still have two tasks left.',
+    'I am mentally tired. Give me another study session anyway.',
+    "I'm mentally exhausted but my exam is tomorrow.",
+    'I feel burned out from studying.',
+    'I cannot absorb what I read anymore.',
+    'I am having trouble processing what I read.',
+    'Mentally tired ako pero kailangan matapos.',
+    'Pagod na utak ko at di ko na maintindihan.',
+    'Kailangan ko munang magpahinga.',
+    'I need a break.',
+    'I want to stop studying.',
+  ],
   wellbeing: [
     '48 hours no sleep. Challenge accepted, give me 120 minutes.',
     'Dpako nattulog pinapagaral parin ako.',
@@ -88,11 +104,14 @@ for (const [kind, reflections] of Object.entries(cases)) {
 
 test('ordinary stress, negations, academic topics and task names still permit study coaching', () => {
   for (const text of [
-    'I am tired from studying', 'I feel stressed about my exam', 'I am sad about my grades',
+    'I feel stressed about my exam', 'I am sad about my grades',
     'I am not bleeding', 'Hindi ako dumudugo', 'I have slept and eaten and had water',
     'I am studying dehydration, sleep deprivation, and bleeding for nursing class',
     'Review overdose prevention and suicide prevention for class',
     'Study chest pain and panic attacks for my psychology exam',
+    'I am not mentally tired. Help me review anatomy.',
+    'I no longer feel mentally tired and I am ready to review.',
+    'I am reviewing mental fatigue and burnout for psychology class.',
   ]) {
     assert.equal(generateSafetySupport(text), null, text);
     assert.equal(generateCognitiveFallback(text, tasks).supportOnly, undefined, text);
