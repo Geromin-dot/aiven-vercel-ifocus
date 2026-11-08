@@ -99,7 +99,7 @@ test('the Coach disclaimer opens as a dialog and preserves the draft reflection'
   await page.goto('/dashboard');
   const reflection = page.locator('.journal-textarea');
   await reflection.fill('I want to review anatomy.');
-  const disclaimer = page.getByRole('button', { name: 'About AI Coach & disclaimer' });
+  const disclaimer = page.getByRole('button', { name: 'Disclaimer for AI Coach' });
   await disclaimer.click();
   const dialog = page.getByRole('dialog', { name: 'About AI Coach' });
   await expect(dialog).toContainText('Your AI study buddy');
@@ -118,7 +118,7 @@ test('Quick Reflection keeps the disclaimer in its header and the Study Hub open
     const reflection = page.locator('#quick-reflection-card');
     await expect(reflection.getByText('Flight:', { exact: false })).toHaveCount(0);
     const heading = reflection.locator('.quick-reflection-heading');
-    const button = heading.getByRole('button', { name: 'About AI Coach & disclaimer' });
+    const button = heading.getByRole('button', { name: 'Disclaimer for AI Coach' });
     await expect(button).toBeVisible();
     const [headerBox, buttonBox] = await Promise.all([heading.boundingBox(), button.boundingBox()]);
     expect(Math.abs(headerBox.x + headerBox.width - buttonBox.x - buttonBox.width)).toBeLessThan(2);

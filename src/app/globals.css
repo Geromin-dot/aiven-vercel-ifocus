@@ -11,8 +11,8 @@ body > .avatar-modal-overlay { z-index: 100010; padding: max(12px, env(safe-area
 .avatar-modal-actions button { min-height: 44px; margin: 0 !important; display: flex; align-items: center; justify-content: center; padding: 10px 14px !important; line-height: 1.4; }
 .quick-reflection-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: .45rem; margin-bottom: .35rem; }
 .quick-reflection-title { display: flex; align-items: center; gap: .45rem; }
-.coach-disclaimer-button { padding: .38rem .65rem; max-width: 9rem; border: 1px solid #27522d; border-radius: 8px; background: #27522d; color: #fff; font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
-.coach-disclaimer-button:hover { background: #1c4025; }
+.coach-disclaimer-button { min-height: 30px; padding: .25rem .55rem; border: 1px solid #dce5dc; border-radius: 8px; background: #f5f8f4; color: #3d5941; font: inherit; font-size: .75rem; font-weight: 600; cursor: pointer; }
+.coach-disclaimer-button:hover { background: #e9f1e8; }
 .study-hub-home { color: inherit; text-decoration: none; border-radius: 6px; }
 .study-hub-home:hover .brand-title, .study-hub-home:hover > span { text-decoration: underline; }
 .study-hub-home:focus-visible { outline: 2px solid #27522d; outline-offset: 3px; }

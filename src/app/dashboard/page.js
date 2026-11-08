@@ -3063,8 +3063,8 @@ export default function CommandCenterPage() {
               <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
               <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
             </div>
-            <button type="button" className="coach-disclaimer-button" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
-              About AI Coach &amp; disclaimer
+            <button type="button" className="coach-disclaimer-button" aria-label="Disclaimer for AI Coach" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
+              Disclaimer
             </button>
           </div>
           <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
