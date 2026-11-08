@@ -877,34 +877,6 @@ function LoginContent() {
                 </p>
               )}
 
-              {/* Quick Fill Student Testing Account (For Evaluation & Defense) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginIdentifier("student_tester");
-                  setLoginPassword("student123");
-                }}
-                style={{
-                  width: "100%",
-                  marginTop: "10px",
-                  padding: "9px 12px",
-                  background: "rgba(59, 130, 246, 0.08)",
-                  border: "1px dashed rgba(59, 130, 246, 0.35)",
-                  borderRadius: "10px",
-                  color: "#1d4ed8",
-                  fontSize: "0.8rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  transition: "all 0.15s ease"
-                }}
-                title="Auto-fill credentials for the Student Evaluation Account"
-              >
-                <span>Fill Testing Account (student_tester)</span>
-              </button>
             </form>
           ) : (
             <form
