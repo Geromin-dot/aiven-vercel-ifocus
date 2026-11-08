@@ -109,3 +109,22 @@ test('the Coach disclaimer opens as a dialog and preserves the draft reflection'
   await expect(reflection).toHaveValue('I want to review anatomy.');
   await expect(disclaimer).toBeFocused();
 });
+
+test('Quick Reflection keeps the disclaimer in its header and the Study Hub opens the signed-in landing page', async ({ page, context }) => {
+  await accountFixture(context);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/dashboard');
+    const reflection = page.locator('#quick-reflection-card');
+    await expect(reflection.getByText('Flight:', { exact: false })).toHaveCount(0);
+    const heading = reflection.locator('.quick-reflection-heading');
+    const button = heading.getByRole('button', { name: 'About AI Coach & disclaimer' });
+    await expect(button).toBeVisible();
+    const [headerBox, buttonBox] = await Promise.all([heading.boundingBox(), button.boundingBox()]);
+    expect(Math.abs(headerBox.x + headerBox.width - buttonBox.x - buttonBox.width)).toBeLessThan(2);
+    expect(Math.abs(headerBox.y - buttonBox.y)).toBeLessThan(2);
+    await page.getByRole('link', { name: 'iFocus landing page' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('link', { name: /Open Dashboard/ })).toBeVisible();
+  }
+});

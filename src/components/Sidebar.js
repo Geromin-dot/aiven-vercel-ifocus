@@ -205,12 +205,12 @@ export default function Sidebar() {
       {/* Mobile Top Header (Frosted Glass with Live Status & Shortcuts) */}
       <div className="mobile-top-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="mobile-brand-mark">
+          <Link href="/" onClick={(event) => handleNavClick(event, '/')} className="mobile-brand-mark study-hub-home" aria-label="iFocus landing page">
             <IFocusLogo size={28} />
             <span style={{ fontWeight: 800, fontSize: '1.22rem', color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
               <span style={{ color: 'var(--primary-accent)' }}>i</span>Focus
             </span>
-          </div>
+          </Link>
           <div className="mobile-live-chip">
             <span className="pulse-dot green" />
             <span>BreakGate</span>
@@ -286,7 +286,7 @@ export default function Sidebar() {
       {/* Desktop Sidebar (Minimalist White, Zero Icons on PC) */}
       <header className="modern-sidebar">
         <div className="sidebar-header-box">
-          <div className="sidebar-brand">
+          <Link href="/" onClick={(event) => handleNavClick(event, '/')} className="sidebar-brand study-hub-home" aria-label="iFocus landing page">
             <IFocusLogo size={40} />
             <div className="sidebar-brand-text">
               <h1 className="brand-title">
@@ -294,7 +294,7 @@ export default function Sidebar() {
               </h1>
               <span className="sidebar-subtitle">Smart Study Hub</span>
             </div>
-          </div>
+          </Link>
         </div>
         
         <div className="nav-section-title">MENU</div>

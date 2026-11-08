@@ -230,15 +230,6 @@ export default function CommandCenterPage() {
   };
 
   // Keystroke Telemetrics Engine State & Refs (Always-On Real-time Reading)
-  const [telemetryStats, setTelemetryStats] = useState({
-    flight: 0,
-    dwell: 0,
-    backspaces: 0,
-    errorRate: 0,
-    totalKeystrokes: 0,
-    state: 'idle', // 'idle', 'flow', 'fast', 'friction', 'hesitant'
-    speedLabel: 'Ready'
-  });
   const [telemetryToast, setTelemetryToast] = useState({
     show: false,
     reason: '',
@@ -537,16 +528,6 @@ export default function CommandCenterPage() {
       label = 'Calibrating...';
     }
 
-    setTelemetryStats({
-      flight: Math.round(avgFlight),
-      dwell: Math.round(avgDwell),
-      backspaces: bsCount,
-      errorRate: Math.round(bsRatio * 100),
-      totalKeystrokes: totalKeystrokesRef.current,
-      state: detectedState,
-      speedLabel: label
-    });
-
     // Update real-time cognitive telemetry if corrections or friction detected
     if (bsCount >= 4 || bsRatio > 0.25 || detectedState === 'friction' || detectedState === 'hesitant') {
       try {
@@ -743,7 +724,6 @@ export default function CommandCenterPage() {
     dwellTimesRef.current = [];
     keydownTimesRef.current = {};
     lastKeyupTimeRef.current = null;
-    setTelemetryStats({ flight: 0, dwell: 0, backspaces: 0, errorRate: 0, totalKeystrokes: 0, state: 'idle', speedLabel: 'Ready' });
   };
 
   // Ambient Audio State
@@ -3078,9 +3058,14 @@ export default function CommandCenterPage() {
 
         {/* Bottom Card: Quick Reflection & Adaptive AI Coach (Seamless Fit) */}
         <div id="quick-reflection-card" className="glass-panel" style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '1.35rem 1.4rem', overflow: 'hidden', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem' }}>
-            <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
-            <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
+          <div className="quick-reflection-heading">
+            <div className="quick-reflection-title">
+              <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
+              <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
+            </div>
+            <button type="button" className="coach-disclaimer-button" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
+              About AI Coach &amp; disclaimer
+            </button>
           </div>
           <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
           
@@ -3113,38 +3098,6 @@ export default function CommandCenterPage() {
             ))}
           </div>
 
-          {/* Always-On Live Keystroke Telemetrics Dashboard Bar */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.35rem 0.75rem',
-            marginBottom: '0.5rem',
-            background: telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.08)' : telemetryStats.state === 'fast' ? 'rgba(59, 130, 246, 0.08)' : 'rgba(78, 130, 83, 0.08)',
-            border: `1px solid ${telemetryStats.state === 'friction' ? 'rgba(239, 68, 68, 0.2)' : telemetryStats.state === 'fast' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(78, 130, 83, 0.2)'}`,
-            borderRadius: '10px',
-            fontSize: '0.72rem',
-            color: telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#2563eb' : 'var(--primary-accent)',
-            fontFamily: 'monospace',
-            transition: 'all 0.2s ease'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#3b82f6' : '#16a34a',
-                boxShadow: telemetryStats.totalKeystrokes > 0 ? `0 0 8px ${telemetryStats.state === 'friction' ? '#dc2626' : telemetryStats.state === 'fast' ? '#3b82f6' : '#16a34a'}` : 'none'
-              }}></span>
-              <span>
-                Flight: <strong>{telemetryStats.flight ? `${telemetryStats.flight}ms` : '--'}</strong> | Dwell: <strong>{telemetryStats.dwell ? `${telemetryStats.dwell}ms` : '--'}</strong> | BS: <strong>{telemetryStats.backspaces}</strong> ({telemetryStats.errorRate}%)
-              </span>
-            </div>
-            <span style={{ fontSize: '0.68rem', fontWeight: 600 }}>
-              {telemetryStats.speedLabel}
-            </span>
-          </div>
-
           {/* Expanded Textarea with Telemetry Event Listeners */}
           <textarea 
             className="journal-textarea" 
@@ -3173,9 +3126,6 @@ export default function CommandCenterPage() {
               boxSizing: 'border-box'
             }}
           ></textarea>
-          <button type="button" className="coach-disclaimer-button" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
-            About AI Coach &amp; disclaimer
-          </button>
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
           
           {/* Submit Button */}
