@@ -19,7 +19,7 @@ export default function AppDialog({ titleId, onDismiss, children }) {
 
   return (
     <dialog ref={dialogRef} className={styles.dialog} aria-labelledby={titleId}
-      onCancel={event => { event.preventDefault(); onDismiss(); }}>
+      onCancel={event => { event.preventDefault(); event.stopPropagation(); onDismiss(); }}>
       {children}
     </dialog>
   );

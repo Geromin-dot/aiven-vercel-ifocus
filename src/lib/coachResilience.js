@@ -27,7 +27,7 @@ export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, stam
       title: `${workMinutes}m Work / ${breakMinutes}m Gate`,
       color,
       subtext: preserveState && !recoveryNeeded ? recommendedRhythm.subtext : recoveryNeeded
-        ? `Take a 5m recovery break first, then resume with ${workMinutes}m focus blocks.`
+        ? `Take a break if you need one. When ready, try a ${workMinutes}m focus block.`
         : `Shorter focus blocks while rebuilding study resilience; complete each BreakGate.`,
     },
   };

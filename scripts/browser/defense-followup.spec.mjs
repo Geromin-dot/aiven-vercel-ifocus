@@ -128,3 +128,40 @@ test('Quick Reflection keeps the disclaimer in its header and the Study Hub open
     await expect(page.getByRole('link', { name: /Open Dashboard/ })).toBeVisible();
   }
 });
+
+test('Coach and Feature Guide explain uncertainty and applying a strategy leaves focus paused', async ({ page, context }) => {
+  await accountFixture(context);
+  await page.goto('/coach');
+  await expect(page.getByRole('region', { name: 'Research-backed study habits' })).toContainText('Space your review');
+  await page.getByRole('button', { name: 'Disclaimer for AI Coach' }).click();
+  const disclaimer = page.getByRole('dialog', { name: 'About AI Coach' });
+  await expect(disclaimer).toContainText('dismiss it if it does not fit your needs');
+  await disclaimer.getByRole('button', { name: 'Got it' }).click();
+  await expect(disclaimer).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Feature Guide', exact: true }).click();
+  const guide = page.getByRole('dialog', { name: 'Feature guide' });
+  await guide.getByRole('button', { name: 'Disclaimer for AI Coach' }).click();
+  await expect(disclaimer).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(disclaimer).toHaveCount(0);
+  await expect(guide).toBeVisible();
+  await guide.getByRole('button', { name: 'Close guide' }).click();
+
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(page).toHaveURL(/dashboard$/);
+  await page.evaluate(() => {
+    localStorage.setItem('ifocus_breakgate_events', JSON.stringify(
+      [1, 2, 3].map(offset => ({ status: 'skipped', timestamp: new Date(Date.now() - offset * 1000).toISOString() }))
+    ));
+  });
+  await page.goto('/coach');
+  await expect(page.getByText('Recovery Needed', { exact: true })).toBeVisible();
+  await expect(page.getByText('5m Recovery Break', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
+  await expect(page).toHaveURL(/dashboard$/);
+  await expect.poll(() => page.evaluate(() => {
+    const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
+    return [timer.isRunning, timer.isFocus, timer.customWorkDuration, localStorage.getItem('ifocus_ai_rest_recovery')];
+  })).toEqual([false, true, 900, null]);
+});

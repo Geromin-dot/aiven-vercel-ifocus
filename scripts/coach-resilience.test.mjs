@@ -31,7 +31,7 @@ test('skips progressively reduce the rhythm even with high energy or a long cust
 test('zero resilience replaces default optimal state with recovery needed', () => {
   const result = adaptCoachToResilience({ ...baseline, cognitiveState: { title: 'In the Zone' }, staminaPct: 0, skippedEvents: 6 });
   assert.equal(result.cognitiveState.title, 'Recovery Needed');
-  assert.match(result.recommendedRhythm.subtext, /5m recovery break first/);
+  assert.match(result.recommendedRhythm.subtext, /Take a break if you need one/);
 });
 
 test('stress and idle signals remain visible alongside recovery evidence', () => {

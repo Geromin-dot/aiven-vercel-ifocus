@@ -3,6 +3,7 @@
 // BreakGateModal is managed globally in GlobalTimer
 
 import AppDialog from '@/components/AppDialog';
+import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -68,7 +69,6 @@ export default function CommandCenterPage() {
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
   const [stressFeedback, setStressFeedback] = useState(null);
-  const [showCoachDisclaimer, setShowCoachDisclaimer] = useState(false);
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
   const reflectionPendingRef = useRef(false);
 
@@ -3063,9 +3063,7 @@ export default function CommandCenterPage() {
               <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
               <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
             </div>
-            <button type="button" className="coach-disclaimer-button" aria-label="Disclaimer for AI Coach" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
-              Disclaimer
-            </button>
+            <CoachDisclaimer />
           </div>
           <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
           
@@ -3290,18 +3288,6 @@ export default function CommandCenterPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {showCoachDisclaimer && (
-        <AppDialog titleId="coach-disclaimer-title" onDismiss={() => setShowCoachDisclaimer(false)}>
-          <h2 id="coach-disclaimer-title">About AI Coach</h2>
-          <p><strong>Your AI study buddy.</strong> AI Coach can help you break down school tasks, plan focus sessions and breaks, and choose a manageable next step based on what you share.</p>
-          <p>AI suggestions can be incomplete or mistaken. Review them and choose what fits your study needs.</p>
-          <p><strong>For health and well-being.</strong> Always rely on qualified healthcare or mental health professionals for advice, diagnosis, treatment, and ongoing care. If you need urgent help, contact your local emergency services.</p>
-          <footer>
-            <button type="button" className="btn-primary" onClick={() => setShowCoachDisclaimer(false)}>Got it</button>
-          </footer>
-        </AppDialog>
       )}
 
       {stressFeedback && (

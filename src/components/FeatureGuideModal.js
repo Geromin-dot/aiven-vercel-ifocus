@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './FeatureGuideModal.module.css';
+import CoachDisclaimer from './CoachDisclaimer';
 
 const TUTORIAL_TOPICS = [
   {
@@ -208,14 +209,17 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
       onCancel={e => { e.preventDefault(); if (isZoomed) closeZoom(); else onClose(); }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={e => {
-        if (isZoomed || e.target.tagName === 'SELECT') return;
+        if (isZoomed || e.target.closest('dialog') !== e.currentTarget || e.target.tagName === 'SELECT') return;
         if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
         if (e.key === 'ArrowLeft') { e.preventDefault(); previous(); }
       }}>
       <div className={styles.frame} inert={isZoomed ? true : undefined}>
         <header className={styles.header}>
           <div><span className={styles.eyebrow}>GET TO KNOW IFOCUS</span><h2 id="feature-guide-title">Feature guide</h2></div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
+          <div className={styles.headerActions}>
+            <CoachDisclaimer />
+            <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
+          </div>
         </header>
         <div className={styles.content}>
         <nav className={styles.topics} aria-label="Guide topics">
