@@ -589,15 +589,7 @@ export default function AnalyticsPage() {
           titleFont: { size: 12, weight: '700' },
           bodyFont: { size: 12 },
           callbacks: {
-            label: (ctx) => {
-              const val = ctx.raw;
-              if (isHours) {
-                return ` ${val} hrs (${Math.round(val * 60)} mins)`;
-              }
-              const hrs = Math.floor(val / 60);
-              const m = val % 60;
-              return hrs > 0 ? ` ${hrs}h ${m}m (${val} mins)` : ` ${val} mins`;
-            },
+            label: ({ dataIndex }) => `Focus time: ${formatFocusMinutes(baseStats.weekMinutes[dataIndex])}`,
           },
         },
       },
