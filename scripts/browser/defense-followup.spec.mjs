@@ -132,10 +132,13 @@ test('Quick Reflection keeps the disclaimer in its header and the Study Hub open
 test('Coach and Feature Guide explain uncertainty and applying a strategy leaves focus paused', async ({ page, context }) => {
   await accountFixture(context);
   await page.goto('/coach');
-  await expect(page.getByRole('region', { name: 'Research-backed study habits' })).toContainText('Space your review');
+  await expect(page.getByRole('region', { name: 'Research-backed study habits' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Disclaimer for AI Coach' }).click();
   const disclaimer = page.getByRole('dialog', { name: 'About AI Coach' });
   await expect(disclaimer).toContainText('dismiss it if it does not fit your needs');
+  const habits = disclaimer.getByRole('region', { name: 'Research-backed study habits' });
+  await expect(habits.getByRole('link', { name: 'Agarwal et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-021-09595-9');
+  await expect(habits.getByRole('link', { name: 'Latimier et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-020-09572-8');
   await disclaimer.getByRole('button', { name: 'Got it' }).click();
   await expect(disclaimer).toHaveCount(0);
 

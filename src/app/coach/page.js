@@ -785,14 +785,6 @@ export default function CoachPage() {
         </button>
       </div>
 
-      <section className={coachStyles.studyHabits} aria-labelledby="coach-study-habits">
-        <h3 id="coach-study-habits">Research-backed study habits</h3>
-        <ul>
-          <li><strong>Practice retrieval.</strong> Answer a flashcard or practice question from memory, then check your answer. <a href="https://doi.org/10.1007/s10648-021-09595-9" target="_blank" rel="noopener noreferrer">Agarwal et al. (2021)</a></li>
-          <li><strong>Space your review.</strong> Revisit the material on different days and spend extra time on items you missed. <a href="https://doi.org/10.1007/s10648-020-09572-8" target="_blank" rel="noopener noreferrer">Latimier et al. (2021)</a></li>
-        </ul>
-      </section>
-
       {/* Main 2-Column Responsive Dashboard Layout (50/50 Cards) */}
       <div className="coach-main-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', flex: 1, minHeight: 0, alignItems: 'stretch' }}>
         
