@@ -461,10 +461,19 @@ export default function GlobalTimer() {
   const stateRef = useRef(timerState);
   stateRef.current = timerState;
 
-  // Track User Activity across the entire screen for AFK Detection (Persisted across route navigation)
-  const lastActivityRef = useRef(
-    (typeof window !== "undefined" && Number(localStorage.getItem("ifocus_last_user_activity"))) || Date.now()
-  );
+  // The current sign-in starts a fresh idle window.
+  const lastActivityRef = useRef(Date.now());
+  const idleUserId = session?.error ? null : session?.user?.id;
+  const idleSessionId = session?.user?.sessionId;
+
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+    setShowIdleCoachModal(false);
+    if (!idleUserId || isAdmin) return;
+    try {
+      localStorage.setItem("ifocus_last_user_activity", String(lastActivityRef.current));
+    } catch {}
+  }, [idleUserId, idleSessionId, isAdmin]);
 
   // Read latest timer state from localStorage
   const readStorageState = useCallback(() => {
@@ -845,7 +854,7 @@ export default function GlobalTimer() {
   // Idle AFK Coach Inactivity Watcher (When NO timer is running)
   useEffect(() => {
     const livePath = getEffectivePath();
-    if (isAdmin || isExemptPath(livePath)) {
+    if (!idleUserId || isAdmin || isExemptPath(livePath)) {
       lastActivityRef.current = Date.now();
       return;
     }
@@ -870,7 +879,7 @@ export default function GlobalTimer() {
       }
 
       // 2. Do not trigger if any modal is currently visible
-      if (showIdleCoachModal || showPresenceModal || showBreakGateModal || showReflectionModal || showCycleCompleteModal || showBurnoutModal) {
+      if (showIdleCoachModal || showPresenceModal || showBreakGateModal || showReflectionModal || showCycleCompleteModal || showBurnoutModal || document.querySelector("dialog:modal")) {
         return;
       }
 
@@ -899,7 +908,7 @@ export default function GlobalTimer() {
 
     const intervalId = setInterval(checkAfkInactivity, 1000);
     return () => clearInterval(intervalId);
-  }, [pathname, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, readStorageState, isAdmin, triggerIdleCoachIntervention]);
+  }, [pathname, showIdleCoachModal, showPresenceModal, showBreakGateModal, showReflectionModal, showCycleCompleteModal, showBurnoutModal, readStorageState, idleUserId, isAdmin, triggerIdleCoachIntervention]);
 
   // Retry pending study saves when the connection returns.
   useEffect(() => {

@@ -147,6 +147,16 @@ const TUTORIAL_TOPICS = [
         image: '/images/tutorials/current/chart.webp'
       }
     ]
+  },
+  {
+    id: 'video',
+    label: 'Video Tutorial',
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m10 8 6 4-6 4Z" /></svg>,
+    steps: [{
+      title: 'iFocus walkthrough',
+      description: 'Watch the tutorial and follow along at your own pace.',
+      video: 'https://www.youtube-nocookie.com/embed/ydmefujKPIY',
+    }],
   }
 ];
 
@@ -205,10 +215,7 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
       <div className={styles.frame} inert={isZoomed ? true : undefined}>
         <header className={styles.header}>
           <div><span className={styles.eyebrow}>GET TO KNOW IFOCUS</span><h2 id="feature-guide-title">Feature guide</h2></div>
-          <div className={styles.headerActions}>
-            <a className={styles.videoLink} href="https://www.youtube.com/watch?v=ydmefujKPIY" target="_blank" rel="noopener noreferrer">Watch tutorial <span aria-hidden="true">↗</span></a>
-            <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
-          </div>
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
         </header>
         <div className={styles.content}>
         <nav className={styles.topics} aria-label="Guide topics">
@@ -219,10 +226,18 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
         <div className={styles.body} key={step.title}>
           <div className={styles.stepLine}><span>{topic.label}</span><span className={styles.stepDots} aria-label={'Step ' + (currentStepIndex + 1) + ' of ' + topic.steps.length}>{topic.steps.map((_, index) => <span key={index} className={index === currentStepIndex ? styles.activeDot : undefined} />)}</span></div>
           <h3>{step.title}</h3><p className={styles.description}>{step.description}</p>
-          <button ref={imageButtonRef} type="button" className={styles.screenshot} onClick={() => setIsZoomed(true)} aria-label={'Enlarge screenshot for ' + step.title}>
-            {picture(styles.picture)}<span className={styles.enlarge}>View full size ↗</span>
-          </button>
-          <p className={styles.tip}><strong>Tip</strong> {step.tip}</p>
+          {step.video ? (
+            <iframe className={styles.videoPlayer} src={step.video} title="iFocus tutorial video"
+              allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
+          ) : (
+            <>
+              <button ref={imageButtonRef} type="button" className={styles.screenshot} onClick={() => setIsZoomed(true)} aria-label={'Enlarge screenshot for ' + step.title}>
+                {picture(styles.picture)}<span className={styles.enlarge}>View full size ↗</span>
+              </button>
+              <p className={styles.tip}><strong>Tip</strong> {step.tip}</p>
+            </>
+          )}
         </div>
         </div>
         <footer className={styles.footer}>

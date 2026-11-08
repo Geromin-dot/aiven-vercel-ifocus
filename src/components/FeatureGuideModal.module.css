@@ -15,8 +15,7 @@
 /* Keep the shell stable as step text and screenshot proportions change. */
 .frame { display: flex; flex-direction: column; height: min(736px, calc(100dvh - 50px)); min-height: 0; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px; flex-shrink: 0; border-bottom: 1px solid #edf0eb; }
-.headerActions { display: flex; align-items: center; gap: 8px; }
-.videoLink { color: #285333; font-size: .78rem; font-weight: 650; text-decoration: underline; }
+.videoPlayer { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 14px; background: #132219; }
 .eyebrow { display: block; margin-bottom: 5px; color: #617565; font-size: .64rem; font-weight: 600; letter-spacing: .14em; }
 .header h2 { margin: 0; font-size: 1.3rem; font-weight: 650; letter-spacing: -.04em; line-height: 1.3; }
 .close { display: inline-flex; align-items: center; justify-content: center; width: 40px; min-width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 0; background: #f3f5f1; color: #526456; font-size: 25px; cursor: pointer; flex-shrink: 0; }

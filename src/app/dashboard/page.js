@@ -2,6 +2,7 @@
 
 // BreakGateModal is managed globally in GlobalTimer
 
+import AppDialog from '@/components/AppDialog';
 import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -66,7 +67,7 @@ export default function CommandCenterPage() {
   const [reflectionInput, setReflectionInput] = useState('');
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
-  const [stressFeedback, setStressFeedback] = useState('');
+  const [stressFeedback, setStressFeedback] = useState(null);
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
   const reflectionPendingRef = useRef(false);
 
@@ -1955,7 +1956,7 @@ export default function CommandCenterPage() {
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
     const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
-    setStressFeedback('');
+    setStressFeedback(null);
     const safety = generateSafetySupport(text);
     if (safety) {
       setReflectionError('');
@@ -2000,7 +2001,7 @@ export default function CommandCenterPage() {
         return;
       }
       if (data.stressContext) {
-        setStressFeedback(data.message);
+        setStressFeedback(data);
         return;
       }
       const { state, workMinutes, breakMinutes, targetSessions } = data;
@@ -3174,7 +3175,6 @@ export default function CommandCenterPage() {
           <p id="reflection-scope-note" style={{ margin: '0 0 .65rem', fontSize: '.75rem', color: '#475569' }}>
             AI Coach offers study support. For health or mental health concerns, reach out to a qualified professional.
           </p>
-          {stressFeedback && <p role="status" style={{ margin: '0 0 .65rem', fontSize: '.82rem', color: '#334155' }}>{stressFeedback}</p>}
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
           
           {/* Submit Button */}
@@ -3339,6 +3339,18 @@ export default function CommandCenterPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {stressFeedback && (
+        <AppDialog titleId="reflection-feedback-title" onDismiss={() => setStressFeedback(null)}>
+          <h2 id="reflection-feedback-title">AI Coach check-in</h2>
+          <p>{stressFeedback.message}</p>
+          <footer>
+            <button type="button" className="btn-secondary" onClick={() => setStressFeedback(null)}>
+              {stressFeedback.stressContext === 'clarify' ? 'Back to reflection' : 'Close'}
+            </button>
+          </footer>
+        </AppDialog>
       )}
 
       {/* AI Coach Adaptive Adjustment Modal (Modern Cognitive Design) */}

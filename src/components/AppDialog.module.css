@@ -1,0 +1,15 @@
+.dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  border: 1px solid #e0e8df;
+  border-radius: 20px;
+  background: #fff;
+  color: #1b2a20;
+  box-shadow: 0 20px 72px #10241740;
+}
+.dialog::backdrop { background: #10241780; }
+.dialog h2 { margin: 0 0 12px; font-size: 1.25rem; }
+.dialog p { margin: 0 0 16px; line-height: 1.55; }
+.dialog footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }

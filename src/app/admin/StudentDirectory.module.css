@@ -1,0 +1,29 @@
+.panel { padding: clamp(14px, 2vw, 28px); }
+.heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.heading h2 { margin: 0; font-size: 1.2rem; color: #17251b; }
+.heading p, .results { margin: 4px 0 0; color: #52635a; font-size: .8rem; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: 10px; }
+.filters label { display: grid; gap: 5px; min-width: 0; color: #384c40; font-size: .75rem; font-weight: 650; }
+.filters input, .filters select { width: 100%; min-width: 0; height: 38px; padding: 0 9px; border: 1px solid #dbe5dc; border-radius: 9px; background: #fff; color: #23392a; font: inherit; }
+.filters :is(input, select):focus-visible { outline: 2px solid #27522d; outline-offset: 2px; }
+.results { margin: 13px 0 8px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); gap: 11px; }
+.card { display: grid; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #dfe8df; border-radius: 13px; background: #fff; }
+.identity { display: flex; align-items: center; gap: 8px; }
+.identity > div { min-width: 0; }
+.identity > :is(img, span) { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; color: #265132; background: #eaf2e9; font-size: .8rem; font-weight: 750; }
+.identity h3, .identity p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+.identity h3 { color: #192d20; font-size: .9rem; }
+.identity p { color: #52635a; font-size: .72rem; }
+.badges, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.badges span { border-radius: 999px; padding: 3px 7px; background: #edf2f6; color: #344d64; font-size: .69rem; font-weight: 650; overflow-wrap: anywhere; }
+.badges span[data-status="Verified"] { background: #e7f4e9; color: #216139; }
+.badges span[data-status="Pending review"], .badges span[data-status="On hold"] { background: #fff5df; color: #79501a; }
+.badges span[data-status="Unverified"], .badges span[data-status="Banned"] { background: #fbe9e9; color: #8b302e; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 7px 8px; border-radius: 8px; background: #f5f8f4; }
+.stats dt { color: #52635a; font-size: .67rem; }
+.stats dd { margin: 2px 0 0; color: #203b28; font-size: .82rem; font-weight: 750; overflow-wrap: anywhere; }
+.actions > button { padding: 6px 8px; min-height: 29px; font-size: .72rem; }
+.actions > button:last-child { margin-inline-start: auto; }
+.empty { padding: 24px 10px; text-align: center; color: #52635a; }
+.empty p { margin: 4px 0 0; font-size: .8rem; }

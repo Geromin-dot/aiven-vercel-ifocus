@@ -38,6 +38,8 @@ const playAdminSuccessChime = () => {
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession, signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import AppDialog from "@/components/AppDialog";
+import directory from "./StudentDirectory.module.css";
 import { STUDENT_YEAR_LEVELS, studentYearLevel } from "@/lib/studentYearLevels";
 
 export default function AdminPortalPage() {
@@ -51,7 +53,8 @@ export default function AdminPortalPage() {
   const [sortBy, setSortBy] = useState("recent");
   const [timeScope, setTimeScope] = useState("all"); // "all" | "today"
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [graduatesOnly, setGraduatesOnly] = useState(false);
+  const [yearFilter, setYearFilter] = useState("all");
+  const [promotion, setPromotion] = useState(null);
   const [updatingYearLevels, setUpdatingYearLevels] = useState(false);
   const yearUpdatePending = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -64,8 +67,6 @@ export default function AdminPortalPage() {
   const [nameConfirmModal, setNameConfirmModal] = useState(null);
   const [accountFilter, setAccountFilter] = useState("all"); // "all" | "this_week" | "pending" | "verified"
   const [isUpdatingVerification, setIsUpdatingVerification] = useState(false);
-  const [isSortOpen, setIsSortOpen] = useState(false);
-  const sortRef = useRef(null);
   const [isPresetOpen, setIsPresetOpen] = useState(false);
   const presetRef = useRef(null);
   const [passwordConfirmModal, setPasswordConfirmModal] = useState(null);
@@ -145,33 +146,40 @@ export default function AdminPortalPage() {
     }
   };
 
-  const handlePromoteYearLevels = async () => {
+  const handlePreviewPromotion = async () => {
     if (yearUpdatePending.current) return;
+    yearUpdatePending.current = true;
+    setPromotion({ loading: true });
+    try {
+      const response = await fetch("/api/admin/year-levels", { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not preview year-level promotion.");
+      setPromotion(await response.json());
+    } catch (error) {
+      setPromotion({ error: error.message });
+    } finally {
+      yearUpdatePending.current = false;
+    }
+  };
+
+  const handlePromoteYearLevels = async () => {
+    if (!promotion?.token || !promotion.count || yearUpdatePending.current) return;
     yearUpdatePending.current = true;
     setUpdatingYearLevels(true);
     try {
-      const previewResponse = await fetch("/api/admin/year-levels", { cache: "no-store" });
-      if (!previewResponse.ok) throw new Error("Could not preview year-level promotion.");
-      const { token, count, graduates } = await previewResponse.json();
-      if (!count) {
-        alert("There are no students with an assigned year level to promote.");
-        return;
-      }
-      const confirmed = window.confirm(`Update ${count} student account(s) for the new school year? ${graduates} fourth-year student(s) will be marked Graduated. Existing graduates and students without an assigned year level are skipped. Run this once per school year.`);
-      if (!confirmed) return;
       const res = await fetch("/api/admin/year-levels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token: promotion.token }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Could not promote year levels.");
+      setPromotion(null);
       setSelectedStudent(null);
       await fetchAdminData();
       setToastPopup({ title: "Year Levels Promoted", message: `${json.count} student account(s) updated.` });
       setTimeout(() => setToastPopup(null), 4500);
     } catch (error) {
-      alert(error.message);
+      setPromotion({ error: error.message });
     } finally {
       yearUpdatePending.current = false;
       setUpdatingYearLevels(false);
@@ -355,16 +363,12 @@ export default function AdminPortalPage() {
   // Filtered and sorted students
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (sortRef.current && !sortRef.current.contains(e.target)) {
-        setIsSortOpen(false);
-      }
       if (presetRef.current && !presetRef.current.contains(e.target)) {
         setIsPresetOpen(false);
       }
     };
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
-        setIsSortOpen(false);
         setIsPresetOpen(false);
       }
     };
@@ -412,7 +416,8 @@ export default function AdminPortalPage() {
 
     let list = [...data.students];
 
-    if (graduatesOnly) list = list.filter(student => studentYearLevel(student) === "Graduated");
+    if (yearFilter === "unassigned") list = list.filter(student => !STUDENT_YEAR_LEVELS.includes(studentYearLevel(student)));
+    else if (yearFilter !== "all") list = list.filter(student => studentYearLevel(student) === yearFilter);
 
     // Filter by account recency / verification
     if (accountFilter === "this_week") {
@@ -456,7 +461,7 @@ export default function AdminPortalPage() {
     }
 
     return list;
-  }, [data, searchQuery, sortBy, timeScope, accountFilter, graduatesOnly]);
+  }, [data, searchQuery, sortBy, timeScope, accountFilter, yearFilter]);
 
   // Loading Screen
   if (status === "loading" || (loading && isAdmin)) {
@@ -664,32 +669,6 @@ export default function AdminPortalPage() {
             0 0 0 1px rgba(255, 255, 255, 0.8) inset;
         }
 
-        /* Table Row Soft Hover Glow */
-        .admin-table-row {
-          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-          transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .admin-table-row:hover {
-          background-color: rgba(39, 82, 45, 0.028);
-        }
-
-        /* Filter Controls */
-        .admin-filter-input {
-          width: 100%;
-          padding: 10px 14px 10px 38px;
-          font-size: 0.88rem;
-          background: #ffffff;
-          border: 1px solid rgba(0, 0, 0, 0.09);
-          border-radius: 12px;
-          outline: none;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .admin-filter-input:focus {
-          border-color: #27522d;
-          box-shadow: 0 0 0 3px rgba(39, 82, 45, 0.12);
-        }
-
         .admin-filter-select {
           padding: 10px 16px;
           font-size: 0.88rem;
@@ -705,16 +684,6 @@ export default function AdminPortalPage() {
         .admin-filter-select:hover {
           border-color: rgba(39, 82, 45, 0.3);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        @keyframes filterFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-4px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
         }
         .admin-filter-select:focus {
           border-color: #27522d;
@@ -1259,596 +1228,122 @@ export default function AdminPortalPage() {
         </div>
 
         {/* Replaced with elegant floating toast popup */}
-        {/* Student Directory Table Section (Expanded & Spacious) */}
-        <div className="admin-directory-panel" style={{ padding: "34px 38px" }}>
-          {/* Table Header and Search Bar */}
-          <div style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "16px",
-            marginBottom: "24px"
-          }}>
+        <section className={`admin-directory-panel ${directory.panel}`} aria-labelledby="student-directory-title">
+          <div className={directory.heading}>
             <div>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                Student Progress Directory
-              </h2>
-              <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                Viewing individual student study records, active decks, and task completions.
-              </p>
+              <h2 id="student-directory-title">Student Progress Directory</h2>
+              <p>Browse student accounts and their recorded study activity.</p>
             </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
-              <button type="button" className="btn-secondary" aria-pressed={graduatesOnly} onClick={() => setGraduatesOnly(value => !value)}>
-                {graduatesOnly ? "Showing Graduates" : "Show Graduates"}
-              </button>
-              <button type="button" className="btn-secondary" disabled={updatingYearLevels || isRefreshing} onClick={handlePromoteYearLevels}>
-                Promote Year Levels
-              </button>
-              {/* Search Input */}
-              <div style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                minWidth: "260px"
-              }}>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ position: "absolute", left: "14px", color: "var(--text-secondary)" }}
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search name, username, email..."
-                  className="admin-filter-input"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    style={{
-                      position: "absolute",
-                      right: "12px",
-                      background: "none",
-                      border: "none",
-                      color: "#94a3b8",
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
-                      fontWeight: 600
-                    }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {/* Account Recency & Verification Filter Segment */}
-              <div style={{
-                display: "inline-flex",
-                alignItems: "center",
-                background: "#f1f5f9",
-                padding: "3.5px",
-                borderRadius: "12px",
-                border: "1px solid #e2e8f0",
-                gap: "3px",
-                flexWrap: "wrap"
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setAccountFilter("all")}
-                  style={{
-                    padding: "7px 13px",
-                    borderRadius: "9px",
-                    fontSize: "0.82rem",
-                    fontWeight: accountFilter === "all" ? 700 : 500,
-                    color: accountFilter === "all" ? "#0f172a" : "#64748b",
-                    background: accountFilter === "all" ? "#ffffff" : "transparent",
-                    boxShadow: accountFilter === "all" ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease"
-                  }}
-                >
-                  All ({data?.students?.length || 0})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountFilter("this_week")}
-                  style={{
-                    padding: "7px 13px",
-                    borderRadius: "9px",
-                    fontSize: "0.82rem",
-                    fontWeight: accountFilter === "this_week" ? 700 : 500,
-                    color: accountFilter === "this_week" ? "#1e3f23" : "#64748b",
-                    background: accountFilter === "this_week" ? "#ffffff" : "transparent",
-                    boxShadow: accountFilter === "this_week" ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px"
-                  }}
-                >
-                  <span>Created This Week</span>
-                  {createdThisWeekCount > 0 && (
-                    <span style={{
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      background: accountFilter === "this_week" ? "#dcfce7" : "#e2e8f0",
-                      color: accountFilter === "this_week" ? "#15803d" : "#475569"
-                    }}>
-                      {createdThisWeekCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountFilter("pending")}
-                  style={{
-                    padding: "7px 13px",
-                    borderRadius: "9px",
-                    fontSize: "0.82rem",
-                    fontWeight: accountFilter === "pending" ? 700 : 500,
-                    color: accountFilter === "pending" ? "#854d0e" : "#64748b",
-                    background: accountFilter === "pending" ? "#ffffff" : "transparent",
-                    boxShadow: accountFilter === "pending" ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px"
-                  }}
-                >
-                  <span>Pending Review</span>
-                  {pendingVerificationCount > 0 && (
-                    <span style={{
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      background: accountFilter === "pending" ? "#fef3c7" : "#e2e8f0",
-                      color: accountFilter === "pending" ? "#b45309" : "#475569"
-                    }}>
-                      {pendingVerificationCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountFilter("verified")}
-                  style={{
-                    padding: "7px 13px",
-                    borderRadius: "9px",
-                    fontSize: "0.82rem",
-                    fontWeight: accountFilter === "verified" ? 700 : 500,
-                    color: accountFilter === "verified" ? "#166534" : "#64748b",
-                    background: accountFilter === "verified" ? "#ffffff" : "transparent",
-                    boxShadow: accountFilter === "verified" ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px"
-                  }}
-                >
-                  <span>Verified Only</span>
-                  {verifiedCount > 0 && (
-                    <span style={{
-                      padding: "1px 6px",
-                      borderRadius: "10px",
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      background: accountFilter === "verified" ? "#dcfce7" : "#e2e8f0",
-                      color: accountFilter === "verified" ? "#15803d" : "#475569"
-                    }}>
-                      {verifiedCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* Custom Sort Dropdown */}
-              <div ref={sortRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  id="admin-sort-trigger"
-                  aria-haspopup="listbox"
-                  aria-expanded={isSortOpen}
-                  onClick={() => setIsSortOpen((prev) => !prev)}
-                  className="admin-filter-select"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    fontWeight: 600,
-                    color: "#1e293b",
-                    background: "#ffffff",
-                    border: isSortOpen ? "1px solid #27522d" : "1px solid rgba(0, 0, 0, 0.09)",
-                    boxShadow: isSortOpen ? "0 0 0 3px rgba(39, 82, 45, 0.12)" : "0 1px 3px rgba(0, 0, 0, 0.02)",
-                    borderRadius: "12px",
-                    padding: "9px 14px",
-                    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#27522d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <line x1="4" y1="6" x2="16" y2="6"/>
-                    <line x1="4" y1="12" x2="11" y2="12"/>
-                    <line x1="4" y1="18" x2="8" y2="18"/>
-                    <polyline points="15 15 18 18 21 15"/>
-                    <line x1="18" y1="9" x2="18" y2="18"/>
-                  </svg>
-                  <span>
-                    {sortOptions.find((opt) => opt.value === sortBy)?.label || "Sort Records"}
-                  </span>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#64748b"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      transform: isSortOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                      flexShrink: 0
-                    }}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-
-                {isSortOpen && (
-                  <div
-                    role="listbox"
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      right: 0,
-                      minWidth: "260px",
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "14px",
-                      boxShadow: "0 14px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.05)",
-                      padding: "6px",
-                      zIndex: 100,
-                      animation: "filterFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1)"
-                    }}
-                  >
-                    {sortOptions.map((opt) => {
-                      const isSelected = sortBy === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => {
-                            setSortBy(opt.value);
-                            setIsSortOpen(false);
-                          }}
-                          style={{
-                            width: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "8px",
-                            padding: "9px 12px",
-                            borderRadius: "9px",
-                            fontSize: "0.84rem",
-                            fontWeight: isSelected ? 700 : 500,
-                            color: isSelected ? "#15803d" : "#334155",
-                            background: isSelected ? "#f0fdf4" : "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                            textAlign: "left"
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = "#f8fafc";
-                              e.currentTarget.style.color = "#0f172a";
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.background = "transparent";
-                              e.currentTarget.style.color = "#334155";
-                            }
-                          }}
-                        >
-                          <span>{opt.label}</span>
-                          {isSelected && (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
+            <button type="button" className="admin-btn-inspect" disabled={updatingYearLevels || isRefreshing} onClick={handlePreviewPromotion}>
+              Promote Year Levels
+            </button>
           </div>
 
-          {/* Directory Table */}
-          <div style={{ overflowX: "auto", width: "100%" }}>
-            <table style={{ width: "100%", minWidth: "1120px", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{
-                  borderBottom: "2px solid var(--glass-border)",
-                  color: "var(--text-secondary)",
-                  fontSize: "0.78rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em"
-                }}>
-                  <th style={{ padding: "16px 20px", minWidth: "300px", textAlign: "left" }}>Student Profile</th>
-                  <th style={{ padding: "16px 20px", minWidth: "135px", textAlign: "center" }}>Year Level</th>
-                  <th style={{ padding: "16px 20px", minWidth: "95px", textAlign: "center" }}>Decks</th>
-                  <th style={{ padding: "16px 20px", minWidth: "130px", textAlign: "center" }}>Focus Time ({timeScope === "today" ? "Today" : "Total"})</th>
-                  <th style={{ padding: "16px 20px", minWidth: "90px", textAlign: "center" }}>Tasks</th>
-
-                  <th style={{ padding: "16px 20px", minWidth: "250px", textAlign: "right", whiteSpace: "nowrap" }}>Dean Controls</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.length > 0 ? (
-                  filteredStudents.map((student) => (
-                    <tr
-                      key={student.id}
-                      className="admin-table-row"
-                    >
-                      {/* Student Profile: Avatar + Full Name + Username Handle + Email */}
-                      <td style={{ padding: "16px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={student.image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(student.username || student.name || 'Student')}&backgroundColor=c0aede`}
-                            alt={student.name || student.username}
-                            style={{
-                              width: "42px",
-                              height: "42px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              border: "2px solid rgba(39, 82, 45, 0.2)",
-                              flexShrink: 0,
-                              background: "#f8fafc"
-                            }}
-                          />
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.94rem" }}>
-                                {student.name || student.username}
-                              </span>
-                              <span style={{
-                                fontSize: "0.74rem",
-                                color: "#27522d",
-                                background: "#f0fdf4",
-                                border: "1px solid #dcfce7",
-                                padding: "1px 7px",
-                                borderRadius: "12px",
-                                fontWeight: 600,
-                                whiteSpace: "nowrap"
-                              }}>
-                                @{student.username}
-                              </span>
-                              {student.status === "ON_HOLD" && (
-                                <span style={{
-                                  fontSize: "0.72rem",
-                                  color: "#92400e",
-                                  background: "#fffbeb",
-                                  border: "1px solid #fde68a",
-                                  padding: "1px 7px",
-                                  borderRadius: "12px",
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap"
-                                }}>
-                                  On Hold
-                                </span>
-                              )}
-                              {student.verificationStatus === "VERIFIED" ? (
-                                <span style={{
-                                  fontSize: "0.7rem",
-                                  color: "#166534",
-                                  background: "#f0fdf4",
-                                  border: "1px solid #bbf7d0",
-                                  padding: "1px 7px",
-                                  borderRadius: "12px",
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap"
-                                }}>
-                                  Valid Student
-                                </span>
-                              ) : student.verificationStatus === "REJECTED" ? (
-                                <span style={{
-                                  fontSize: "0.7rem",
-                                  color: "#991b1b",
-                                  background: "#fef2f2",
-                                  border: "1px solid #fecaca",
-                                  padding: "1px 7px",
-                                  borderRadius: "12px",
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap"
-                                }}>
-                                  Unverified Acc
-                                </span>
-                              ) : (
-                                <span style={{
-                                  fontSize: "0.7rem",
-                                  color: "#854d0e",
-                                  background: "#fefce8",
-                                  border: "1px solid #fef08a",
-                                  padding: "1px 7px",
-                                  borderRadius: "12px",
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap"
-                                }}>
-                                  Pending Review
-                                </span>
-                              )}
-                              {new Date(student.createdAt) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) && (
-                                <span style={{
-                                  fontSize: "0.68rem",
-                                  color: "#1e40af",
-                                  background: "#eff6ff",
-                                  border: "1px solid #bfdbfe",
-                                  padding: "1px 6px",
-                                  borderRadius: "10px",
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap"
-                                }}>
-                                  New This Week
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px" }}>
-                              {student.email}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Year & Section (Centered Badge) */}
-                      <td style={{ padding: "14px 18px", textAlign: "center", whiteSpace: "nowrap" }}>
-                        <span style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "4px 10px",
-                          background: "#f1f5f9",
-                          color: "#334155",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "8px",
-                          fontSize: "0.78rem",
-                          fontWeight: 600,
-                          whiteSpace: "nowrap"
-                        }}>
-                          {student.yearSection || (student.yearLevel && student.section ? `${student.yearLevel} - ${student.section}` : student.yearLevel || student.section || "Not Assigned")}
-                        </span>
-                      </td>
-
-                      {/* Decks (Centered, Uniform 78px Fixed Width Pill - Perfectly Aligned) */}
-                      <td style={{ padding: "14px 18px", textAlign: "center" }}>
-                        <span style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "78px",
-                          height: "26px",
-                          background: "#f1f5f9",
-                          color: "#475569",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: "8px",
-                          fontSize: "0.78rem",
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
-                          boxSizing: "border-box"
-                        }}>
-                          {student.decksCount} {student.decksCount === 1 ? "Deck" : "Decks"}
-                        </span>
-                      </td>
-
-                      {/* Focus Time (Centered) */}
-                      <td style={{ padding: "14px 18px", textAlign: "center", whiteSpace: "nowrap" }}>
-                        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a" }}>
-                          {timeScope === "today" ? (student.formattedTodayStudyTime || "0m") : student.formattedStudyTime}
-                        </div>
-                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "2px", fontWeight: 500 }}>
-                          {timeScope === "today"
-                            ? `Total: ${student.formattedStudyTime}`
-                            : `Today: ${student.formattedTodayStudyTime || "0m"}`}
-                        </div>
-                      </td>
-
-                      {/* Tasks Completed (Centered) */}
-                      <td style={{ padding: "14px 18px", textAlign: "center", fontSize: "0.85rem", color: "#64748b", whiteSpace: "nowrap" }}>
-                        {student.completedTodos} / {student.totalTodos}
-                      </td>
-
-                      {/* Dean Controls: Fluid Pill Buttons with Tactile Spring Press */}
-                      <td style={{ padding: "14px 18px", textAlign: "right", whiteSpace: "nowrap" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", whiteSpace: "nowrap" }}>
-                          <button
-                            onClick={() => setSelectedStudent(student)}
-                            className="admin-btn-inspect"
-                            title="Inspect student study history and decks"
-                          >
-                            Inspect
-                          </button>
-
-                          {student.status === "ON_HOLD" || student.status === "BANNED" ? (
-                            <button
-                              onClick={() => handleUpdateUserStatus(student.id, "ACTIVE", null)}
-                              disabled={isUpdatingStatus}
-                              className="admin-btn-reactivate"
-                              title="Restore full student access"
-                            >
-                              Reactivate
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setStatusModalStudent(student);
-                                setTargetStatus("ON_HOLD");
-                                setStatusReason("Academic Integrity Review - In-person clearance with College Dean required");
-                              }}
-                              className="admin-btn-hold"
-                              title="Place account on hold (Requires in-person clearance)"
-                            >
-                              Put On Hold
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => setDeleteModalStudent(student)}
-                            className="admin-btn-delete"
-                            title="Permanently Delete Student Account"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="6" style={{ padding: "48px 16px", textAlign: "center", color: "var(--text-secondary)" }}>
-                      <div style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "4px" }}>
-                        No students found
-                      </div>
-                      <div style={{ fontSize: "0.85rem" }}>
-                        {searchQuery ? "Try refining your search keyword." : "No registered students in the system yet."}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className={directory.filters}>
+            <label className={directory.search}>Search students
+              <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Name, username, or email" />
+            </label>
+            <label>Year level
+              <select value={yearFilter} onChange={event => setYearFilter(event.target.value)}>
+                <option value="all">All year levels</option>
+                {STUDENT_YEAR_LEVELS.map(level => <option key={level}>{level}</option>)}
+                <option value="unassigned">Not assigned</option>
+              </select>
+            </label>
+            <label>Account filter
+              <select value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+                <option value="all">All accounts ({data?.students?.length || 0})</option>
+                <option value="this_week">Created this week ({createdThisWeekCount})</option>
+                <option value="pending">Pending review ({pendingVerificationCount})</option>
+                <option value="verified">Verified only ({verifiedCount})</option>
+              </select>
+            </label>
+            <label>Sort by
+              <select value={sortBy} onChange={event => setSortBy(event.target.value)}>
+                {sortOptions.map(option => <option key={option.value} value={option.value}>{option.label.replace("Sort: ", "")}</option>)}
+              </select>
+            </label>
           </div>
-        </div>
+
+          <p className={directory.results} role="status">{filteredStudents.length} {filteredStudents.length === 1 ? "student" : "students"}</p>
+          {filteredStudents.length ? (
+            <div className={directory.grid}>
+              {filteredStudents.map(student => {
+                const name = student.name || student.username;
+                const year = student.yearSection || studentYearLevel(student) || "Not assigned";
+                const statusLabel = student.status === "ON_HOLD" ? "On hold" : student.status === "BANNED" ? "Banned" :
+                  student.verificationStatus === "VERIFIED" ? "Verified" : student.verificationStatus === "REJECTED" ? "Unverified" : "Pending review";
+                const accountRestricted = student.status === "ON_HOLD" || student.status === "BANNED";
+
+                return (
+                  <article key={student.id} className={directory.card} aria-label={name}>
+                    <div className={directory.identity}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {student.image ? <img src={student.image} alt="" loading="lazy" /> : <span aria-hidden="true">{name?.charAt(0).toUpperCase()}</span>}
+                      <div>
+                        <h3 title={name}>{name}</h3>
+                        <p title={`@${student.username} · ${student.email}`}>@{student.username} · {student.email}</p>
+                      </div>
+                    </div>
+                    <div className={directory.badges}>
+                      <span>{year}</span>
+                      <span data-status={statusLabel}>{statusLabel}</span>
+                    </div>
+                    <dl className={directory.stats}>
+                      <div><dt>{timeScope === "today" ? "Focus today" : "Total focus"}</dt><dd>{(timeScope === "today" ? student.formattedTodayStudyTime : student.formattedStudyTime) || "0m"}</dd></div>
+                      <div><dt>Decks</dt><dd>{student.decksCount}</dd></div>
+                      <div><dt>Tasks done</dt><dd>{student.completedTodos}/{student.totalTodos}</dd></div>
+                    </dl>
+                    <div className={directory.actions}>
+                      <button type="button" className="admin-btn-inspect" onClick={() => setSelectedStudent(student)}>Inspect</button>
+                      {accountRestricted ? (
+                        <button type="button" className="admin-btn-reactivate" disabled={isUpdatingStatus} onClick={() => handleUpdateUserStatus(student.id, "ACTIVE", null)}>Reactivate</button>
+                      ) : (
+                        <button type="button" className="admin-btn-hold" onClick={() => {
+                          setStatusModalStudent(student);
+                          setTargetStatus("ON_HOLD");
+                          setStatusReason("Academic Integrity Review - In-person clearance with College Dean required");
+                        }}>Put On Hold</button>
+                      )}
+                      <button type="button" className="admin-btn-delete" onClick={() => setDeleteModalStudent(student)} aria-label={`Delete ${name}`} title="Delete student account">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={directory.empty}>
+              <strong>No students found</strong>
+              <p>{data?.students?.length ? "Try changing the filters or search." : "No student accounts have been registered yet."}</p>
+            </div>
+          )}
+        </section>
+
+        {promotion && (
+          <AppDialog titleId="promotion-title" onDismiss={() => { if (!promotion.loading && !updatingYearLevels) setPromotion(null); }}>
+            <h2 id="promotion-title">Promote Year Levels</h2>
+            {promotion.loading ? <p role="status">Checking student records…</p> : promotion.error ? (
+              <p role="alert">{promotion.error}</p>
+            ) : promotion.count ? (
+              <>
+                <p><strong>{promotion.count}</strong> student account(s) will move up one year. <strong>{promotion.graduates}</strong> fourth-year student(s) will be marked Graduated.</p>
+                <p>Existing graduates and students without an assigned year level are skipped. Run this once per school year.</p>
+              </>
+            ) : <p>There are no students with an assigned year level to promote.</p>}
+            <footer>
+              <button type="button" className="btn-secondary" disabled={promotion.loading || updatingYearLevels} onClick={() => setPromotion(null)}>
+                {promotion.count ? "Cancel" : "Close"}
+              </button>
+              {Boolean(promotion.count) && <button type="button" className="btn-primary" disabled={updatingYearLevels} onClick={handlePromoteYearLevels}>
+                {updatingYearLevels ? "Promoting…" : "Confirm promotion"}
+              </button>}
+            </footer>
+          </AppDialog>
+        )}
 
         {/* Confirmation Modal: Place Student Account On Hold */}
         {statusModalStudent && (

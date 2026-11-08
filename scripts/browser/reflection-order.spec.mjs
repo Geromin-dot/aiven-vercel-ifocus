@@ -111,9 +111,13 @@ test('unclear and personal stress can be submitted without task changes or a stu
   ]) {
     await reflection.fill(text);
     await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: reply })).toBeVisible();
+    const checkIn = page.getByRole('dialog', { name: 'AI Coach check-in' });
+    await expect(checkIn).toContainText(reply);
     await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toHaveCount(0);
     await expect(page.locator('.todo-text')).toHaveText(tasks.map(task => task.text));
     expect(account.savedOrder()).toEqual([]);
+    await checkIn.getByRole('button').click();
+    await expect(checkIn).toHaveCount(0);
+    await expect(reflection).toHaveValue(text);
   }
 });
