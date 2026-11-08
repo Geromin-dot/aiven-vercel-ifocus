@@ -1281,8 +1281,9 @@ export default function AdminPortalPage() {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {student.image ? <img src={student.image} alt="" loading="lazy" /> : <span aria-hidden="true">{name?.charAt(0).toUpperCase()}</span>}
                       <div>
-                        <h3 title={name}>{name}</h3>
-                        <p title={`@${student.username} · ${student.email}`}>@{student.username} · {student.email}</p>
+                        <h3>{name}</h3>
+                        <p>@{student.username}</p>
+                        {student.email && <p>{student.email}</p>}
                       </div>
                     </div>
                     <div className={directory.badges}>

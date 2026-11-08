@@ -35,7 +35,9 @@ test('the admin directory filters cards and promotes only after in-app confirmat
   const token = await encode({ secret: 'history-regression-test-secret', token: { ...user, sub: user.id } });
   await context.addCookies([{ name: 'next-auth.session-token', value: token, url: 'http://127.0.0.1:3106' }]);
   const students = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'].map((yearLevel, index) => ({
-    id: String(index), name: 'Student ' + index, username: 'student' + index, yearLevel, createdAt: '2026-10-01',
+    id: String(index), name: index === 0 ? 'Student With a Long Name for the Evaluation Cohort' : 'Student ' + index,
+    username: index === 0 ? 'verylongstudentusernamewithoutspaces2026' : 'student' + index,
+    email: 'verylongemailaddressforthegraduatingstudent@school-example.edu', yearLevel, createdAt: '2026-10-01',
     status: 'ACTIVE', verificationStatus: 'VERIFIED', formattedStudyTime: '20m', decksCount: 1, completedTodos: 1, totalTodos: 3,
   }));
   let promotions = 0;
@@ -58,6 +60,19 @@ test('the admin directory filters cards and promotes only after in-app confirmat
   await expect(directory.getByRole('article')).toHaveCount(5);
   const cards = await directory.getByRole('article').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
   expect(cards[0]).toBe(cards[1]);
+  for (const width of [1920, 1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const overflow = await directory.getByRole('article').evaluateAll(cards => cards.some(card => {
+      const bounds = card.getBoundingClientRect();
+      return [...card.querySelectorAll('*')].some(element => {
+        const box = element.getBoundingClientRect();
+        return box.left < bounds.left - 1 || box.right > bounds.right + 1 ||
+          (element.matches('h3, p') && element.scrollWidth > element.clientWidth + 1);
+      });
+    }));
+    expect(overflow, `student cards at ${width}px`).toBe(false);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
   const yearFilter = directory.getByRole('combobox', { name: 'Year level' });
   for (const level of ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated']) {
     await yearFilter.selectOption(level);
@@ -77,4 +92,20 @@ test('the admin directory filters cards and promotes only after in-app confirmat
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileCards = await directory.getByRole('article').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
   expect(mobileCards[1]).toBeGreaterThan(mobileCards[0]);
+});
+
+test('the Coach disclaimer opens as a dialog and preserves the draft reflection', async ({ page, context }) => {
+  await accountFixture(context);
+  await page.goto('/dashboard');
+  const reflection = page.locator('.journal-textarea');
+  await reflection.fill('I want to review anatomy.');
+  const disclaimer = page.getByRole('button', { name: 'About AI Coach & disclaimer' });
+  await disclaimer.click();
+  const dialog = page.getByRole('dialog', { name: 'About AI Coach' });
+  await expect(dialog).toContainText('Your AI study buddy');
+  await expect(dialog).toContainText('qualified healthcare or mental health professionals');
+  await dialog.getByRole('button', { name: 'Got it' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(reflection).toHaveValue('I want to review anatomy.');
+  await expect(disclaimer).toBeFocused();
 });

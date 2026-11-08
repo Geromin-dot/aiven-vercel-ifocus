@@ -7,12 +7,12 @@
 .filters input, .filters select { width: 100%; min-width: 0; height: 38px; padding: 0 9px; border: 1px solid #dbe5dc; border-radius: 9px; background: #fff; color: #23392a; font: inherit; }
 .filters :is(input, select):focus-visible { outline: 2px solid #27522d; outline-offset: 2px; }
 .results { margin: 13px 0 8px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 235px), 1fr)); gap: 11px; }
-.card { display: grid; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #dfe8df; border-radius: 13px; background: #fff; }
-.identity { display: flex; align-items: center; gap: 8px; }
-.identity > div { min-width: 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 11px; }
+.card { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #dfe8df; border-radius: 13px; background: #fff; }
+.identity { display: flex; align-items: flex-start; gap: 8px; }
+.identity > div { flex: 1; min-width: 0; }
 .identity > :is(img, span) { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; color: #265132; background: #eaf2e9; font-size: .8rem; font-weight: 750; }
-.identity h3, .identity p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+.identity h3, .identity p { overflow-wrap: anywhere; margin: 0; }
 .identity h3 { color: #192d20; font-size: .9rem; }
 .identity p { color: #52635a; font-size: .72rem; }
 .badges, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
@@ -20,10 +20,10 @@
 .badges span[data-status="Verified"] { background: #e7f4e9; color: #216139; }
 .badges span[data-status="Pending review"], .badges span[data-status="On hold"] { background: #fff5df; color: #79501a; }
 .badges span[data-status="Unverified"], .badges span[data-status="Banned"] { background: #fbe9e9; color: #8b302e; }
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 0; padding: 7px 8px; border-radius: 8px; background: #f5f8f4; }
-.stats dt { color: #52635a; font-size: .67rem; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; align-self: end; margin: 0; padding: 7px 8px; border-radius: 8px; background: #f5f8f4; }
+.stats dt { overflow-wrap: anywhere; color: #52635a; font-size: .67rem; }
 .stats dd { margin: 2px 0 0; color: #203b28; font-size: .82rem; font-weight: 750; overflow-wrap: anywhere; }
-.actions > button { padding: 6px 8px; min-height: 29px; font-size: .72rem; }
+.actions > button { max-width: 100%; white-space: normal; padding: 6px 8px; min-height: 29px; font-size: .72rem; }
 .actions > button:last-child { margin-inline-start: auto; }
 .empty { padding: 24px 10px; text-align: center; color: #52635a; }
 .empty p { margin: 4px 0 0; font-size: .8rem; }

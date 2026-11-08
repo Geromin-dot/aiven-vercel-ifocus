@@ -9,6 +9,9 @@ body > .avatar-modal-overlay { z-index: 100010; padding: max(12px, env(safe-area
 .avatar-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .avatar-modal-actions { flex-shrink: 0; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .avatar-modal-actions button { min-height: 44px; margin: 0 !important; display: flex; align-items: center; justify-content: center; padding: 10px 14px !important; line-height: 1.4; }
+.coach-disclaimer-button { align-self: flex-start; margin: 0 0 .65rem; padding: .35rem .6rem; border: 1px solid #d8e4d8; border-radius: 8px; background: #f3f7f2; color: #27522d; font: inherit; font-size: .75rem; font-weight: 650; cursor: pointer; }
+.coach-disclaimer-button:hover { background: #e7f0e6; }
+.coach-disclaimer-button:focus-visible { outline: 2px solid #27522d; outline-offset: 2px; }
 .reflection-input-error { color: #a13c25; font-size: .84rem; line-height: 1.5; margin: 8px 0; }
 .reflection-waiting { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
 .reflection-waiting-dots { display: inline-flex; align-items: center; gap: 4px; }

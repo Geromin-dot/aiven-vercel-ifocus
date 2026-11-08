@@ -7,8 +7,14 @@ export default function AppDialog({ titleId, onDismiss, children }) {
   const dialogRef = useRef(null);
   useEffect(() => {
     const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      dialog.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
   }, []);
 
   return (

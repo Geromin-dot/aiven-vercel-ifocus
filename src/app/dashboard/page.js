@@ -68,6 +68,7 @@ export default function CommandCenterPage() {
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
   const [stressFeedback, setStressFeedback] = useState(null);
+  const [showCoachDisclaimer, setShowCoachDisclaimer] = useState(false);
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
   const reflectionPendingRef = useRef(false);
 
@@ -3154,7 +3155,7 @@ export default function CommandCenterPage() {
             }}
             onKeyDown={handleTelemetryKeyDown}
             onKeyUp={handleTelemetryKeyUp}
-            aria-describedby={reflectionError ? "reflection-scope-note reflection-input-error" : "reflection-scope-note"}
+            aria-describedby={reflectionError ? "reflection-input-error" : undefined}
               aria-invalid={Boolean(reflectionError)}
               placeholder="Type how you feel or pick a starter above..."
             disabled={isSubmittingReflection}
@@ -3172,9 +3173,9 @@ export default function CommandCenterPage() {
               boxSizing: 'border-box'
             }}
           ></textarea>
-          <p id="reflection-scope-note" style={{ margin: '0 0 .65rem', fontSize: '.75rem', color: '#475569' }}>
-            AI Coach offers study support. For health or mental health concerns, reach out to a qualified professional.
-          </p>
+          <button type="button" className="coach-disclaimer-button" aria-haspopup="dialog" onClick={() => setShowCoachDisclaimer(true)}>
+            About AI Coach &amp; disclaimer
+          </button>
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
           
           {/* Submit Button */}
@@ -3339,6 +3340,18 @@ export default function CommandCenterPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCoachDisclaimer && (
+        <AppDialog titleId="coach-disclaimer-title" onDismiss={() => setShowCoachDisclaimer(false)}>
+          <h2 id="coach-disclaimer-title">About AI Coach</h2>
+          <p><strong>Your AI study buddy.</strong> AI Coach can help you break down school tasks, plan focus sessions and breaks, and choose a manageable next step based on what you share.</p>
+          <p>AI suggestions can be incomplete or mistaken. Review them and choose what fits your study needs.</p>
+          <p><strong>For health and well-being.</strong> Always rely on qualified healthcare or mental health professionals for advice, diagnosis, treatment, and ongoing care. If you need urgent help, contact your local emergency services.</p>
+          <footer>
+            <button type="button" className="btn-primary" onClick={() => setShowCoachDisclaimer(false)}>Got it</button>
+          </footer>
+        </AppDialog>
       )}
 
       {stressFeedback && (
