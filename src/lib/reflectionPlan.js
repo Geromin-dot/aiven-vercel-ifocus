@@ -209,9 +209,24 @@ function reflectionStudyGoal(text, tasks) {
   return { topic: match[1], assessment: match[2], when: match[3], unmatched };
 }
 
+export function stressContextFeedback(rawText, modelContext, taskPreference) {
+  const text = normalize(rawText);
+  const personal = /\b(?:personal (?:issues?|problems?|stress)|stress(?:ed)? (?:ako )?(?:at|sa) (?:home|bahay|work|trabaho)|non academic|not (?:about|because of|related to) (?:school|studying|academics)|(?:problem|problema|issues?|conflict|fight) (?:at|with|sa) (?:home|bahay|pamilya|family|work|trabaho)|(?:because of|due to|dahil sa) (?:my |our )?(?:family|pamilya|trabaho|work|relationship|money|pera))\b/.test(text);
+  const study = /\b(?:school|acad(?:emic|emics|s)?|exam(?:s)?|quiz(?:zes)?|assignment(?:s)?|coursework|homework|study|studying|review|magreview|mag aral|tasks?|test(?:s)?)\b/.test(text);
+  const reportsStress = /\bstress(?:ed)?\b/.test(text);
+  if ((reportsStress && personal) || modelContext === 'personal') return { stressContext: 'personal',
+    message: 'That sounds hard. It’s okay to step away from studying for now. If it would help, take a break or reach out to someone you trust.' };
+  const explicitStudyRequest = study || taskPreference || requestedPriorityOrder(rawText).length > 0;
+  if ((reportsStress || modelContext === 'clarify') && !explicitStudyRequest) return { stressContext: 'clarify',
+    message: 'That sounds hard. Is the stress related to school, something personal, or a bit of both? You can add context to your reflection if you feel comfortable.' };
+  return null;
+}
+
 export function generateCognitiveFallback(rawText, tasks = [], forcedState, taskPreference = null) {
   const safety = generateSafetySupport(rawText);
   if (safety) return safety;
+  const stress = stressContextFeedback(rawText, null, taskPreference);
+  if (stress) return stress;
   const text = String(rawText || '').toLowerCase();
   const activeTasks = Array.isArray(tasks) ? tasks.filter(task => task && task.id != null && !task.completed) : [];
   let state = 'Engaged';
@@ -260,8 +275,10 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
     title: 'Health questions need professional advice',
     actionPlan: 'A study reflection or typing pattern cannot establish or rule out a health condition. Please speak with a qualified healthcare professional for an assessment. iFocus can help with study goals and pacing; it cannot confirm diagnoses or recommend medical treatment.' };
   const activeTasks = tasks.filter(task => task && task.id != null && !task.completed);
-  const unmatchedGoal = reflectionStudyGoal(text, activeTasks)?.unmatched;
   const taskPreference = validatedTaskPreference(parsed?.taskPreference, text, activeTasks);
+  const stress = stressContextFeedback(text, parsed?.stressContext, taskPreference);
+  if (stress) return stress;
+  const unmatchedGoal = reflectionStudyGoal(text, activeTasks)?.unmatched;
   const fallback = generateCognitiveFallback(text, tasks, parsed?.state, taskPreference);
   const byId = new Map(activeTasks.map(task => [String(task.id), task]));
   const resolve = value => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
@@ -155,20 +156,20 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       setDeck(targetDeck);
 
       // Read custom BreakGate questions count from settings or localStorage
-      let questionCount = 3;
+      let questionCount = DEFAULT_BREAK_GATE_QUESTIONS;
       try {
         const savedCount = localStorage.getItem('ifocus_breakgate_question_count');
         if (savedCount) {
-          questionCount = parseInt(savedCount) || 3;
+          questionCount = parseInt(savedCount) || DEFAULT_BREAK_GATE_QUESTIONS;
         } else {
           const timerPrefs = localStorage.getItem('ifocus_timer_preferences');
           if (timerPrefs) {
             const parsed = JSON.parse(timerPrefs);
-            if (parsed.breakGateQuestionCount) questionCount = parseInt(parsed.breakGateQuestionCount) || 3;
+            if (parsed.breakGateQuestionCount) questionCount = parseInt(parsed.breakGateQuestionCount) || DEFAULT_BREAK_GATE_QUESTIONS;
           }
         }
       } catch (e) {}
-      questionCount = Math.max(1, Math.min(questionCount, 20));
+      questionCount = Math.max(1, Math.min(questionCount, MAX_BREAK_GATE_QUESTIONS));
 
       // Select cards based on user's configured question count
       const picked = [...allCards]

@@ -113,3 +113,27 @@ test('signed-out users cannot invoke the AI Coach', async () => {
   const post = endpoint(async () => assert.fail('signed-out requests must not reach the AI provider'), null);
   assert.equal((await post({ text: 'I am ready to study', tasks })).status, 401);
 });
+
+test('unclear and personal stress hold study planning even when the provider is unavailable', async () => {
+  const post = endpoint(async () => { throw new Error('Provider unavailable'); });
+  for (const [text, expected] of [
+    ['Stressed ako', 'clarify'],
+    ['Stressed ako dahil may problema sa bahay, pero may exam ako bukas', 'personal'],
+  ]) {
+    const result = await post({ text, tasks });
+    assert.equal(result.data.stressContext, expected);
+    assert.equal(result.data.orderedIds, undefined);
+    assert.equal(result.data.workMinutes, undefined);
+    assert.equal(plans.normalizeReflectionPlan(result.data, text, tasks).stressContext, expected);
+  }
+  const academic = await post({ text: 'Stressed ako sa exam bukas', tasks });
+  assert.equal(academic.data.state, 'Stressed');
+  assert.equal(academic.data.workMinutes, 15);
+});
+
+test('a model-detected safety concern takes precedence over clarification', async () => {
+  const post = endpoint(async () => ({ safetyConcern: 'emotional', stressContext: 'clarify' }));
+  const result = await post({ text: 'Stressed ako', tasks });
+  assert.equal(result.data.supportKind, 'emotional');
+  assert.equal(result.data.stressContext, undefined);
+});

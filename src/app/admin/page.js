@@ -38,6 +38,7 @@ const playAdminSuccessChime = () => {
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession, signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { STUDENT_YEAR_LEVELS, studentYearLevel } from "@/lib/studentYearLevels";
 
 export default function AdminPortalPage() {
   const { data: session, status } = useSession();
@@ -50,6 +51,9 @@ export default function AdminPortalPage() {
   const [sortBy, setSortBy] = useState("recent");
   const [timeScope, setTimeScope] = useState("all"); // "all" | "today"
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [graduatesOnly, setGraduatesOnly] = useState(false);
+  const [updatingYearLevels, setUpdatingYearLevels] = useState(false);
+  const yearUpdatePending = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusModalStudent, setStatusModalStudent] = useState(null);
   const [targetStatus, setTargetStatus] = useState("ON_HOLD");
@@ -111,6 +115,66 @@ export default function AdminPortalPage() {
       alert("Error: " + err.message);
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleSaveYearLevel = async (event, student) => {
+    event.preventDefault();
+    const yearLevel = new FormData(event.currentTarget).get("yearLevel");
+    if (!yearLevel || yearLevel === studentYearLevel(student) || yearUpdatePending.current) return;
+    yearUpdatePending.current = true;
+    setUpdatingYearLevels(true);
+    try {
+      const res = await fetch(`/api/admin/users/${student.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ yearLevel }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Could not save the year level.");
+      const record = { yearLevel: json.user.yearLevel, yearSection: json.user.yearSection, section: json.user.section };
+      setSelectedStudent(prev => prev?.id === student.id ? { ...prev, ...record } : prev);
+      setData(prev => prev && { ...prev, students: prev.students.map(row => row.id === student.id ? { ...row, ...record } : row) });
+      setToastPopup({ title: "Year Level Updated", message: `Saved as ${record.yearLevel}.` });
+      setTimeout(() => setToastPopup(null), 4500);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      yearUpdatePending.current = false;
+      setUpdatingYearLevels(false);
+    }
+  };
+
+  const handlePromoteYearLevels = async () => {
+    if (yearUpdatePending.current) return;
+    yearUpdatePending.current = true;
+    setUpdatingYearLevels(true);
+    try {
+      const previewResponse = await fetch("/api/admin/year-levels", { cache: "no-store" });
+      if (!previewResponse.ok) throw new Error("Could not preview year-level promotion.");
+      const { token, count, graduates } = await previewResponse.json();
+      if (!count) {
+        alert("There are no students with an assigned year level to promote.");
+        return;
+      }
+      const confirmed = window.confirm(`Update ${count} student account(s) for the new school year? ${graduates} fourth-year student(s) will be marked Graduated. Existing graduates and students without an assigned year level are skipped. Run this once per school year.`);
+      if (!confirmed) return;
+      const res = await fetch("/api/admin/year-levels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Could not promote year levels.");
+      setSelectedStudent(null);
+      await fetchAdminData();
+      setToastPopup({ title: "Year Levels Promoted", message: `${json.count} student account(s) updated.` });
+      setTimeout(() => setToastPopup(null), 4500);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      yearUpdatePending.current = false;
+      setUpdatingYearLevels(false);
     }
   };
 
@@ -348,6 +412,8 @@ export default function AdminPortalPage() {
 
     let list = [...data.students];
 
+    if (graduatesOnly) list = list.filter(student => studentYearLevel(student) === "Graduated");
+
     // Filter by account recency / verification
     if (accountFilter === "this_week") {
       const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -390,7 +456,7 @@ export default function AdminPortalPage() {
     }
 
     return list;
-  }, [data, searchQuery, sortBy, timeScope, accountFilter]);
+  }, [data, searchQuery, sortBy, timeScope, accountFilter, graduatesOnly]);
 
   // Loading Screen
   if (status === "loading" || (loading && isAdmin)) {
@@ -1214,6 +1280,12 @@ export default function AdminPortalPage() {
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+              <button type="button" className="btn-secondary" aria-pressed={graduatesOnly} onClick={() => setGraduatesOnly(value => !value)}>
+                {graduatesOnly ? "Showing Graduates" : "Show Graduates"}
+              </button>
+              <button type="button" className="btn-secondary" disabled={updatingYearLevels || isRefreshing} onClick={handlePromoteYearLevels}>
+                Promote Year Levels
+              </button>
               {/* Search Input */}
               <div style={{
                 position: "relative",
@@ -2278,6 +2350,13 @@ export default function AdminPortalPage() {
                       <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
                         {selectedStudent.yearSection || (selectedStudent.yearLevel && selectedStudent.section ? `${selectedStudent.yearLevel} - ${selectedStudent.section}` : selectedStudent.yearLevel || selectedStudent.section || "Not Assigned")}
                       </div>
+                      <form key={`${selectedStudent.id}-${studentYearLevel(selectedStudent)}`} onSubmit={event => handleSaveYearLevel(event, selectedStudent)} style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "6px" }}>
+                        <select name="yearLevel" aria-label="Edit year level" defaultValue={STUDENT_YEAR_LEVELS.includes(studentYearLevel(selectedStudent)) ? studentYearLevel(selectedStudent) : ""} className="admin-filter-select" disabled={updatingYearLevels} required>
+                          <option value="" disabled>Select year level</option>
+                          {STUDENT_YEAR_LEVELS.map(level => <option key={level} value={level}>{level}</option>)}
+                        </select>
+                        <button type="submit" className="btn-secondary" disabled={updatingYearLevels}>Save Year Level</button>
+                      </form>
                     </div>
                     <div>
                       <label style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 600, display: "block" }}>Date Enrolled / Joined</label>

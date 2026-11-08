@@ -88,14 +88,32 @@ test('a stressed student preferring medium tasks gets both medium tasks before o
   await expect(page.locator('.todo-text')).toHaveText(['Science', 'Fil', 'Medtech', 'IT Module 10', 'Archi']);
 });
 
-test('stressed-only reflection corrects the reported partial order and persists low-medium-high groups', async ({ page, context }) => {
+test('academic stress reflection corrects the reported partial order and persists low-medium-high groups', async ({ page, context }) => {
   const account = await accountFixture(context, true, { tasks, coachResponse: {
     state: 'Stressed', workMinutes: 15, breakMinutes: 5, targetSessions: 2,
     orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'], actionPlan: 'Start with Science to keep things comfortable.' } });
-  await submit(page, 'I feel stressed');
+  await submit(page, 'I feel stressed about my exam');
   await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toContainText('Start with “Medtech”');
   await expect(page.locator('.todo-text')).toHaveText(['Medtech', 'Science', 'Fil', 'IT Module 10', 'Archi']);
   await expect.poll(() => account.savedOrder()).toEqual(['medtech', 'science', 'fil', 'it', 'archi']);
   await page.reload();
   await expect(page.locator('.todo-text')).toHaveText(['Medtech', 'Science', 'Fil', 'IT Module 10', 'Archi']);
+});
+
+test('unclear and personal stress can be submitted without task changes or a study plan', async ({ page, context }) => {
+  const account = await accountFixture(context, true, { tasks, coachResponse });
+  await page.goto('/dashboard');
+  const reflection = page.locator('.journal-textarea');
+  await expect(page.locator('.todo-text')).toHaveText(tasks.map(task => task.text));
+  for (const [text, reply] of [
+    ['Stressed ako', 'Is the stress related to school'],
+    ['Stressed ako dahil may problema sa bahay', 'step away from studying'],
+  ]) {
+    await reflection.fill(text);
+    await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: reply })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toHaveCount(0);
+    await expect(page.locator('.todo-text')).toHaveText(tasks.map(task => task.text));
+    expect(account.savedOrder()).toEqual([]);
+  }
 });

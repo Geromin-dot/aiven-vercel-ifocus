@@ -142,7 +142,7 @@ test('a named subject takes precedence and requested rhythm is honored', () => {
 });
 
 test('missing or malformed model order cannot drop tasks or introduce unknown IDs', () => {
-  const missing = normalizeReflectionPlan({ state: 'Stressed', actionPlan: 'Take one small step.' }, 'Stressed ako', tasks);
+  const missing = normalizeReflectionPlan({ state: 'Stressed', actionPlan: 'Take one small step.' }, 'Stressed ako sa exam', tasks);
   assert.deepEqual(missing.orderedIds, ['easy', 'medium', 'hard']);
   const invalid = normalizeReflectionPlan({ state: 'Distracted', orderedIds: ['medium', 'medium', 'unknown'],
     workMinutes: -20, targetSessions: 99 }, 'I feel distracted', tasks);
@@ -209,9 +209,9 @@ test('medium task preferences need not use the literal words start or first', ()
   }
 });
 
-test('the reported stressed-only reflection cannot leave low effort behind medium and high tasks', () => {
+test('academic stress cannot leave low effort behind medium and high tasks', () => {
   const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'],
-    actionPlan: 'Start with Science to keep things comfortable.' }, 'I feel stressed', screenshotTasks);
+    actionPlan: 'Start with Science to keep things comfortable.' }, 'I feel stressed about my exam', screenshotTasks);
   assert.deepEqual(result.orderedIds, ['medtech', 'science', 'fil', 'it', 'archi']);
   assert.match(result.actionPlan, /Start with “Medtech”/);
 });
@@ -252,7 +252,7 @@ test('semantic intent can defer a named task instead of promoting every task men
 
 test('invented preference evidence cannot override mood defaults', () => {
   const result = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['it', 'archi', 'science', 'fil', 'medtech'],
-    taskPreference: { evidence: 'Start with high', priorityOrder: ['high'] }, actionPlan: 'Start with IT.' }, 'I feel stressed', screenshotTasks);
+    taskPreference: { evidence: 'Start with high', priorityOrder: ['high'] }, actionPlan: 'Start with IT.' }, 'I feel stressed about my exam', screenshotTasks);
   assert.equal(result.orderedIds[0], 'medtech');
   assert.equal(result.taskPreference, undefined);
 });

@@ -2,6 +2,7 @@
 
 // BreakGateModal is managed globally in GlobalTimer
 
+import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -11,7 +12,7 @@ import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } fro
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import { reflectionInputError } from '@/lib/reflectionInput';
-import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport } from '@/lib/reflectionPlan';
+import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport, stressContextFeedback } from '@/lib/reflectionPlan';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 const playAlertSound = () => {
@@ -65,6 +66,7 @@ export default function CommandCenterPage() {
   const [reflectionInput, setReflectionInput] = useState('');
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
+  const [stressFeedback, setStressFeedback] = useState('');
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
   const reflectionPendingRef = useRef(false);
 
@@ -92,7 +94,7 @@ export default function CommandCenterPage() {
   const [customBreakTime, setCustomBreakTime] = useState({ min: '', sec: '' });
   const [sessionTotalTime, setSessionTotalTime] = useState(25 * 60);
   const [customSessions, setCustomSessions] = useState(1);
-  const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState('');
+  const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState(DEFAULT_BREAK_GATE_QUESTIONS);
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [saveSessionToast, setSaveSessionToast] = useState({ show: false, message: '' });
@@ -690,7 +692,7 @@ export default function CommandCenterPage() {
 
   const handleTelemetryInput = (e) => {
     const text = e.target.value.toLowerCase();
-    if (generateSafetySupport(text)) return;
+    if (generateSafetySupport(text) || stressContextFeedback(text)) return;
     if (anomalyTriggeredRef.current) return;
 
     let triggerWord = null;
@@ -1036,9 +1038,12 @@ export default function CommandCenterPage() {
         if (parsed.customBreakTime) setCustomBreakTime(parsed.customBreakTime);
         if (parsed.customSessions) setCustomSessions(parsed.customSessions);
         if (parsed.customBreakGateQuestions) setCustomBreakGateQuestions(parsed.customBreakGateQuestions);
-      } else {
-        const bgStored = localStorage.getItem('ifocus_breakgate_question_count');
-        if (bgStored) setCustomBreakGateQuestions(parseInt(bgStored) || 3);
+      }
+      const bgStored = localStorage.getItem('ifocus_breakgate_question_count');
+      if (bgStored) setCustomBreakGateQuestions(parseInt(bgStored) || DEFAULT_BREAK_GATE_QUESTIONS);
+      else {
+        const timerPrefs = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+        if (timerPrefs.breakGateQuestionCount) setCustomBreakGateQuestions(Number(timerPrefs.breakGateQuestionCount) || DEFAULT_BREAK_GATE_QUESTIONS);
       }
 
       // Check if AI adjusted timer schedule is active
@@ -1572,7 +1577,7 @@ export default function CommandCenterPage() {
     const validatedSessions = Math.min(5, Math.max(1, parseInt(customSessions, 10) || 1));
     setCustomSessions(validatedSessions);
 
-    const customQuestionCount = parseInt(customBreakGateQuestions) || 3;
+    const customQuestionCount = parseInt(customBreakGateQuestions) || DEFAULT_BREAK_GATE_QUESTIONS;
     localStorage.setItem('ifocus_breakgate_question_count', String(customQuestionCount));
 
     try {
@@ -1950,6 +1955,7 @@ export default function CommandCenterPage() {
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
     const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
+    setStressFeedback('');
     const safety = generateSafetySupport(text);
     if (safety) {
       setReflectionError('');
@@ -1991,6 +1997,10 @@ export default function CommandCenterPage() {
 
       if (data.supportOnly) {
         showSupportFeedback(data);
+        return;
+      }
+      if (data.stressContext) {
+        setStressFeedback(data.message);
         return;
       }
       const { state, workMinutes, breakMinutes, targetSessions } = data;
@@ -3143,7 +3153,7 @@ export default function CommandCenterPage() {
             }}
             onKeyDown={handleTelemetryKeyDown}
             onKeyUp={handleTelemetryKeyUp}
-            aria-describedby={reflectionError ? "reflection-input-error" : undefined}
+            aria-describedby={reflectionError ? "reflection-scope-note reflection-input-error" : "reflection-scope-note"}
               aria-invalid={Boolean(reflectionError)}
               placeholder="Type how you feel or pick a starter above..."
             disabled={isSubmittingReflection}
@@ -3161,6 +3171,10 @@ export default function CommandCenterPage() {
               boxSizing: 'border-box'
             }}
           ></textarea>
+          <p id="reflection-scope-note" style={{ margin: '0 0 .65rem', fontSize: '.75rem', color: '#475569' }}>
+            AI Coach offers study support. For health or mental health concerns, reach out to a qualified professional.
+          </p>
+          {stressFeedback && <p role="status" style={{ margin: '0 0 .65rem', fontSize: '.82rem', color: '#334155' }}>{stressFeedback}</p>}
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
           
           {/* Submit Button */}
@@ -3726,15 +3740,15 @@ export default function CommandCenterPage() {
                   <input 
                     type="number" 
                     min="1" 
-                    max="10" 
+                    max={MAX_BREAK_GATE_QUESTIONS}
                     disabled={!activeBreakGateDeck}
-                    value={!activeBreakGateDeck ? 0 : (customBreakGateQuestions === 0 || customBreakGateQuestions === '0' ? '' : customBreakGateQuestions)} 
+                    value={!activeBreakGateDeck ? 0 : (customBreakGateQuestions === 0 || customBreakGateQuestions === '0' ? '' : customBreakGateQuestions)}
                     onChange={e => {
                       if (!activeBreakGateDeck) return;
-                      const val = e.target.value === '' ? '' : Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
+                      const val = e.target.value === '' ? '' : Math.max(1, Math.min(MAX_BREAK_GATE_QUESTIONS, parseInt(e.target.value) || 1));
                       setCustomBreakGateQuestions(val);
-                    }} 
-                    placeholder={!activeBreakGateDeck ? '0 (Locked)' : 'e.g. 3 Questions'} 
+                    }}
+                    placeholder={!activeBreakGateDeck ? '0 (Locked)' : 'e.g. 5 Questions'}
                     style={{ 
                       width: '100%', 
                       padding: '0.65rem 0.85rem', 

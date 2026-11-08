@@ -1,0 +1,2 @@
+export const DEFAULT_BREAK_GATE_QUESTIONS = 5;
+export const MAX_BREAK_GATE_QUESTIONS = 20;

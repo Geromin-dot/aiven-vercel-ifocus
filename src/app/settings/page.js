@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
@@ -168,7 +169,7 @@ export default function SettingsPage() {
 
   // 1. Focus Preferences State
   const [focusDuration, setFocusDuration] = useState(25);
-  const [breakGateQuestionCount, setBreakGateQuestionCount] = useState(3);
+  const [breakGateQuestionCount, setBreakGateQuestionCount] = useState(DEFAULT_BREAK_GATE_QUESTIONS);
   const [hasActiveBreakGateDeck, setHasActiveBreakGateDeck] = useState(false);
   const [activeDeckTitle, setActiveDeckTitle] = useState('');
   const [autoStartBreaks, setAutoStartBreaks] = useState(true);
@@ -214,7 +215,7 @@ export default function SettingsPage() {
   // Unsaved Changes Baseline State
   const [initialFocusPrefs, setInitialFocusPrefs] = useState({
     focusDuration: 25,
-    breakGateQuestionCount: 3,
+    breakGateQuestionCount: DEFAULT_BREAK_GATE_QUESTIONS,
     timerChimeSound: true,
     activePresenceEnabled: true,
     activePresenceInterval: 5,
@@ -346,7 +347,7 @@ export default function SettingsPage() {
       const savedTimer = localStorage.getItem('ifocus_timer_preferences');
       let loadedTimerPrefs = {
         focusDuration: 25,
-        breakGateQuestionCount: 3,
+        breakGateQuestionCount: DEFAULT_BREAK_GATE_QUESTIONS,
         timerChimeSound: true,
         activePresenceEnabled: true,
         activePresenceInterval: 5,
@@ -364,7 +365,7 @@ export default function SettingsPage() {
           loadedTimerPrefs.focusDuration = fd;
         }
         if (parsed.breakGateQuestionCount !== undefined) {
-          const bgCount = Number(parsed.breakGateQuestionCount) || 3;
+          const bgCount = Number(parsed.breakGateQuestionCount) || DEFAULT_BREAK_GATE_QUESTIONS;
           setBreakGateQuestionCount(bgCount);
           loadedTimerPrefs.breakGateQuestionCount = bgCount;
         }
@@ -461,7 +462,7 @@ export default function SettingsPage() {
       // Check if separate ifocus_breakgate_question_count exists
       const savedBgCount = localStorage.getItem('ifocus_breakgate_question_count');
       if (savedBgCount) {
-        const bgNum = parseInt(savedBgCount) || 3;
+        const bgNum = parseInt(savedBgCount) || DEFAULT_BREAK_GATE_QUESTIONS;
         setBreakGateQuestionCount(bgNum);
         loadedTimerPrefs.breakGateQuestionCount = bgNum;
       }
@@ -683,7 +684,7 @@ export default function SettingsPage() {
     if (e && e.preventDefault) e.preventDefault();
     setIsSavingProfile(true);
     try {
-      const cleanBgCount = Number(breakGateQuestionCount || 3);
+      const cleanBgCount = Number(breakGateQuestionCount || DEFAULT_BREAK_GATE_QUESTIONS);
       setBreakGateQuestionCount(cleanBgCount);
 
       const savedPrefs = savedCheckIntervals();
@@ -1357,16 +1358,16 @@ export default function SettingsPage() {
                 <input 
                   type="number" 
                   min="1" 
-                  max="10" 
+                  max={MAX_BREAK_GATE_QUESTIONS}
                   disabled={!hasActiveBreakGateDeck}
-                  className="settings-input" 
-                  value={!hasActiveBreakGateDeck ? 0 : (breakGateQuestionCount === 0 || breakGateQuestionCount === '0' ? '' : breakGateQuestionCount)} 
+                  className="settings-input"
+                  value={!hasActiveBreakGateDeck ? 0 : (breakGateQuestionCount === 0 || breakGateQuestionCount === '0' ? '' : breakGateQuestionCount)}
                   onChange={(e) => {
                     if (!hasActiveBreakGateDeck) return;
-                    const val = e.target.value === '' ? '' : Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
+                    const val = e.target.value === '' ? '' : Math.max(1, Math.min(MAX_BREAK_GATE_QUESTIONS, parseInt(e.target.value) || 1));
                     setBreakGateQuestionCount(val);
-                  }} 
-                  placeholder={!hasActiveBreakGateDeck ? '0 (Locked)' : 'e.g. 3 Questions'}
+                  }}
+                  placeholder={!hasActiveBreakGateDeck ? '0 (Locked)' : 'e.g. 5 Questions'}
                   style={{ 
                     padding: '0.6rem 0.85rem', 
                     fontSize: '0.9rem', 

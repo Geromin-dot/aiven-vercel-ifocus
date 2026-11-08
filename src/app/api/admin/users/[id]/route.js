@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../auth/[...nextauth]/route";
 import { prisma } from "../../../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { STUDENT_YEAR_LEVELS, updatedYearSection } from "@/lib/studentYearLevels";
 
 export async function PATCH(req, { params }) {
   try {
@@ -26,6 +27,10 @@ export async function PATCH(req, { params }) {
     const { id } = await params;
     const body = await req.json();
     const { status, reason, name, newPassword, yearLevel, section, yearSection, verificationStatus } = body;
+
+    if (yearLevel !== undefined && !STUDENT_YEAR_LEVELS.includes(yearLevel)) {
+      return NextResponse.json({ message: "Choose a valid year level." }, { status: 400 });
+    }
 
     const validStatuses = ["ACTIVE", "ON_HOLD", "BANNED"];
     if (status && !validStatuses.includes(status)) {
@@ -62,7 +67,7 @@ export async function PATCH(req, { params }) {
     // Check target user
     const targetUser = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, email: true, role: true }
+      select: { id: true, username: true, email: true, role: true, yearLevel: true, section: true, yearSection: true }
     });
 
     if (!targetUser) {
@@ -84,7 +89,7 @@ export async function PATCH(req, { params }) {
 
     let computedYearSection = yearSection;
     if (computedYearSection === undefined && (yearLevel !== undefined || section !== undefined)) {
-      computedYearSection = [yearLevel, section].filter(Boolean).join(" - ");
+      computedYearSection = updatedYearSection(targetUser, yearLevel ?? targetUser.yearLevel, section);
     }
 
     const updated = await prisma.user.update({
@@ -122,6 +127,8 @@ export async function PATCH(req, { params }) {
     } else if (verificationStatus) {
       successMessage = `Student account marked as ${verificationStatus === "VERIFIED" ? "Valid Account (Verified)" : verificationStatus === "REJECTED" ? "Invalid / Unverified Account" : "Pending Verification"}`;
       console.log(`[ADMIN ACTION] User ${updated.username} (${updated.email}) verification set to: ${verificationStatus} by Dean/Admin (${session.user.username})`);
+    } else if (yearLevel !== undefined) {
+      successMessage = "Student year level updated";
     } else {
       console.log(`[ADMIN ACTION] User ${updated.username} (${updated.email}) status changed to: ${status} by Dean/Admin (${session.user.username}). Reason: ${reason || 'N/A'}`);
     }

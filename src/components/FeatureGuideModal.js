@@ -205,7 +205,10 @@ export default function FeatureGuideModal({ isOpen, onClose, initialTopic = 'pom
       <div className={styles.frame} inert={isZoomed ? true : undefined}>
         <header className={styles.header}>
           <div><span className={styles.eyebrow}>GET TO KNOW IFOCUS</span><h2 id="feature-guide-title">Feature guide</h2></div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
+          <div className={styles.headerActions}>
+            <a className={styles.videoLink} href="https://www.youtube.com/watch?v=ydmefujKPIY" target="_blank" rel="noopener noreferrer">Watch tutorial <span aria-hidden="true">↗</span></a>
+            <button type="button" className={styles.close} onClick={onClose} aria-label="Close guide">×</button>
+          </div>
         </header>
         <div className={styles.content}>
         <nav className={styles.topics} aria-label="Guide topics">
