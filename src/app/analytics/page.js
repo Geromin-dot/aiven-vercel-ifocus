@@ -426,7 +426,7 @@ export default function AnalyticsPage() {
           flex-shrink: 0;
         }
         .analytics-grid-2x2 {
-          flex: 0 0 auto;
+          flex: 1 0 auto;
           display: grid;
           grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
           gap: 0.65rem;
@@ -449,6 +449,11 @@ export default function AnalyticsPage() {
           flex-direction: column;
           gap: 0.65rem;
           min-width: 0;
+        }
+        @media (min-width: 961px) {
+          .analytics-review-column > * { flex: 1 0 auto; }
+          .analytics-review-column > section { display: flex; flex-direction: column; }
+          .analytics-review-column dl { flex: 1; grid-auto-rows: 1fr; }
         }
         @media (max-width: 960px) {
           .analytics-page-root {
@@ -920,7 +925,6 @@ export default function AnalyticsPage() {
 
         <div className="analytics-review-column">
           <section aria-labelledby="breakgate-activity-title" style={{
-            alignSelf: 'start',
             width: '100%',
             minWidth: 0,
             padding: '0.9rem 1.15rem',

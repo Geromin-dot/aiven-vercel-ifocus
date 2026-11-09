@@ -225,13 +225,18 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
   ]);
   expect(retention.y - (activityBox.y + activityBox.height)).toBeGreaterThan(0);
   expect(retention.y - (activityBox.y + activityBox.height)).toBeLessThan(36);
-  const [focusColumn, reviewColumn, recallCard] = await Promise.all([
-    page.locator('.analytics-focus-column').boundingBox(),
-    page.locator('.analytics-review-column').boundingBox(),
-    page.locator('.analytics-review-column > :last-child').boundingBox(),
-  ]);
-  expect(Math.abs(focusColumn.y + focusColumn.height - (recallCard.y + recallCard.height))).toBeLessThan(3);
-  expect(reviewColumn.height).toBeLessThan(620);
+  for (const viewport of [{ width: 1920, height: 964 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(async () => {
+      const [root, focusColumn, recallCard] = await Promise.all([
+        page.locator('.analytics-page-root').boundingBox(),
+        page.locator('.analytics-focus-column').boundingBox(),
+        page.locator('.analytics-review-column > :last-child').boundingBox(),
+      ]);
+      const bottom = recallCard.y + recallCard.height;
+      return Math.max(Math.abs(root.y + root.height - bottom), Math.abs(focusColumn.y + focusColumn.height - bottom));
+    }).toBeLessThan(3);
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   const chart = page.locator('.analytics-chart-body');
   await expect(chart).toBeVisible();
