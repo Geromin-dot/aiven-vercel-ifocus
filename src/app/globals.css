@@ -4073,7 +4073,6 @@ textarea:focus {
   }
 
   .coach-main-grid {
-    align-items: start !important;
     height: auto !important;
     min-height: auto !important;
   }

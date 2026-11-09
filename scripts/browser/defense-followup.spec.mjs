@@ -132,6 +132,20 @@ test('Quick Reflection keeps the disclaimer in its header and the Study Hub open
 test('Coach and Feature Guide explain uncertainty and applying a strategy leaves focus paused', async ({ page, context }) => {
   await accountFixture(context);
   await page.goto('/coach');
+  const guidanceCard = page.locator('.coach-card-telemetry');
+  const journalCard = page.locator('.coach-card-journal');
+  await expect(guidanceCard).toBeVisible();
+  for (const width of [1920, 1280, 1050]) {
+    await page.setViewportSize({ width, height: 964 });
+    await expect.poll(async () => {
+      const [guidance, journal] = await Promise.all([guidanceCard.boundingBox(), journalCard.boundingBox()]);
+      return Math.abs(guidance.y + guidance.height - journal.y - journal.height);
+    }).toBeLessThan(2);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const [guidance, journal] = await Promise.all([guidanceCard.boundingBox(), journalCard.boundingBox()]);
+  expect(journal.y).toBeGreaterThanOrEqual(guidance.y + guidance.height);
+  await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.getByRole('region', { name: 'Research-backed study habits' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Disclaimer for AI Coach' }).click();
   const disclaimer = page.getByRole('dialog', { name: 'About AI Coach' });

@@ -803,7 +803,6 @@ export default function CoachPage() {
             borderRadius: '16px', 
             border: insight?.isIntervention ? '1.5px solid var(--warning)' : '1px solid var(--glass-border)',
             boxShadow: insight ? '0 4px 18px rgba(217, 119, 6, 0.1)' : '0 2px 10px rgba(0,0,0,0.02)', 
-            alignSelf: 'start',
             minHeight: 0, 
             display: 'flex', 
             flexDirection: 'column', 
@@ -1054,7 +1053,6 @@ export default function CoachPage() {
             boxShadow: '0 2px 10px rgba(0,0,0,0.02)', 
             display: 'flex', 
             flexDirection: 'column', 
-            height: '100%', 
             minHeight: 0,
             justifyContent: 'space-between',
             overflow: 'hidden'
