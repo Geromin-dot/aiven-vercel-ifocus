@@ -22,10 +22,13 @@ export function settlePresence(state, preferences = {}, now = Date.now()) {
   if (!state?.isRunning || !state.isFocus || state.presencePaused || preferences.activePresenceEnabled === false) return state;
   const total = Number(state.totalTime) || 1500;
   const interval = presenceInterval(state, preferences);
-  const baseline = Math.max(0, Number(state.lastPresenceCheckElapsed) || 0);
+  const elapsed = Math.max(0, total - remainingTime(state, now));
+  const previousCheck = Math.max(0, Number(state.lastPresenceCheckElapsed) || 0);
+  // Older clients carried the previous block's check into a fresh countdown.
+  const baseline = previousCheck > elapsed ? 0 : previousCheck;
   const dueElapsed = Math.min(total, baseline + interval);
   // Completion wins when the next check would fall at/after the end of focus.
-  if (baseline + interval >= total || total - remainingTime(state, now) < dueElapsed) return state;
+  if (baseline + interval >= total || elapsed < dueElapsed) return state;
   // Freeze at the FIRST missed check, even if the OS suspended JS for hours.
   // Never move an already recorded countdown backwards during legacy recovery.
   const remaining = Math.min(Number(state.timeLeft) || total, total - dueElapsed);

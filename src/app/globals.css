@@ -607,6 +607,42 @@ main {
     animation: iosTaskInsert 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
+.todo-item.todo-reorderable {
+  user-select: none;
+}
+
+.todo-reorderable .todo-text,
+.todo-reorderable .todo-priority-badge {
+  cursor: grab;
+}
+
+.todo-reorderable .todo-text {
+  touch-action: none;
+}
+
+.todo-reorderable .todo-text:active {
+  cursor: grabbing;
+}
+
+.todo-drag-handle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.todo-drag-handle:active {
+  cursor: grabbing;
+}
+
 .todo-item:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);

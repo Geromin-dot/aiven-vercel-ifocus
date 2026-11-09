@@ -10,6 +10,20 @@ let reconciliationPromise = null;
 let lastReconciliationAt = 0;
 const RECONCILIATION_COOLDOWN_MS = 10000;
 
+export function setBreakGateDeck(deck, userId) {
+  const key = 'ifocus_active_breakgate_deck';
+  const versionKey = `ifocus_breakgate_deck_updated_at_${userId}`;
+  const updatedAt = Math.max(Date.now(), Number(localStorage.getItem(versionKey) || 0) + 1);
+  if (deck) localStorage.setItem(key, JSON.stringify(deck));
+  else localStorage.removeItem(key);
+  localStorage.setItem(versionKey, String(updatedAt));
+  window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: Boolean(deck), deck } }));
+  fetch('/api/user/telemetry', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+    body: JSON.stringify({ telemetryState: { activeBreakGateDeck: deck, activeBreakGateDeckUpdatedAt: updatedAt } }),
+  }).catch(() => {});
+}
+
 export function reconcileCloudTelemetry() {
   const now = Date.now();
 
@@ -68,18 +82,6 @@ async function reconcileCloudTelemetryInternal() {
     try {
       const raw = localStorage.getItem("ifocus_active_idle_alert");
       if (raw) localIdleAlert = JSON.parse(raw);
-    } catch (e) {}
-
-    let localPrefs = {};
-    try {
-      const raw = localStorage.getItem("ifocus_timer_preferences");
-      if (raw) localPrefs = JSON.parse(raw);
-    } catch (e) {}
-
-    let localDeck = null;
-    try {
-      const raw = localStorage.getItem("ifocus_active_breakgate_deck");
-      if (raw) localDeck = JSON.parse(raw);
     } catch (e) {}
 
     let localCustomTimer = null;
@@ -196,6 +198,10 @@ async function reconcileCloudTelemetryInternal() {
     }
 
     // 7. Reconcile Timer Preferences & Checkpoint
+    let localPrefs = {};
+    try {
+      localPrefs = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+    } catch {}
     const mergedPrefs = { ...cloudPrefs, ...localPrefs };
     if (Object.keys(mergedPrefs).length > 0) {
       localStorage.setItem("ifocus_timer_preferences", JSON.stringify(mergedPrefs));
@@ -231,11 +237,23 @@ async function reconcileCloudTelemetryInternal() {
       }
     }
 
-    // 8. Reconcile Active BreakGate Deck
-    const effectiveDeck = localDeck || cloud.activeBreakGateDeck || null;
+    // An explicit deactivation is a newer choice, even though the deck is null.
+    const deckKey = 'ifocus_active_breakgate_deck';
+    const deckVersionKey = `ifocus_breakgate_deck_updated_at_${data.userId}`;
+    const localDeck = JSON.parse(localStorage.getItem(deckKey) || 'null');
+    const localDeckVersion = Number(localStorage.getItem(deckVersionKey)) || 0;
+    const cloudDeckVersion = Number(cloud.activeBreakGateDeckUpdatedAt) || 0;
+    const validDeck = deck => deck && (!deck.userId || deck.userId === data.userId) ? deck : null;
+    const useLocalDeck = localDeckVersion >= cloudDeckVersion && (localDeckVersion > 0 || validDeck(localDeck));
+    // Old cloud snapshots could outlive a local deactivation. Only restore a
+    // cloud selection that was explicitly synced by the versioned selector.
+    const effectiveDeck = validDeck(useLocalDeck ? localDeck : cloudDeckVersion ? cloud.activeBreakGateDeck : null);
     if (effectiveDeck) {
-      localStorage.setItem("ifocus_active_breakgate_deck", JSON.stringify(effectiveDeck));
+      localStorage.setItem(deckKey, JSON.stringify(effectiveDeck));
+    } else {
+      localStorage.removeItem(deckKey);
     }
+    if (cloudDeckVersion > localDeckVersion) localStorage.setItem(deckVersionKey, String(cloudDeckVersion));
 
     // 9. BI-DIRECTIONAL PUSH: If local had data that cloud lacked or was behind on, push up to Aiven database!
     const isCloudMissingEvents = mergedEvents.length > remoteEvents.length;
@@ -246,7 +264,7 @@ async function reconcileCloudTelemetryInternal() {
     const isCloudBehindTelem = localTelem && localTelemTime > cloudTelemTime;
     const isCloudBehindInsight = localInsight && localInsightTime > cloudInsightTime;
     const isCloudMissingPrefs = Object.keys(localPrefs).length > 0 && Object.keys(cloudPrefs).length < Object.keys(localPrefs).length;
-    const isCloudMissingDeck = !cloud.activeBreakGateDeck && Boolean(effectiveDeck);
+    const isCloudMissingDeck = localDeckVersion > cloudDeckVersion;
     const isCloudMissingCustomTimer = !cloud.customTimer && Boolean(localCustomTimer);
 
     if (
@@ -276,7 +294,7 @@ async function reconcileCloudTelemetryInternal() {
             latestTelemetry: effectiveTelem,
             insightData: effectiveInsight,
             activeIdleAlert: effectiveIdle,
-            activeBreakGateDeck: effectiveDeck,
+            ...(isCloudMissingDeck ? { activeBreakGateDeck: effectiveDeck, activeBreakGateDeckUpdatedAt: localDeckVersion } : {}),
             customTimer: effectiveCustomTimer,
             updatedAt: new Date().toISOString()
           },
@@ -289,9 +307,9 @@ async function reconcileCloudTelemetryInternal() {
     window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated", { detail: effectiveTelem }));
     window.dispatchEvent(new CustomEvent("ifocus_journal_updated", { detail: mergedJournal }));
     window.dispatchEvent(new CustomEvent("ifocus_mastery_updated", { detail: mergedMastered }));
-    if (effectiveDeck) {
-      window.dispatchEvent(new CustomEvent("ifocus_breakgate_deck_changed", { detail: { active: true, deck: effectiveDeck } }));
-    }
+    window.dispatchEvent(new CustomEvent("ifocus_breakgate_deck_changed", {
+      detail: { active: Boolean(effectiveDeck), deck: effectiveDeck }
+    }));
 
     return {
       mergedEvents,

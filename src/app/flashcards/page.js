@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import HelpButton from '@/components/HelpButton';
 import emptyStateImg from '../../img/empty_flashcard_state.png';
-import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { reconcileCloudTelemetry, setBreakGateDeck } from '@/lib/telemetrySync';
 
 // Helper: Ensure every card has a smart, active-recall mnemonic hint
 const getCardHint = (card, isDefFirst) => {
@@ -93,6 +94,7 @@ const playToastSound = () => {
 };
 
 export default function FlashcardsPage() {
+  const { data: session } = useSession();
   const [view, setView] = useState('collections'); // 'collections' | 'create' | 'loading' | 'study'
 
   // Collections State
@@ -198,15 +200,13 @@ export default function FlashcardsPage() {
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('ifocus_active_breakgate_deck');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && (parsed.id || parsed.title)) {
-          setActiveBreakGateId(parsed.id || parsed.title);
-        }
-      }
-    } catch(e) {}
+    const updateActiveDeck = () => {
+      const deck = JSON.parse(localStorage.getItem('ifocus_active_breakgate_deck') || 'null');
+      setActiveBreakGateId(deck?.id || deck?.title || null);
+    };
+    updateActiveDeck();
+    window.addEventListener('ifocus_breakgate_deck_changed', updateActiveDeck);
+    return () => window.removeEventListener('ifocus_breakgate_deck_changed', updateActiveDeck);
   }, []);
 
   const handleToggleActivateBreakGate = (deck, e) => {
@@ -218,20 +218,12 @@ export default function FlashcardsPage() {
     setTimeout(() => setActivatingId(null), 650);
 
     if (activeBreakGateId === currentId) {
-      localStorage.removeItem('ifocus_active_breakgate_deck');
-      setActiveBreakGateId(null);
+      setBreakGateDeck(null, session?.user?.id);
       showToast('BreakGate deactivated for this deck.');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
-      }
     } else {
-      localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(deck));
-      setActiveBreakGateId(currentId);
+      setBreakGateDeck(deck, session?.user?.id);
       // Open clean on-screen pop-up modal
       setBreakGateModalDeck(deck);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: true, deck } }));
-      }
     }
   };
 
@@ -519,8 +511,7 @@ export default function FlashcardsPage() {
       if (res.ok) {
         setDecks(prev => prev.filter(d => d.id !== deckToDelete.id));
         if (activeBreakGateId === deckToDelete.id || activeBreakGateId === deckToDelete.title) {
-          localStorage.removeItem('ifocus_active_breakgate_deck');
-          setActiveBreakGateId(null);
+          setBreakGateDeck(null, session?.user?.id);
         }
         showToast('Deck deleted successfully.');
         setDeckToDelete(null);

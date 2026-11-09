@@ -1,0 +1,103 @@
+import { test, expect } from '@playwright/test';
+import { accountFixture } from './account-fixture.mjs';
+
+test('presence and progress checks repeat in each focus block and completed time retries', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context);
+  let failStudySave = true;
+  let failCheckpoint = false;
+  const saved = [];
+  await page.route('**/api/user/telemetry', route => {
+    if (failCheckpoint && route.request().method() === 'POST') {
+      return route.fulfill({ status: 503, json: {} });
+    }
+    return route.fallback();
+  });
+  await page.route('**/api/study-sessions', async route => {
+    if (route.request().method() === 'GET') return route.fallback();
+    if (failStudySave) return route.fulfill({ status: 503, json: { message: 'Try again' } });
+    const input = route.request().postDataJSON();
+    saved.push(input.timerSessionId);
+    return route.fulfill({ json: { session: {
+      id: input.timerSessionId, createdAt: new Date().toISOString(), duration: input.duration,
+    } } });
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('ifocus_timer_preferences', JSON.stringify({
+      activePresenceEnabled: true, activePresenceInterval: 5,
+      burnoutCheckEnabled: true, burnoutCheckMinutes: 10, autoStartBreaks: true,
+    }));
+    localStorage.setItem('ifocus_sound_preferences', JSON.stringify({ dailyReminder: false }));
+    localStorage.setItem('ifocus_timer_state', JSON.stringify({
+      isFocus: true, isRunning: true, sessionCount: 1, timerPreset: '25/5',
+      timeLeft: 1500, totalTime: 1500, targetEndTime: Date.now() + 1500000,
+      timerSessionId: 'first-test-block', authSessionId: 'history-login', userId: 'history-student',
+    }));
+  });
+  await page.goto('/dashboard');
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
+  const presence = page.getByRole('button', { name: 'Continue Session', exact: true });
+  const progress = page.getByText('Study Progress Check', { exact: true });
+  const confirmNextPresence = async () => {
+    await page.clock.fastForward(301000);
+    await expect(presence).toBeVisible();
+    await presence.click();
+  };
+
+  for (let block = 1; block <= 2; block++) {
+    await confirmNextPresence();
+    await expect(progress).toBeHidden();
+    await page.clock.fastForward(301000);
+    await expect(presence).toBeVisible();
+    await page.getByRole('button', { name: 'Stay Paused' }).click();
+    await page.clock.fastForward(1000);
+    await expect(progress).toBeVisible();
+    await page.getByRole('button', { name: 'Go to Pomodoro Timer' }).click();
+    failCheckpoint = true;
+    const failedCheckpoint = page.waitForResponse(response =>
+      response.url().endsWith('/api/user/telemetry') && response.status() === 503);
+    await page.locator('#timerToggleBtn').click();
+    await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
+    await failedCheckpoint;
+    await expect(page.getByText('Timer could not sync')).toHaveCount(0);
+    failCheckpoint = false;
+    await confirmNextPresence();
+    await confirmNextPresence();
+    await page.clock.fastForward(301000);
+    const nextBlock = page.getByRole('button', { name: `Skip Break & Start Session ${block + 1}` });
+    await expect(nextBlock).toBeVisible();
+    await nextBlock.click();
+  }
+
+  const pendingIds = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('ifocus_pending_study_sessions')).map(item => item.timerSessionId));
+  expect(pendingIds).toHaveLength(2);
+  expect(new Set(pendingIds).size).toBe(2);
+  failStudySave = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => saved).toEqual(pendingIds);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_pending_study_sessions'))).toBeNull();
+});
+
+test('dragging a task saves the new order and it survives reload', async ({ page, context }) => {
+  const tasks = ['Read chapter', 'Write notes', 'Practice quiz'].map((text, index) => ({
+    id: String(index), text, priority: 'medium', completed: false,
+  }));
+  const account = await accountFixture(context, true, { tasks });
+  await page.goto('/dashboard');
+  const source = page.locator('.todo-text').filter({ hasText: /^Read chapter$/ });
+  const target = page.locator('.todo-text').filter({ hasText: /^Practice quiz$/ });
+  await expect(source).toBeVisible();
+  const start = await source.boundingBox();
+  const end = await target.boundingBox();
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 8 });
+  expect(await page.evaluate(() => window.getSelection().toString())).toBe('');
+  await page.mouse.up();
+  await expect.poll(account.savedOrder).toEqual(['1', '2', '0']);
+  await page.reload();
+  await expect(page.locator('[data-todo-id]')).toHaveText([
+    /Write notes/, /Practice quiz/, /Read chapter/,
+  ]);
+});

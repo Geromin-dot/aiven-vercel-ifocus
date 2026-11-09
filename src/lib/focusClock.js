@@ -43,12 +43,13 @@ export function resolveFocusClock(clock = {}, resolvedIds = [], now = Date.now()
     ? { ...settleFocusClock(item, now), runningSince: null, discarded: true } : item) };
 }
 
-export function verifiedFocusSeconds(entry, requested, recovery = false, now = Date.now()) {
+export function verifiedFocusSeconds(entry, requested, recovery = false, now = Date.now(), completed = false) {
   const settled = settleFocusClock(entry, now);
   if (!settled || settled.discarded) throw new Error('This session has no server-verified study time. Start a new timer while connected.');
   const seconds = Math.min((recovery ? Math.floor : Math.round)(settled.elapsedMs / 1000), Math.floor(settled.plannedMs / 1000));
   // Recovery saves the available verified time, even if a cached browser timer is ahead.
-  if (!Number.isInteger(requested) || requested <= 0 || (!recovery && requested > seconds + 2)) throw new Error('Requested time exceeds the server-verified focus time.');
+  const completedBlock = completed && requested === settled.plannedMs / 1000;
+  if (!Number.isInteger(requested) || requested <= 0 || (!recovery && !completedBlock && requested > seconds + 2)) throw new Error('Requested time exceeds the server-verified focus time.');
   const duration = Math.min(seconds, requested);
   if (duration < (recovery ? 60 : 1)) throw new Error(recovery ? 'Unfinished sessions need at least one verified minute.' : 'No elapsed focus time has been verified yet.');
   return { duration, entry: { ...settled, runningSince: null } };

@@ -98,6 +98,11 @@ export async function POST(req) {
             : body.telemetryState;
 
           const merged = { ...existingTelemetry, ...incoming };
+          if (Object.hasOwn(incoming, 'activeBreakGateDeck') &&
+              (Number(incoming.activeBreakGateDeckUpdatedAt) || 0) < (Number(existingTelemetry.activeBreakGateDeckUpdatedAt) || 0)) {
+            merged.activeBreakGateDeck = existingTelemetry.activeBreakGateDeck;
+            merged.activeBreakGateDeckUpdatedAt = existingTelemetry.activeBreakGateDeckUpdatedAt;
+          }
           // A delayed AFK/keyboard request must not replace a newer interaction.
           for (const field of ['latestTelemetry', 'insightData', 'activeIdleAlert']) {
             const previous = existingTelemetry[field];

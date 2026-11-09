@@ -44,6 +44,13 @@ test('invented durations and browser timestamps cannot create elapsed time', () 
   assert.equal(verifiedFocusSeconds(clock.sessions[0], 30, false, start + 30000).duration, 30);
 });
 
+test('completed blocks save verified elapsed time despite a delayed checkpoint', () => {
+  const entry = { plannedMs: 1500000, elapsedMs: 1496200, runningSince: null };
+  assert.throws(() => verifiedFocusSeconds(entry, 1500, false, start), /exceeds/);
+  assert.equal(verifiedFocusSeconds(entry, 1500, false, start, true).duration, 1496);
+  assert.throws(() => verifiedFocusSeconds(entry, 1600, false, start, true), /exceeds/);
+});
+
 test('a missed presence check caps time even after hours offline', () => {
   const clock = advance({}, timer(), 0);
   assert.equal(verifiedFocusSeconds(clock.sessions[0], 60, true, start + 3600000).duration, 60);

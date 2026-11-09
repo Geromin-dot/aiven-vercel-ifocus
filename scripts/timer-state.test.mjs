@@ -33,6 +33,14 @@ test('manual pause/play at 13:47 preserves progress and does not trigger presenc
   assert.equal(settlePresence(resumed, {}, start + 407000).timeLeft, 720);
 });
 
+test('an inherited check from a previous focus block cannot skip the first check', () => {
+  const nextBlock = { ...session(300), sessionCount: 2, lastPresenceCheckElapsed: 600 };
+  const paused = settlePresence(nextBlock, {}, start + 300000);
+  assert.equal(paused.presencePaused, true);
+  assert.equal(paused.timeLeft, 600);
+  assert.equal(paused.lastPresenceCheckElapsed, 300);
+});
+
 test('background at 14:05 freezes at the FIRST one-minute check even after long suspension', () => {
   const hidden = { ...session(60), timeLeft: 845 };
   const paused = settlePresence(hidden, {}, start + 500000);

@@ -52,6 +52,9 @@ export default function CommandCenterPage() {
   const [todos, setTodos] = useState([]);
   const todosRef = useRef(todos);
   const [taskOrderSync, setTaskOrderSync] = useState('loading');
+  const taskOrderRequest = useRef(Promise.resolve());
+  const todoDrag = useRef(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
   useEffect(() => { todosRef.current = todos; }, [todos]);
   const [todoInput, setTodoInput] = useState('');
   const [todoPriority, setTodoPriority] = useState('medium');
@@ -101,7 +104,6 @@ export default function CommandCenterPage() {
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [saveSessionToast, setSaveSessionToast] = useState({ show: false, message: '' });
-  const timerStartPendingRef = useRef(false);
   const sessionSavePendingRef = useRef(false);
 
   // AI-Adapted Timer State & Override Confirmation Prompt
@@ -919,7 +921,7 @@ export default function CommandCenterPage() {
   useEffect(() => {
     if (session?.user?.id) {
       fetch('/api/decks')
-        .then(res => res.ok ? res.json() : [])
+        .then(res => res.ok ? res.json() : null)
         .then(userDecks => {
           if (Array.isArray(userDecks)) {
             const raw = localStorage.getItem('ifocus_active_breakgate_deck');
@@ -1250,8 +1252,8 @@ export default function CommandCenterPage() {
     window.dispatchEvent(new CustomEvent('ifocus_skip_break'));
   };
 
-  const startTimerDirectly = async () => {
-    if (timerStartPendingRef.current || sessionSavePendingRef.current) return;
+  const startTimerDirectly = () => {
+    if (sessionSavePendingRef.current) return;
     setShowNoBreakGateModal(false);
     const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
     const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
@@ -1289,18 +1291,6 @@ export default function CommandCenterPage() {
       userId: session?.user?.id,
       timerSessionId: baseState.timerSessionId || crypto.randomUUID(),
     };
-    // Confirm the server is tracking this timer before starting the visible countdown.
-    timerStartPendingRef.current = true;
-    try {
-      await syncTimerCheckpoint(nextState);
-      if (nextState.isRunning) Object.assign(nextState, toggleTimerState(baseState, preferences));
-    } catch (error) {
-      setSaveSessionToast({ show: true, title: 'Timer could not sync', error: true,
-        message: 'Please check your connection and try again. Your timer has not been changed.' });
-      return;
-    } finally {
-      timerStartPendingRef.current = false;
-    }
     setIsActive(nextState.isRunning);
     setTimeLeft(nextState.timeLeft);
     try {
@@ -1320,7 +1310,7 @@ export default function CommandCenterPage() {
       setShowAiRestExitModal(true);
       return;
     }
-    if (!isActive) {
+    if (!isActive && isFocus && timeLeft === getTotalTime()) {
       // User is starting a focus session: check if a BreakGate deck is active
       let hasDeck = Boolean(activeBreakGateDeck);
       if (!hasDeck) {
@@ -1427,7 +1417,7 @@ export default function CommandCenterPage() {
   };
 
   const handleSaveAndEndSession = async () => {
-    if (sessionSavePendingRef.current || timerStartPendingRef.current) return;
+    if (sessionSavePendingRef.current) return;
     setShowQuitModal(false);
     setIsActive(false);
     const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
@@ -1893,18 +1883,68 @@ export default function CommandCenterPage() {
 
   const persistTaskOrder = async (orderedTasks) => {
     setTaskOrderSync('saving');
-    try {
+    const request = taskOrderRequest.current.catch(() => {}).then(async () => {
       const response = await fetch('/api/todos/reorder', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderedIds: orderedTasks.map(task => task.id) }),
       });
       if (!response.ok) throw new Error('Task order was not saved');
-      setTaskOrderSync('synced');
+    });
+    taskOrderRequest.current = request;
+    try {
+      await request;
+      if (taskOrderRequest.current === request) setTaskOrderSync('synced');
       return true;
     } catch {
-      setTaskOrderSync('error');
+      if (taskOrderRequest.current === request) setTaskOrderSync('error');
       return false;
     }
+  };
+
+  const moveTodo = (fromId, toId) => {
+    if (!toId || fromId === toId) return;
+    const visible = [...filteredTodos];
+    const fromIndex = visible.findIndex(task => task.id === fromId);
+    const toIndex = visible.findIndex(task => task.id === toId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    visible.splice(toIndex, 0, ...visible.splice(fromIndex, 1));
+    const visibleIds = new Set(visible.map(task => task.id));
+    const order = todosRef.current.map(task => visibleIds.has(task.id) ? visible.shift() : task);
+    todosRef.current = order;
+    setTodos(order);
+    void persistTaskOrder(order);
+  };
+
+  const startTodoDrag = (event, todoId) => {
+    if (!event.isPrimary || event.button !== 0 || editingTodoId === todoId) return;
+    const handle = event.target.closest('.todo-drag-handle');
+    if (!handle && event.target.closest('button, input, select, .todo-checkbox, .todo-action-pill')) return;
+    if (event.pointerType === 'touch' && !handle && !event.target.closest('.todo-text')) return;
+    const captureTarget = handle || event.currentTarget;
+    captureTarget.setPointerCapture(event.pointerId);
+    todoDrag.current = {
+      id: todoId, pointerId: event.pointerId, startY: event.clientY, active: false, targetId: null,
+    };
+  };
+
+  const updateTodoDrag = (event) => {
+    const drag = todoDrag.current;
+    if (drag?.pointerId !== event.pointerId || drag.id !== event.currentTarget.dataset.todoId) return;
+    if (!drag.active) {
+      if (Math.abs(event.clientY - drag.startY) < 5) return;
+      drag.active = true;
+    }
+    const targetId = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-todo-id]')?.dataset.todoId;
+    drag.targetId = targetId === drag.id ? null : targetId;
+    setDropTargetId(drag.targetId);
+  };
+
+  const finishTodoDrag = (event, cancelled = false) => {
+    const drag = todoDrag.current;
+    if (drag?.pointerId !== event.pointerId) return;
+    todoDrag.current = null;
+    setDropTargetId(null);
+    if (!cancelled && drag.active) moveTodo(drag.id, drag.targetId);
   };
 
   // AI Coach Logic
@@ -2340,13 +2380,38 @@ export default function CommandCenterPage() {
             filteredTodos.map((todo) => (
               <div 
                 key={todo.id} 
-                className={`todo-item ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''}`}
+                data-todo-id={todo.id}
+                className={`todo-item ${editingTodoId !== todo.id ? 'todo-reorderable' : ''} ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''}`}
+                onPointerDown={event => startTodoDrag(event, todo.id)}
+                onPointerMove={updateTodoDrag}
+                onPointerUp={finishTodoDrag}
+                onPointerCancel={event => finishTodoDrag(event, true)}
+                onLostPointerCapture={event => finishTodoDrag(event, true)}
                 style={{
                   position: 'relative',
                   overflow: 'hidden',
-                  borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`
+                  borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`,
+                  boxShadow: dropTargetId === todo.id ? 'inset 0 0 0 2px var(--primary-accent)' : undefined,
                 }}
               >
+                <button
+                  type="button"
+                  className="todo-drag-handle"
+                  aria-label={`Reorder ${todo.text}. Use the Up and Down arrow keys to move it.`}
+                  title="Hold and drag to reorder"
+                  onKeyDown={event => {
+                    if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                    event.preventDefault();
+                    const index = filteredTodos.findIndex(task => task.id === todo.id);
+                    moveTodo(todo.id, filteredTodos[index + (event.key === 'ArrowUp' ? -1 : 1)]?.id);
+                  }}
+                >
+                  <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true">
+                    <circle cx="4" cy="4" r="1.5" /><circle cx="10" cy="4" r="1.5" />
+                    <circle cx="4" cy="9" r="1.5" /><circle cx="10" cy="9" r="1.5" />
+                    <circle cx="4" cy="14" r="1.5" /><circle cx="10" cy="14" r="1.5" />
+                  </svg>
+                </button>
                 <div 
                   className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
                   onClick={() => toggleTodo(todo.id)}

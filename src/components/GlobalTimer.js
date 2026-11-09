@@ -224,8 +224,6 @@ export default function GlobalTimer() {
   const [showBurnoutModal, setShowBurnoutModal] = useState(false);
   const [isTestBurnoutModal, setIsTestBurnoutModal] = useState(false);
   const [burnoutModalMinutes, setBurnoutModalMinutes] = useState(20);
-  const tasksCompletedInSessionRef = useRef(0);
-  const burnoutCheckedThisSessionRef = useRef(false);
   const lastTimerCheckpointSyncRef = useRef(0);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
@@ -496,6 +494,13 @@ export default function GlobalTimer() {
         (!previous?.isFocus || previous.timeLeft !== nextState.timeLeft);
       const normalizedState = {
         ...nextState,
+        ...(newFocusBlock ? {
+          lastPresenceCheckElapsed: 0,
+          lastPresenceElapsed: 0,
+          lastPresenceRemaining: nextState.totalTime,
+          studyProgressChecked: false,
+          studyTaskCompleted: false,
+        } : {}),
         updatedAt: Date.now(),
         deviceId: getTimerDeviceId(),
         timerSessionId: newFocusBlock ? crypto.randomUUID() : (nextState.timerSessionId || crypto.randomUUID()),
@@ -543,11 +548,13 @@ export default function GlobalTimer() {
     window.addEventListener('ifocus_timer_sync', pushCheckpoint);
     window.addEventListener('ifocus_timer_checkpoint', pushCheckpoint);
     window.addEventListener('pagehide', pushCheckpoint);
+    window.addEventListener('online', pushCheckpoint);
     return () => {
       clearInterval(interval);
       window.removeEventListener('ifocus_timer_sync', pushCheckpoint);
       window.removeEventListener('ifocus_timer_checkpoint', pushCheckpoint);
       window.removeEventListener('pagehide', pushCheckpoint);
+      window.removeEventListener('online', pushCheckpoint);
     };
   }, [session?.user?.id, session?.user?.sessionId, session?.error, isAdmin, getEffectivePath, readStorageState]);
 
@@ -837,7 +844,10 @@ export default function GlobalTimer() {
       triggerBurnoutCheck(true, mins || 20);
     };
     const handleTaskCompleted = () => {
-      tasksCompletedInSessionRef.current += 1;
+      const current = readStorageState();
+      if (current?.isFocus && remainingTime(current) < current.totalTime) {
+        localStorage.setItem('ifocus_timer_state', JSON.stringify({ ...current, studyTaskCompleted: true }));
+      }
     };
 
     window.addEventListener("ifocus_trigger_afk_coach_test", handleTestTrigger);
@@ -849,7 +859,7 @@ export default function GlobalTimer() {
       window.removeEventListener("ifocus_trigger_burnout_check_test", handleBurnoutTest);
       window.removeEventListener("ifocus_task_completed", handleTaskCompleted);
     };
-  }, [triggerIdleCoachIntervention, triggerBurnoutCheck]);
+  }, [triggerIdleCoachIntervention, triggerBurnoutCheck, readStorageState]);
 
   // Idle AFK Coach Inactivity Watcher (When NO timer is running)
   useEffect(() => {
@@ -912,39 +922,39 @@ export default function GlobalTimer() {
 
   // Retry pending study saves when the connection returns.
   useEffect(() => {
+    if (!session?.user?.id || session.error || isAdmin) return;
+    let syncing = false;
     const syncPendingOfflineSessions = async () => {
+      if (syncing || !navigator.onLine) return;
+      syncing = true;
       try {
         const raw = localStorage.getItem('ifocus_pending_study_sessions');
         if (!raw) return;
         const pending = JSON.parse(raw);
         if (!Array.isArray(pending) || pending.length === 0) return;
 
-        const remaining = [];
         for (const sessionItem of pending) {
+          if (sessionItem.userId && sessionItem.userId !== session.user.id) continue;
           try {
             await saveVerifiedStudySession(sessionItem);
-          } catch (e) {
-            remaining.push(sessionItem);
-          }
+          } catch {}
         }
-
-        if (remaining.length === 0) {
-          localStorage.removeItem('ifocus_pending_study_sessions');
-        } else {
-          localStorage.setItem('ifocus_pending_study_sessions', JSON.stringify(remaining));
-        }
-      } catch (err) {}
+      } catch {} finally {
+        syncing = false;
+      }
     };
 
     window.addEventListener('online', syncPendingOfflineSessions);
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       syncPendingOfflineSessions();
     }
+    const retry = setInterval(syncPendingOfflineSessions, 30000);
 
     return () => {
       window.removeEventListener('online', syncPendingOfflineSessions);
+      clearInterval(retry);
     };
-  }, []);
+  }, [session?.user?.id, session?.error, isAdmin]);
 
   // Initialize and listen to sync and test events
   useEffect(() => {
@@ -1082,6 +1092,7 @@ export default function GlobalTimer() {
 
     const handleSkipBreakEvent = () => {
       const current = readStorageState() || stateRef.current;
+      if (current.isFocus || current.breakGatePending) return;
       let maxSessions = 4;
       if (current.timerPreset === "Custom") {
         if (current.customSessions) maxSessions = Number(current.customSessions) || 1;
@@ -1240,9 +1251,9 @@ export default function GlobalTimer() {
     if (!session?.user?.id || session.error || isAdmin || isExemptPath(getEffectivePath())) return;
     const interval = setInterval(() => {
       const current = readStorageState() || stateRef.current;
-      if (!current.isRunning || !current.targetEndTime) {
-        return;
-      }
+      const countingDown = current.isRunning && current.targetEndTime;
+      if (!countingDown && (!current.isFocus || current.presencePaused ||
+          current.timeLeft >= current.totalTime || current.studyProgressChecked || current.studyTaskCompleted)) return;
 
       const now = Date.now();
       const remainingSeconds = remainingTime(current, now);
@@ -1261,41 +1272,23 @@ export default function GlobalTimer() {
           'ifocus-presence', PRESENCE_NOTIFICATION_ACTIONS, readStorageState() || settled);
         return;
       }
-      if (current.isFocus) {
-        // --- 1.1 TASK STAGNATION & BURNOUT CHECK (Focus without completed task) ---
-        if (!burnoutCheckedThisSessionRef.current) {
-          const livePath = getEffectivePath();
-          if (!isExemptPath(livePath) && !isAdmin) {
-            let burnoutCheckEnabled = true;
-            let burnoutCheckMinutes = 20;
-            try {
-              const rawPrefs = localStorage.getItem("ifocus_timer_preferences");
-              if (rawPrefs) {
-                const prefs = JSON.parse(rawPrefs);
-                if (prefs.burnoutCheckEnabled !== undefined) {
-                  burnoutCheckEnabled = Boolean(prefs.burnoutCheckEnabled);
-                }
-                if (prefs.burnoutCheckMinutes) {
-                  burnoutCheckMinutes = Number(prefs.burnoutCheckMinutes);
-                }
-              }
-            } catch (e) {}
-
-            const focusElapsedSecs = Math.max(0, totalTime - remainingSeconds);
-            const focusElapsedMins = Math.floor(focusElapsedSecs / 60);
-
-            if (burnoutCheckEnabled && focusElapsedMins >= burnoutCheckMinutes && tasksCompletedInSessionRef.current === 0) {
-              burnoutCheckedThisSessionRef.current = true;
-              triggerBurnoutCheck(false, burnoutCheckMinutes);
-            }
-          }
+      let studyProgressChecked = current.studyProgressChecked;
+      const progressCheckMinutes = Number(preferences.burnoutCheckMinutes) || 20;
+      if (current.isFocus && remainingSeconds > 0 && !studyProgressChecked && !current.studyTaskCompleted &&
+          preferences.burnoutCheckEnabled !== false && elapsedSeconds >= progressCheckMinutes * 60) {
+        studyProgressChecked = true;
+        triggerBurnoutCheck(false, progressCheckMinutes);
+      }
+      if (!countingDown) {
+        if (studyProgressChecked) {
+          localStorage.setItem('ifocus_timer_state', JSON.stringify({ ...current, studyProgressChecked }));
         }
+        return;
       }
 
       // --- 2. TIMER FINISHED (remainingSeconds === 0) ---
       if (remainingSeconds <= 0) {
-        tasksCompletedInSessionRef.current = 0;
-        burnoutCheckedThisSessionRef.current = false;
+        setShowBurnoutModal(false);
         playCompletionAlarm();
 
         // Check if an active deck is set for BreakGate
@@ -1391,24 +1384,17 @@ export default function GlobalTimer() {
             // Retain pending time if the connection drops; verify it after reconnection.
             const sessionPayload = {
               timerSessionId: current.timerSessionId,
+              userId: session.user.id,
               duration: totalTime,
-              score: 100,
+              completed: true,
               deckId: breakGateDeck?.id || null,
               createdAt: new Date().toISOString()
             };
 
-            const recordPendingOffline = (payload) => {
-              try {
-                queueStudySession(payload);
-              } catch (e) {}
-            };
-
-            if (typeof navigator !== 'undefined' && !navigator.onLine) {
-              recordPendingOffline(sessionPayload);
-            } else {
-              saveVerifiedStudySession(sessionPayload).catch(() => {
-                recordPendingOffline(sessionPayload);
-              });
+            queueStudySession(sessionPayload);
+            if (navigator.onLine) {
+              // Let the phase transition checkpoint stop the server clock first.
+              queueMicrotask(() => saveVerifiedStudySession(sessionPayload).catch(() => {}));
             }
           } catch (e) {
             console.warn("Could not save session stats:", e);
@@ -1629,6 +1615,7 @@ export default function GlobalTimer() {
       // --- 3. NORMAL 1-SECOND TICK ---
       const updatedState = {
         ...current,
+        studyProgressChecked,
         timeLeft: remainingSeconds,
         lastPresenceCheckElapsed: typeof current.lastPresenceCheckElapsed === "number" ? current.lastPresenceCheckElapsed : 0,
         lastPresenceRemaining: remainingSeconds,
@@ -1740,9 +1727,10 @@ export default function GlobalTimer() {
   }, []);
 
   // Handle BreakGate Completion
-  const handleBreakGateComplete = () => {
+  const handleBreakGateComplete = useCallback(() => {
     setShowBreakGateModal(false);
-    const current = readStorageState() || timerState;
+    const current = readStorageState() || stateRef.current;
+    if (!current.breakGatePending) return;
 
     let maxSessions = 4;
     let focusDuration = 25 * 60;
@@ -1844,7 +1832,13 @@ export default function GlobalTimer() {
       customBreakDuration: breakDuration,
     };
     commitStorageState(breakState, true);
-  };
+  }, [readStorageState, commitStorageState]);
+
+  useEffect(() => {
+    if (timerState.breakGatePending && !localStorage.getItem('ifocus_active_breakgate_deck')) {
+      handleBreakGateComplete();
+    }
+  }, [timerState.breakGatePending, activeBreakGateDeck, handleBreakGateComplete]);
 
   const handleBreakGateSkip = () => {
     handleBreakGateComplete();
@@ -2602,7 +2596,7 @@ export default function GlobalTimer() {
       )}
 
       {/* Global Task Stagnation & Burnout Check Modal (100% Emoji-Free) */}
-      {showBurnoutModal && (
+      {showBurnoutModal && !showPresenceModal && (
         <div
           id="globalBurnoutCheckModal"
           style={{

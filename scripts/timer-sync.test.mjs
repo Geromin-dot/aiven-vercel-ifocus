@@ -56,6 +56,21 @@ async function setup(local, cloud, beforeResponse = () => {}) {
   return { storage, events, requests };
 }
 
+test('a cloud response in flight cannot reactivate a deactivated BreakGate deck', async () => {
+  const deck = { id: 'old-deck', userId: 'student-1' };
+  const { storage, requests } = await setup({}, { activeBreakGateDeck: deck, activeBreakGateDeckUpdatedAt: 100 }, local => {
+    local.set('ifocus_breakgate_deck_updated_at_student-1', '200');
+  });
+  assert.equal(storage.has('ifocus_active_breakgate_deck'), false);
+  const write = requests.find(request => request.options?.method === 'POST');
+  assert.equal(JSON.parse(write.options.body).telemetryState.activeBreakGateDeck, null);
+});
+
+test('an unversioned cloud deck cannot restore a previously cleared local selection', async () => {
+  const { storage } = await setup({}, { activeBreakGateDeck: { id: 'old-deck', userId: 'student-1' } });
+  assert.equal(storage.has('ifocus_active_breakgate_deck'), false);
+});
+
 test('a stale cloud countdown cannot roll back a local presence pause', async () => {
   const local = { deviceId: 'phone', timeLeft: 720, totalTime: 900, isRunning: false, presencePaused: true, updatedAt: 200 };
   const { storage, events } = await setup({ ifocus_timer_state: JSON.stringify(local) }, {

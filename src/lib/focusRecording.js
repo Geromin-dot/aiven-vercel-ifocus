@@ -17,7 +17,10 @@ export async function recordVerifiedFocus(tx, userId, input, now = Date.now()) {
   const telemetry = JSON.parse(user?.telemetryState || '{}');
   const sessions = telemetry.focusClock?.sessions || [];
   const entry = sessions.find(item => item.id === timerId);
-  const { duration, entry: settled } = verifiedFocusSeconds(entry, input.duration, Boolean(input.recoveryId), now);
+  // A completed block can be slightly ahead of the server after a delayed
+  // checkpoint. Save the verified portion, including for older queued blocks.
+  const completed = input.completed === true || input.score === 100;
+  const { duration, entry: settled } = verifiedFocusSeconds(entry, input.duration, Boolean(input.recoveryId), now, completed);
   let deck = input.deckId ? await tx.deck.findFirst({ where: { id: input.deckId, userId } }) : null;
   deck ||= await tx.deck.findFirst({ where: { userId } });
   deck ||= await tx.deck.create({ data: { userId, title: 'General Focus Sessions', description: 'Recorded focus time' } });

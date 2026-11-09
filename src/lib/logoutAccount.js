@@ -4,7 +4,7 @@ const privatePrefixes = ['ifocus_user_', 'ifocus_current_user', 'ifocus_session_
   'ifocus_latest_telemetry', 'ifocus_telemetry_insight_', 'ifocus_journal_history', 'ifocus_active_idle_alert',
   'ifocus_breakgate_events', 'ifocus_mastered_', 'ifocus_interrupted_session_', 'ifocus_resolved_timer_sessions_',
   'ifocus_pending_study_sessions', 'ifocus_timer_state', 'ifocus_custom_timer', 'ifocus_ai_',
-  'ifocus_active_breakgate_deck', 'ifocus_prefill_reflection', 'ifocus_recovery_', 'ifocus_cognitive_reset'];
+  'ifocus_active_breakgate_deck', 'ifocus_breakgate_deck_updated_at_', 'ifocus_prefill_reflection', 'ifocus_recovery_', 'ifocus_cognitive_reset'];
 
 export function clearPrivateCache(storage) {
   const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
