@@ -86,15 +86,21 @@ test('dragging a task saves the new order and it survives reload', async ({ page
   const account = await accountFixture(context, true, { tasks });
   await page.goto('/dashboard');
   const source = page.locator('.todo-text').filter({ hasText: /^Read chapter$/ });
-  const target = page.locator('.todo-text').filter({ hasText: /^Practice quiz$/ });
+  const target = page.locator('[data-todo-id="2"]');
   await expect(source).toBeVisible();
   const start = await source.boundingBox();
   const end = await target.boundingBox();
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
-  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 8 });
+  await page.mouse.move(start.x + start.width / 2, end.y + end.height / 2 + 8, { steps: 8 });
   expect(await page.evaluate(() => window.getSelection().toString())).toBe('');
+  const preview = page.locator('.todo-drop-preview');
+  await expect(preview).toContainText('Read chapter');
+  await expect(preview).toHaveCSS('opacity', '0.48');
+  await expect.poll(async () => (await preview.boundingBox()).y - (await target.boundingBox()).y).toBeGreaterThan(0);
+  expect(account.savedOrder()).toEqual([]);
   await page.mouse.up();
+  await expect(preview).toHaveCount(0);
   await expect.poll(account.savedOrder).toEqual(['1', '2', '0']);
   await page.reload();
   await expect(page.locator('[data-todo-id]')).toHaveText([

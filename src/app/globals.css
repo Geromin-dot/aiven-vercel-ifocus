@@ -649,6 +649,18 @@ main {
     border-color: rgba(78, 130, 83, 0.25);
 }
 
+.todo-list-previewing > .todo-item {
+  transition: opacity 0.15s ease;
+  transform: none;
+}
+
+.todo-list > .todo-item.todo-drop-preview {
+  opacity: 0.48;
+  outline: 1px dashed var(--primary-accent);
+  outline-offset: -2px;
+  animation: none;
+}
+
 .todo-item.completed {
     background: rgba(255, 255, 255, 0.55);
     border-color: rgba(0, 0, 0, 0.04);

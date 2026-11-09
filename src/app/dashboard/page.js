@@ -54,7 +54,7 @@ export default function CommandCenterPage() {
   const [taskOrderSync, setTaskOrderSync] = useState('loading');
   const taskOrderRequest = useRef(Promise.resolve());
   const todoDrag = useRef(null);
-  const [dropTargetId, setDropTargetId] = useState(null);
+  const [todoDropPreview, setTodoDropPreview] = useState(null);
   useEffect(() => { todosRef.current = todos; }, [todos]);
   const [todoInput, setTodoInput] = useState('');
   const [todoPriority, setTodoPriority] = useState('medium');
@@ -1901,13 +1901,19 @@ export default function CommandCenterPage() {
     }
   };
 
-  const moveTodo = (fromId, toId) => {
-    if (!toId || fromId === toId) return;
+  const getVisibleTodoOrder = (fromId, toId) => {
+    if (!toId || fromId === toId) return filteredTodos;
     const visible = [...filteredTodos];
     const fromIndex = visible.findIndex(task => task.id === fromId);
     const toIndex = visible.findIndex(task => task.id === toId);
-    if (fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex < 0 || toIndex < 0) return filteredTodos;
     visible.splice(toIndex, 0, ...visible.splice(fromIndex, 1));
+    return visible;
+  };
+
+  const moveTodo = (fromId, toId) => {
+    const visible = getVisibleTodoOrder(fromId, toId);
+    if (visible === filteredTodos) return;
     const visibleIds = new Set(visible.map(task => task.id));
     const order = todosRef.current.map(task => visibleIds.has(task.id) ? visible.shift() : task);
     todosRef.current = order;
@@ -1934,18 +1940,39 @@ export default function CommandCenterPage() {
       if (Math.abs(event.clientY - drag.startY) < 5) return;
       drag.active = true;
     }
-    const targetId = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-todo-id]')?.dataset.todoId;
-    drag.targetId = targetId === drag.id ? null : targetId;
-    setDropTargetId(drag.targetId);
+    const list = event.currentTarget.parentElement;
+    const bounds = list.getBoundingClientRect();
+    const inside = event.clientX >= bounds.left && event.clientX <= bounds.right &&
+      event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+    drag.targetId = null;
+    if (inside) {
+      // Compare against the other rows so the moving preview never catches itself.
+      const index = Array.from(list.children).filter(row => {
+        if (!row.dataset.todoId || row.dataset.todoId === drag.id) return false;
+        const rect = row.getBoundingClientRect();
+        return event.clientY >= rect.top + rect.height / 2;
+      }).length;
+      drag.targetId = filteredTodos[index]?.id ?? null;
+    }
+    const { id, targetId } = drag;
+    setTodoDropPreview(previous => {
+      if (!targetId) return null;
+      if (previous?.id === id && previous.targetId === targetId) return previous;
+      return { id, targetId };
+    });
   };
 
   const finishTodoDrag = (event, cancelled = false) => {
     const drag = todoDrag.current;
     if (drag?.pointerId !== event.pointerId) return;
     todoDrag.current = null;
-    setDropTargetId(null);
+    setTodoDropPreview(null);
     if (!cancelled && drag.active) moveTodo(drag.id, drag.targetId);
   };
+
+  const todoPreviewPositions = todoDropPreview && new Map(
+    getVisibleTodoOrder(todoDropPreview.id, todoDropPreview.targetId).map((task, index) => [task.id, index])
+  );
 
   // AI Coach Logic
   const showSupportFeedback = (support) => {
@@ -2369,7 +2396,7 @@ export default function CommandCenterPage() {
         </div>
 
         {/* Tasks List */}
-        <div className="todo-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: '2px' }}>
+        <div className={`todo-list${todoDropPreview ? ' todo-list-previewing' : ''}`} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', paddingRight: '2px' }}>
           {loadingTodos ? (
             <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading tasks...</p>
           ) : filteredTodos.length === 0 ? (
@@ -2381,7 +2408,7 @@ export default function CommandCenterPage() {
               <div 
                 key={todo.id} 
                 data-todo-id={todo.id}
-                className={`todo-item ${editingTodoId !== todo.id ? 'todo-reorderable' : ''} ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''}`}
+                className={`todo-item ${editingTodoId !== todo.id ? 'todo-reorderable' : ''} ${todo.completed ? 'completed' : ''} ${deletingTodoIds.has(todo.id) ? 'deleting' : ''} ${todoDropPreview?.id === todo.id ? 'todo-drop-preview' : ''}`}
                 onPointerDown={event => startTodoDrag(event, todo.id)}
                 onPointerMove={updateTodoDrag}
                 onPointerUp={finishTodoDrag}
@@ -2391,7 +2418,7 @@ export default function CommandCenterPage() {
                   position: 'relative',
                   overflow: 'hidden',
                   borderLeft: `3.5px solid ${todo.priority === 'high' ? '#ef4444' : todo.priority === 'low' ? '#10b981' : '#f59e0b'}`,
-                  boxShadow: dropTargetId === todo.id ? 'inset 0 0 0 2px var(--primary-accent)' : undefined,
+                  order: todoPreviewPositions?.get(todo.id),
                 }}
               >
                 <button
