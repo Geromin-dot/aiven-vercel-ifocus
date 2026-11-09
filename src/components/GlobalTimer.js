@@ -1521,7 +1521,7 @@ export default function GlobalTimer() {
           const nextCount = isPreSessionRest ? currentCount : currentCount + 1;
           const isBreakCycleFinished = nextCount > maxSessions;
 
-          if (isPreSessionRest) {
+          if (isPreSessionRest && !current.optionalPreFocusBreak) {
             try {
               localStorage.setItem("ifocus_recovery_completed", String(Date.now()));
               localStorage.setItem("ifocus_cognitive_reset", String(Date.now()));
@@ -1580,13 +1580,15 @@ export default function GlobalTimer() {
           }
 
           let autoStartFocusPref = false;
-          try {
-            const rawTimerPrefs = localStorage.getItem("ifocus_timer_preferences");
-            if (rawTimerPrefs) {
-              const tPrefs = JSON.parse(rawTimerPrefs);
-              if (tPrefs.autoStartFocus !== undefined) autoStartFocusPref = tPrefs.autoStartFocus;
-            }
-          } catch (e) {}
+          if (!isPreSessionRest) {
+            try {
+              const rawTimerPrefs = localStorage.getItem("ifocus_timer_preferences");
+              if (rawTimerPrefs) {
+                const tPrefs = JSON.parse(rawTimerPrefs);
+                if (tPrefs.autoStartFocus !== undefined) autoStartFocusPref = tPrefs.autoStartFocus;
+              }
+            } catch (e) {}
+          }
 
           try {
             localStorage.removeItem("ifocus_ai_rest_recovery");
@@ -1605,6 +1607,8 @@ export default function GlobalTimer() {
           const nextFocusState = {
             ...current,
             isFocus: true,
+            isAiRestRecovery: false,
+            optionalPreFocusBreak: false,
             isRunning: autoStartFocusPref,
             totalTime: focusDuration,
             timeLeft: focusDuration,

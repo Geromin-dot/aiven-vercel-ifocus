@@ -1,6 +1,7 @@
 // Unified Client-Side Bi-Directional Cloud Telemetry & State Reconciliation
 // Ensures 100% data parity across all devices (PC browser, mobile PWA, tablet) for the same user account.
 
+import { mergeReflections, readReflectionJournal } from './reflectionJournal';
 import { getTimerDeviceId, recoveryFromCheckpoint } from './timerState';
 import { applyResolvedSessions } from './recoveryState';
 import { latestCoachSignal, signalTime } from './coachSignals';
@@ -81,16 +82,6 @@ async function reconcileCloudTelemetryInternal() {
       if (raw) localDeck = JSON.parse(raw);
     } catch (e) {}
 
-    let localJournal = [];
-    try {
-      const raw = localStorage.getItem(`ifocus_journal_history_${userName}`) || localStorage.getItem("ifocus_journal_history");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) localJournal = parsed;
-      }
-    } catch (e) {}
-
-
     let localCustomTimer = null;
     try {
       const raw = localStorage.getItem("ifocus_custom_timer");
@@ -139,26 +130,11 @@ async function reconcileCloudTelemetryInternal() {
 
     localStorage.setItem("ifocus_breakgate_events", JSON.stringify(mergedEvents));
 
-    // 4. Reconcile Reflection Journal History (merge entries by unique ID, date, or text)
-    try {
-      const latest = JSON.parse(localStorage.getItem(`ifocus_journal_history_${userName}`) || 'null');
-      if (Array.isArray(latest)) localJournal = latest;
-    } catch {}
+    // Reconcile only unexpired reflections, even when a device was offline.
     const remoteJournal = Array.isArray(cloud.journalHistory) ? cloud.journalHistory : [];
-    const journalMap = new Map();
-    [...localJournal, ...remoteJournal].forEach((entry) => {
-      if (!entry) return;
-      const key = entry.id || entry.date || entry.timestamp || (entry.text ? entry.text.slice(0, 40) : null);
-      if (key) journalMap.set(key, entry);
-    });
-    const mergedJournal = Array.from(journalMap.values())
-      .sort((a, b) => new Date(b.date || b.timestamp || 0).getTime() - new Date(a.date || a.timestamp || 0).getTime())
-      .slice(0, 50);
-
-    if (mergedJournal.length > 0) {
-      localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(mergedJournal));
-      localStorage.setItem("ifocus_journal_history", JSON.stringify(mergedJournal));
-    }
+    const mergedJournal = mergeReflections(readReflectionJournal(userName), remoteJournal);
+    localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(mergedJournal));
+    localStorage.setItem("ifocus_journal_history", JSON.stringify(mergedJournal));
 
     // 4b. Reconcile Mastered Flashcards (timestamp-based parity across PC, mobile PWA, and tablet)
     const remoteMastered = Array.isArray(cloud.masteredCards) ? cloud.masteredCards : null;

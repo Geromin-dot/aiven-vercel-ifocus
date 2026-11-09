@@ -1,5 +1,5 @@
 // Apply recovery evidence after reflection and saved schedule preferences.
-export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, staminaPct, skippedEvents, preserveState = false }) {
+export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, staminaPct = 100, skippedEvents, preserveState = false }) {
   const recoveryNeeded = staminaPct < 60 || skippedEvents >= 3;
   const pacingNeeded = recoveryNeeded || skippedEvents > 0 || staminaPct < 80;
   if (!pacingNeeded) return { cognitiveState, recommendedRhythm, recoveryNeeded, pacingNeeded };
@@ -9,7 +9,7 @@ export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, stam
   const workMinutes = Math.min(Number(match?.[1]) || workLimit, workLimit);
   const breakMinutes = 5;
   const color = recoveryNeeded ? '#dc2626' : '#d97706';
-  const evidence = `${staminaPct}% study resilience with ${skippedEvents} unrecovered BreakGate skip${skippedEvents === 1 ? '' : 's'} today`;
+  const evidence = `${skippedEvents} BreakGate skip${skippedEvents === 1 ? '' : 's'} recorded today`;
 
   return {
     recoveryNeeded,

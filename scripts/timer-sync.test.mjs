@@ -7,10 +7,12 @@ const timerUrl = `data:text/javascript;base64,${Buffer.from(timerSource).toStrin
 const recoverySource = await readFile(new URL('../src/lib/recoveryState.js', import.meta.url), 'utf8');
 const recoveryUrl = `data:text/javascript;base64,${Buffer.from(recoverySource).toString('base64')}`;
 const signalUrl = `data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/coachSignals.js', import.meta.url), 'utf8')).toString('base64')}`;
+const reflectionJournalUrl = `data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/reflectionJournal.js', import.meta.url), 'utf8')).toString('base64')}`;
 const syncSource = (await readFile(new URL('../src/lib/telemetrySync.js', import.meta.url), 'utf8'))
   .replace("'./timerState'", JSON.stringify(timerUrl))
   .replace("'./recoveryState'", JSON.stringify(recoveryUrl))
-  .replace("'./coachSignals'", JSON.stringify(signalUrl));
+  .replace("'./coachSignals'", JSON.stringify(signalUrl))
+  .replace("'./reflectionJournal'", JSON.stringify(reflectionJournalUrl));
 let moduleNumber = 0;
 
 test('saving waits for timer checkpoints and stops if the checkpoint failed', async () => {
@@ -72,8 +74,8 @@ test('a pause made during an in-flight request remains authoritative', async () 
 });
 
 test('a new reflection during a cloud request cannot be overwritten by old AFK data', async () => {
-  const idle = { state: 'idle', timestamp: '2026-11-01T01:00:00Z', reason: 'Inactivity detected' };
-  const stress = { state: 'Stressed', timestamp: '2026-11-01T01:01:00Z', source: 'reflection_submission' };
+  const idle = { state: 'idle', timestamp: new Date(Date.now() - 60_000).toISOString(), reason: 'Inactivity detected' };
+  const stress = { state: 'Stressed', timestamp: new Date().toISOString(), source: 'reflection_submission' };
   const { storage } = await setup({ ifocus_latest_telemetry: JSON.stringify(idle) },
     { latestTelemetry: idle, insightData: idle, activeIdleAlert: idle }, values => {
       values.set('ifocus_latest_telemetry', JSON.stringify(stress));
@@ -162,6 +164,7 @@ test('telemetry sync retries a conflict and never clears resolved sessions with 
     .replace(/import \{ authOptions \}[^;]+;/, 'const authOptions={};')
     .replace(/import \{ prisma \}[^;]+;/, 'const prisma=globalThis.__recoveryTestDb;')
     .replace("'../../../../lib/recoveryState'", JSON.stringify(recoveryUrl))
+    .replace("'../../../../lib/reflectionJournal'", JSON.stringify(reflectionJournalUrl))
     .replace("'../../../../lib/focusClock'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8')).toString('base64')}`));
   const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
   for(const resolvedTimerSessions of [null, [], ['phone-save']]) {
@@ -172,4 +175,18 @@ test('telemetry sync retries a conflict and never clears resolved sessions with 
   }
   assert.deepEqual(JSON.parse(row.telemetryState).resolvedTimerSessions,['pc-discard','phone-save']);
   delete globalThis.__recoveryTestDb;
+});
+
+test('reflection retention expires at 48 hours and an older device cannot revive an expired entry', async () => {
+  const { mergeReflections, pruneReflectionTelemetry, REFLECTION_RETENTION_MS } = await import(reflectionJournalUrl);
+  const now = Date.UTC(2026, 10, 9);
+  const expired = { id: 'expired', date: new Date(now - REFLECTION_RETENTION_MS).toISOString() };
+  const recent = { id: 'recent', date: new Date(now - 1000).toISOString() };
+  assert.deepEqual(mergeReflections([expired], [expired, recent], now), [recent]);
+  assert.deepEqual(mergeReflections([expired], [{ ...expired, date: recent.date }], now), []);
+  const expiredSignal = { source: 'reflection_submission', timestamp: expired.date };
+  assert.deepEqual(pruneReflectionTelemetry({
+    journalHistory: [expired, recent], latestTelemetry: expiredSignal,
+    aiAdjustedDetails: { reflectionText: 'private', message: 'old advice', sessions: 2 }, focusClock: { preserve: true },
+  }, now), { journalHistory: [recent], latestTelemetry: null, aiAdjustedDetails: { sessions: 2 }, focusClock: { preserve: true } });
 });

@@ -13,6 +13,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { signalTime } from '@/lib/coachSignals';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { saveVerifiedStudySession } from '@/lib/verifiedStudyClient';
@@ -27,7 +28,7 @@ ChartJS.register(
 );
 
 export default function AnalyticsPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   // Auto-sync existing client-side sessions to PostgreSQL database when authenticated
@@ -66,256 +67,24 @@ export default function AnalyticsPage() {
   const [masteredCount, setMasteredCount] = useState(0);
   const [scaleMode, setScaleMode] = useState('10mins'); // '10mins' or 'hours'
 
-  const userName = session?.user?.name || session?.user?.username || 'anonymous';
-
-  const [complianceData, setComplianceData] = useState({
-    gateCompliance: {
-      label: '100% On-Track',
-      color: '#16a34a',
-      bg: 'rgba(22, 163, 74, 0.12)',
-      subtext: 'Break challenges met on schedule'
-    },
-    focusRestRatio: {
-      label: '5:1 (Optimal)',
-      color: '#27522d',
-      bg: 'rgba(39, 82, 45, 0.12)',
-      subtext: 'Active micro-rest pacing'
-    },
-    cognitiveFatigue: {
-      label: 'Low (Resilient)',
-      color: '#059669',
-      bg: 'rgba(5, 150, 105, 0.12)',
-      subtext: 'Keystroke cadence & stability optimal'
-    }
-  });
-
+  const [breakGateActivity, setBreakGateActivity] = useState({ completed: 0, skipped: 0 });
   const loadComplianceData = useCallback(() => {
     try {
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-      let recoveryCompletedTime = 0;
-      try {
-        const rc = localStorage.getItem('ifocus_recovery_completed');
-        if (rc) recoveryCompletedTime = Number(rc) || 0;
-      } catch (e) {}
-
-      let cognitiveResetTime = 0;
-      try {
-        const cr = localStorage.getItem('ifocus_cognitive_reset');
-        if (cr) cognitiveResetTime = Number(cr) || 0;
-      } catch (e) {}
-
-      const effectiveResetTime = Math.max(recoveryCompletedTime, cognitiveResetTime);
-
-      // 1. BreakGate Compliance (Events: completed vs skipped - Daily Reset Aware)
-      let gateComp = {
-        label: '100% On-Track',
-        color: '#16a34a',
-        bg: 'rgba(22, 163, 74, 0.12)',
-        subtext: recoveryCompletedTime >= todayStart
-          ? 'Recovery break completed: cognitive baseline restored'
-          : 'Fresh study day: ready for your first focus session'
-      };
-
-      const rawEvents = localStorage.getItem('ifocus_breakgate_events');
-      if (rawEvents) {
-        try {
-          const events = JSON.parse(rawEvents);
-          if (Array.isArray(events) && events.length > 0) {
-            // Daily reset: strictly isolate events logged today (starting from 12:00 AM)
-            const todayEvents = events.filter(e => {
-              const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
-              return t >= todayStart;
-            });
-
-            // If recovery was completed today, any skipped BreakGate events that occurred BEFORE recovery completed have been reconciled!
-            const unrecoveredEvents = recoveryCompletedTime >= todayStart
-              ? todayEvents.filter(e => {
-                  const t = e.timestamp ? new Date(e.timestamp).getTime() : (e.date ? new Date(e.date).getTime() : (e.time || 0));
-                  return t > recoveryCompletedTime;
-                })
-              : todayEvents;
-
-            if (unrecoveredEvents.length > 0) {
-              const total = unrecoveredEvents.length;
-              const completed = unrecoveredEvents.filter(e => e.status === 'completed').length;
-              const skips = total - completed;
-              const pct = Math.max(0, Math.min(100, 100 - (skips * 20) + (completed * 5)));
-              const latest = unrecoveredEvents[unrecoveredEvents.length - 1];
-
-              if (skips >= 3 || pct < 60) {
-                gateComp = {
-                  label: `${pct}% Low Compliance`,
-                  color: '#dc2626',
-                  bg: 'rgba(220, 38, 38, 0.12)',
-                  subtext: `${skips} challenges skipped (${completed} of ${total} completed)`
-                };
-              } else if (skips > 0 || pct < 80) {
-                gateComp = {
-                  label: `${pct}% Pacing Lag`,
-                  color: '#d97706',
-                  bg: 'rgba(217, 119, 6, 0.12)',
-                  subtext: `${skips} challenge skipped (${completed} of ${total} completed)`
-                };
-              } else {
-                gateComp = {
-                  label: `${pct}% On-Track`,
-                  color: '#16a34a',
-                  bg: 'rgba(22, 163, 74, 0.12)',
-                  subtext: `${completed} of ${total} challenges completed today`
-                };
-              }
-            } else if (recoveryCompletedTime >= todayStart) {
-              gateComp = {
-                label: '100% On-Track',
-                color: '#16a34a',
-                bg: 'rgba(22, 163, 74, 0.12)',
-                subtext: 'Recovery break completed: cognitive baseline restored'
-              };
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 2. Focus-to-Rest Ratio
-      let ratioData = {
-        label: '5:1 (Optimal)',
-        color: '#27522d',
-        bg: 'rgba(39, 82, 45, 0.12)',
-        subtext: 'Active micro-rest pacing (25m / 5m)'
-      };
-
-      try {
-        const customTimerRaw = localStorage.getItem('ifocus_custom_timer');
-        const timerStateRaw = localStorage.getItem('ifocus_timer_state');
-        let workMin = null;
-        let breakMin = null;
-
-        if (customTimerRaw) {
-          const parsed = JSON.parse(customTimerRaw);
-          if (parsed.customWorkDuration) workMin = Math.round(parsed.customWorkDuration / 60);
-          else if (parsed.customWorkTime?.min) workMin = Number(parsed.customWorkTime.min);
-          else if (parsed.workDuration) workMin = Number(parsed.workDuration);
-
-          if (parsed.customBreakDuration) breakMin = Math.round(parsed.customBreakDuration / 60);
-          else if (parsed.customBreakTime?.min) breakMin = Number(parsed.customBreakTime.min);
-          else if (parsed.breakDuration) breakMin = Number(parsed.breakDuration);
-        }
-
-        if (timerStateRaw) {
-          const tState = JSON.parse(timerStateRaw);
-          if (tState.timerPreset && tState.timerPreset.includes('/')) {
-            const parts = tState.timerPreset.split('/');
-            workMin = parseInt(parts[0]);
-            breakMin = parseInt(parts[1]);
-          }
-        }
-
-        if (workMin && breakMin && breakMin > 0) {
-          const ratio = Math.round(workMin / breakMin);
-          const ratioLabel = ratio >= 6 ? 'Extended' : ratio <= 4 ? 'Gentle' : 'Optimal';
-          ratioData = {
-            label: `${ratio}:1 (${ratioLabel})`,
-            color: '#27522d',
-            bg: 'rgba(39, 82, 45, 0.12)',
-            subtext: `${workMin}m focus to ${breakMin}m rest cadence`
-          };
-        }
-      } catch (e) { }
-
-      // 3. Cognitive Fatigue Status
-      let fatigueData = {
-        label: 'Low (Resilient)',
-        color: '#059669',
-        bg: 'rgba(5, 150, 105, 0.12)',
-        subtext: recoveryCompletedTime >= todayStart
-          ? 'Restorative break completed: cognitive baseline restored'
-          : 'Fresh study day: cognitive baseline optimal'
-      };
-
-      let latestTelem = null;
-      try {
-        const telemRaw = localStorage.getItem('ifocus_latest_telemetry');
-        if (telemRaw) latestTelem = JSON.parse(telemRaw);
-      } catch (e) { }
-
-      if (!latestTelem) {
-        try {
-          const insightRaw = localStorage.getItem(`ifocus_telemetry_insight_${userName}`);
-          if (insightRaw) latestTelem = JSON.parse(insightRaw);
-        } catch (e) { }
-      }
-
-      if (!latestTelem) {
-        try {
-          const journalRaw = localStorage.getItem(`ifocus_journal_history_${userName}`);
-          if (journalRaw) {
-            const list = JSON.parse(journalRaw);
-            if (Array.isArray(list) && list.length > 0) {
-              const lastEntry = list[0];
-              latestTelem = {
-                state: lastEntry.state,
-                reason: lastEntry.text,
-                timestamp: lastEntry.date || lastEntry.timestamp || lastEntry.createdAt
-              };
-            }
-          }
-        } catch (e) { }
-      }
-
-      // Daily Reset & Recovery Aware: If telemetry/reflection is from yesterday or resolved by recovery/reset, clear it
-      if (latestTelem) {
-        const telemTime = latestTelem.timestamp ? new Date(latestTelem.timestamp).getTime() : (latestTelem.date ? new Date(latestTelem.date).getTime() : null);
-        if (telemTime && (telemTime < todayStart || (effectiveResetTime > 0 && telemTime <= effectiveResetTime))) {
-          latestTelem = null;
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
+      const counts = { completed: 0, skipped: 0 };
+      for (const event of Array.isArray(events) ? events : []) {
+        const time = signalTime(event);
+        if (time >= dayStart && time <= now.getTime() && (event.status === 'completed' || event.status === 'skipped')) {
+          counts[event.status]++;
         }
       }
-
-      if (latestTelem) {
-        const stateStr = String(latestTelem.state || '').toLowerCase();
-        const sentimentStr = String(latestTelem.sentiment || '').toLowerCase();
-        const reasonStr = String(latestTelem.reason || '').toLowerCase();
-        const errorRate = Number(latestTelem.errorRate) || 0;
-        const backspaces = Number(latestTelem.backspaces) || 0;
-
-        const isStress = stateStr.includes('stress') || sentimentStr.includes('stress') || reasonStr.includes('stress') || stateStr === 'friction' || backspaces >= 8 || errorRate > 35;
-        const isDistracted = stateStr.includes('distract') || sentimentStr.includes('distract') || reasonStr.includes('distract') || errorRate > 20 || backspaces >= 4;
-        const isFatigued = stateStr.includes('fatigue') || sentimentStr.includes('fatigue') || stateStr === 'hesitant';
-
-        if (isStress) {
-          fatigueData = {
-            label: 'High (Tension / Stress)',
-            color: '#dc2626',
-            bg: 'rgba(220, 38, 38, 0.12)',
-            subtext: backspaces > 0 ? `Keystroke friction & tension logged (${backspaces} corrections)` : 'Stress & tension sentiment logged'
-          };
-        } else if (isDistracted) {
-          fatigueData = {
-            label: 'Elevated (Friction / Pacing)',
-            color: '#d97706',
-            bg: 'rgba(217, 119, 6, 0.12)',
-            subtext: errorRate > 0 ? `Elevated typing friction detected (${errorRate}% correction rate)` : 'Distracted focus pattern logged'
-          };
-        } else if (isFatigued) {
-          fatigueData = {
-            label: 'Moderate (Fatigued)',
-            color: '#d97706',
-            bg: 'rgba(217, 119, 6, 0.12)',
-            subtext: 'Mental fatigue & hesitation logged'
-          };
-        }
-      }
-
-      setComplianceData({
-        gateCompliance: gateComp,
-        focusRestRatio: ratioData,
-        cognitiveFatigue: fatigueData
-      });
-    } catch (e) {
-      console.error('Error loading compliance data:', e);
+      setBreakGateActivity(counts);
+    } catch {
+      setBreakGateActivity({ completed: 0, skipped: 0 });
     }
-  }, [userName]);
+  }, []);
 
   const computeStreakFromHistory = (history) => {
     if (!history || history.length === 0) return 0;
@@ -977,7 +746,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Row 1, Col 2: BreakGate Compliance */}
+        {/* Row 1, Col 2: BreakGate Activity */}
         <div style={{
           padding: '0.9rem 1.15rem',
           background: '#ffffff',
@@ -991,93 +760,25 @@ export default function AnalyticsPage() {
         }}>
           <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.45rem', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              BreakGate Compliance
+              BreakGate Activity
             </h3>
             <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-              Cognitive pacing and recovery telemetry.
+              Challenges recorded today.
             </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, justifyContent: 'center', padding: '0.35rem 0' }}>
 
-            {/* Tile 1 */}
-            <div style={{
-              padding: '0.65rem 0.95rem',
-              background: '#f8faf8',
-              borderRadius: '12px',
-              border: '1px solid rgba(95, 143, 94, 0.14)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.gateCompliance.bg}`, color: complianceData.gateCompliance.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1f2937' }}>Gate Compliance</div>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>{complianceData.gateCompliance.subtext}</div>
-                </div>
+            {[
+              ['Challenges logged', breakGateActivity.completed + breakGateActivity.skipped],
+              ['Completed', breakGateActivity.completed],
+              ['Skipped', breakGateActivity.skipped],
+            ].map(([label, count]) => (
+              <div key={label} style={{ padding: '0.65rem 0.95rem', background: '#f8faf8', borderRadius: '12px', border: '1px solid rgba(95, 143, 94, 0.14)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1f2937' }}>{label}</span>
+                <strong style={{ fontSize: '0.86rem', color: '#27522d' }}>{count}</strong>
               </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: complianceData.gateCompliance.color, background: complianceData.gateCompliance.bg, padding: '0.25rem 0.65rem', borderRadius: '6px' }}>
-                {complianceData.gateCompliance.label}
-              </span>
-            </div>
-
-            {/* Tile 2 */}
-            <div style={{
-              padding: '0.65rem 0.95rem',
-              background: '#f8faf8',
-              borderRadius: '12px',
-              border: '1px solid rgba(95, 143, 94, 0.14)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.focusRestRatio.bg}`, color: complianceData.focusRestRatio.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 14 14" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1f2937' }}>Focus-to-Rest Ratio</div>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>{complianceData.focusRestRatio.subtext}</div>
-                </div>
-              </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: complianceData.focusRestRatio.color, background: complianceData.focusRestRatio.bg, padding: '0.25rem 0.65rem', borderRadius: '6px' }}>
-                {complianceData.focusRestRatio.label}
-              </span>
-            </div>
-
-            {/* Tile 3 */}
-            <div style={{
-              padding: '0.65rem 0.95rem',
-              background: '#f8faf8',
-              borderRadius: '12px',
-              border: '1px solid rgba(95, 143, 94, 0.14)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: `${complianceData.cognitiveFatigue.bg}`, color: complianceData.cognitiveFatigue.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1f2937' }}>Cognitive Fatigue Status</div>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>{complianceData.cognitiveFatigue.subtext}</div>
-                </div>
-              </div>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: complianceData.cognitiveFatigue.color, background: complianceData.cognitiveFatigue.bg, padding: '0.25rem 0.65rem', borderRadius: '6px' }}>
-                {complianceData.cognitiveFatigue.label}
-              </span>
-            </div>
+            ))}
 
           </div>
         </div>

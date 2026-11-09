@@ -162,9 +162,51 @@ test('Coach and Feature Guide explain uncertainty and applying a strategy leaves
   await expect(page.getByText('Recovery Needed', { exact: true })).toBeVisible();
   await expect(page.getByText('5m Recovery Break', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
+  await page.getByRole('button', { name: 'Continue to focus' }).click();
   await expect(page).toHaveURL(/dashboard$/);
   await expect.poll(() => page.evaluate(() => {
     const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
     return [timer.isRunning, timer.isFocus, timer.customWorkDuration, localStorage.getItem('ifocus_ai_rest_recovery')];
   })).toEqual([false, true, 900, null]);
+});
+
+test('Coach offers an optional five-minute break and leaves focus stopped at the end', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context);
+  await page.addInitScript(() => localStorage.setItem('ifocus_timer_preferences', JSON.stringify({ autoStartFocus: true })));
+  await page.goto('/coach');
+  await expect(page.getByText('Study Resilience', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
+  await page.getByRole('button', { name: 'Take a 5-minute break' }).click();
+  await expect(page).toHaveURL(/dashboard$/);
+  const timer = () => page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
+    return [state.isRunning, state.isFocus, state.totalTime, state.sessionCount];
+  });
+  await expect.poll(timer).toEqual([true, false, 300, 1]);
+  await page.clock.fastForward(301_000);
+  await expect.poll(timer).toEqual([false, true, 1500, 1]);
+});
+
+test('Coach hides expired reflections and Analytics shows only recorded BreakGate counts', async ({ page, context }) => {
+  await accountFixture(context);
+  await page.addInitScript(() => {
+    localStorage.setItem('ifocus_journal_history_History Student', JSON.stringify([
+      { id: 'expired', text: 'Expired reflection fixture', date: new Date(Date.now() - 49 * 3600000).toISOString() },
+      { id: 'recent', text: 'Recent reflection fixture', date: new Date(Date.now() - 1000).toISOString() },
+    ]));
+    const date = new Date().toISOString();
+    localStorage.setItem('ifocus_breakgate_events', JSON.stringify([
+      { id: 'complete', status: 'completed', date }, { id: 'skip', status: 'skipped', date },
+      { id: 'yesterday', status: 'skipped', date: new Date(Date.now() - 86400000).toISOString() },
+    ]));
+  });
+  await page.goto('/coach');
+  await expect(page.getByText('1 Entry', { exact: true })).toBeVisible();
+  await expect(page.getByText('Expired reflection fixture', { exact: false })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_journal_history_History Student')).map(entry => entry.id))).toEqual(['recent']);
+  await page.goto('/analytics');
+  await expect(page.getByRole('heading', { name: 'BreakGate Activity' })).toBeVisible();
+  await expect(page.getByText('Challenges logged', { exact: true }).locator('..')).toHaveText('Challenges logged2');
+  await expect(page.getByText('Skipped', { exact: true }).locator('..')).toHaveText('Skipped1');
 });

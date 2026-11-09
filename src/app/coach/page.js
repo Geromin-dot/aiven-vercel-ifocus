@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
+import AppDialog from '@/components/AppDialog';
+import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { adaptCoachToResilience } from '@/lib/coachResilience';
@@ -66,6 +68,7 @@ export default function CoachPage() {
   };
 
   const [applyingHome, setApplyingHome] = useState(false);
+  const [chooseBreak, setChooseBreak] = useState(false);
 
   const applyCoachAiRhythm = (reply) => {
     let wMin = 25, bMin = 5;
@@ -129,11 +132,6 @@ export default function CoachPage() {
       color: '#27522d',
       dotColor: '#16a34a',
       subtext: 'No recent interaction to assess yet'
-    },
-    studyStamina: {
-      title: 'Awaiting signal',
-      color: '#2e7d32',
-      subtext: 'Resilience is an estimate from recent interactions and BreakGate activity'
     },
     recommendedRhythm: {
       title: '25m Work / 5m Gate',
@@ -211,9 +209,8 @@ export default function CoachPage() {
       } catch (e) {}
 
       try {
-        const journalRaw = localStorage.getItem(`ifocus_journal_history_${userName}`);
-        if (journalRaw) {
-          const list = JSON.parse(journalRaw);
+        {
+          const list = readReflectionJournal(userName);
           if (Array.isArray(list) && list.length > 0) telemCandidates.push(list[0]);
         }
       } catch (e) {}
@@ -378,18 +375,10 @@ export default function CoachPage() {
         signal: telem, events, since: Math.max(todayStart - 1, effectiveResetTime),
         isStress, isFatigued, isDistracted, isIdle,
       });
-      const { staminaPct, totalEvents, completedEvents, skippedEvents } = currentResilience;
-      const stamina = {
-        title: !telem && totalEvents === 0 && recoveryCompletedTime < todayStart ? 'Awaiting signal' : `${staminaPct}% Resilience`,
-        color: staminaPct < 60 ? '#dc2626' : staminaPct < 80 || skippedEvents ? '#d97706' : '#16a34a',
-        subtext: currentResilience.subtext,
-      };
-
-      // Recovery evidence takes priority over positive reflections and saved timers.
+      const { totalEvents, completedEvents, skippedEvents } = currentResilience;
       const resilienceDiagnostics = adaptCoachToResilience({
         cognitiveState: cogState,
         recommendedRhythm: recRhythm,
-        staminaPct,
         skippedEvents,
         preserveState: isStress || isIdle || isDistracted || isFatigued,
       });
@@ -419,13 +408,13 @@ export default function CoachPage() {
           badgeBg: 'rgba(217, 119, 6, 0.12)',
           text: `You have been idle for ${idleMins} minutes with no active timer. Cognitive hesitation or task friction detected. Lower the cognitive barrier: start with a gentle 15-minute focus session on an easy, low-friction task to rebuild flow.`
         });
-      } else if (isMotivated && (staminaPct < 60 || skippedEvents >= 2)) {
+      } else if (isMotivated && skippedEvents >= 2) {
         dynamicStrategies.push({
           title: 'Protective Pacing: High Drive vs Recovery Cadence',
           badge: 'Retention Safeguard',
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `You reported feeling energetic, but ${skippedEvents} BreakGate challenges were skipped today (${staminaPct}% study resilience). ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
+          text: `You reported feeling energetic, but ${skippedEvents} BreakGate challenges were skipped today. ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
         });
       } else if (skippedEvents === 1) {
         dynamicStrategies.push({
@@ -435,21 +424,21 @@ export default function CoachPage() {
           badgeBg: 'rgba(217, 119, 6, 0.12)',
           text: 'You skipped one BreakGate review. You can try a few flashcards later when you want to practice recalling the material.'
         });
-      } else if (staminaPct < 60 || skippedEvents >= 2) {
+      } else if (skippedEvents >= 2) {
         dynamicStrategies.push({
           title: 'Break Recovery Deficit Alert',
           badge: 'Rest Needed',
           badgeColor: '#dc2626',
           badgeBg: 'rgba(239, 68, 68, 0.1)',
-          text: `You have skipped ${skippedEvents} BreakGate challenges today (${staminaPct}% study resilience). ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
+          text: `You have skipped ${skippedEvents} BreakGate challenges today. ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
         });
-      } else if (staminaPct >= 80 && totalEvents > 0) {
+      } else if (skippedEvents === 0 && totalEvents > 0) {
         dynamicStrategies.push({
           title: 'Pacing & Retrieval Consistency',
           badge: 'High Compliance',
           badgeColor: '#16a34a',
           badgeBg: 'rgba(22, 163, 74, 0.12)',
-          text: `High consistency detected: You have completed ${completedEvents} of ${totalEvents} BreakGate retrieval challenges (${staminaPct}%). Revisit the items you missed in a later study session.`
+          text: `High consistency detected: You have completed ${completedEvents} of ${totalEvents} BreakGate retrieval challenges. Revisit the items you missed in a later study session.`
         });
       } else {
         dynamicStrategies.push({
@@ -492,9 +481,9 @@ export default function CoachPage() {
           badge: 'Low Energy Buffer',
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `Study resilience is ${staminaPct}% with ${skippedEvents} unrecovered BreakGate skips. Take a break if you need one. When you feel ready, try a few flashcards and set aside another day to review them.`
+          text: `You skipped ${skippedEvents} BreakGate challenges. Take a break if you need one. When you feel ready, try a few flashcards and set aside another day to review them.`
         });
-      } else if (isMotivated && staminaPct >= 80 && skippedEvents === 0) {
+      } else if (isMotivated && skippedEvents === 0) {
         dynamicStrategies.push({
           title: 'High-Yield Memory Reinforcement',
           badge: 'Peak Flow',
@@ -502,7 +491,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'Try explaining the answer aloud before flipping the flashcard. Check what you missed and revisit it later.'
         });
-      } else if (skippedEvents > 0 || staminaPct < 80) {
+      } else if (skippedEvents > 0) {
         dynamicStrategies.push({
           title: 'Rebuild Study Consistency',
           badge: 'Pacing Advisory',
@@ -524,7 +513,6 @@ export default function CoachPage() {
 
       setTelemetryDiagnostics({
         cognitiveState: cogState,
-        studyStamina: stamina,
         recommendedRhythm: recRhythm,
         recoveryNeeded,
         pacingNeeded: resilienceDiagnostics.pacingNeeded,
@@ -536,12 +524,10 @@ export default function CoachPage() {
   }, [userName]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`ifocus_journal_history_${userName}`);
-      if (stored) {
-        setJournalEntries(JSON.parse(stored));
-      }
-    } catch (e) {}
+    const refresh = () => setJournalEntries(readReflectionJournal(userName));
+    refresh();
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
   }, [userName]);
 
   useEffect(() => {
@@ -556,10 +542,7 @@ export default function CoachPage() {
 
     const handleJournalUpdate = () => {
       loadDiagnostics(false);
-      try {
-        const stored = localStorage.getItem(`ifocus_journal_history_${userName}`);
-        if (stored) setJournalEntries(JSON.parse(stored));
-      } catch (e) {}
+      setJournalEntries(readReflectionJournal(userName));
     };
 
     window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
@@ -579,7 +562,8 @@ export default function CoachPage() {
     };
   }, [status, userName, loadDiagnostics]);
 
-  const handleReturnHome = () => {
+  const handleReturnHome = (takeBreak) => {
+    setChooseBreak(false);
     setApplyingHome(true);
 
     try {
@@ -670,12 +654,15 @@ export default function CoachPage() {
       localStorage.removeItem('ifocus_ai_rest_recovery');
       localStorage.setItem('ifocus_cognitive_reset', String(Date.now()));
 
+      const now = Date.now();
+      const initialSeconds = takeBreak ? 5 * 60 : wMin * 60;
       const syncPayload = {
-        isRunning: false,
-        isFocus: true,
-        timeLeft: wMin * 60,
-        totalTime: wMin * 60,
-        targetEndTime: null,
+        isRunning: takeBreak,
+        isFocus: !takeBreak,
+        timeLeft: initialSeconds,
+        totalTime: initialSeconds,
+        targetEndTime: takeBreak ? now + initialSeconds * 1000 : null,
+        updatedAt: now,
         timerPreset: 'Custom',
         customWorkDuration: wMin * 60,
         customBreakDuration: bMin * 60,
@@ -683,16 +670,17 @@ export default function CoachPage() {
         sessionCount: 1,
         presencePaused: false,
         lastPresenceElapsed: 0,
-        lastPresenceRemaining: wMin * 60,
+        lastPresenceRemaining: initialSeconds,
         breakGatePending: false,
-        isAiRestRecovery: false
+        isAiRestRecovery: takeBreak,
+        optionalPreFocusBreak: takeBreak
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
 
       // Save notification toast for Dashboard
       localStorage.setItem('ifocus_applied_toast', JSON.stringify({
-        title: cadenceTitle,
+        title: takeBreak ? "5-minute break started" : cadenceTitle,
         message: `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
       }));
       // Clear alert keys so the alert is fulfilled
@@ -785,6 +773,18 @@ export default function CoachPage() {
         </button>
       </div>
 
+      {chooseBreak && (
+        <AppDialog titleId="coach-break-choice" onDismiss={() => setChooseBreak(false)}>
+          <h2 id="coach-break-choice">Ready to focus?</h2>
+          <p>You can take a short break first. When the break ends, start the focus timer when you feel ready.</p>
+          <footer>
+            <button type="button" className="btn-secondary" onClick={() => setChooseBreak(false)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={() => handleReturnHome(false)}>Continue to focus</button>
+            <button type="button" className="btn-primary" onClick={() => handleReturnHome(true)}>Take a 5-minute break</button>
+          </footer>
+        </AppDialog>
+      )}
+
       {/* Main 2-Column Responsive Dashboard Layout (50/50 Cards) */}
       <div className="coach-main-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', flex: 1, minHeight: 0, alignItems: 'stretch' }}>
         
@@ -807,7 +807,7 @@ export default function CoachPage() {
           <div className={coachStyles.telemetryContent} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
             
             {/* Top Telemetry Diagnostic Metrics Row */}
-            <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
+            <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
               
               {/* Metric 1: Attention State */}
               <div className="coach-metric-card coach-metric-primary" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px', overflow: 'hidden' }}>
@@ -825,19 +825,6 @@ export default function CoachPage() {
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
                   {telemetryDiagnostics.cognitiveState.subtext}
-                </div>
-              </div>
-
-              {/* Metric 2: Study Resilience */}
-              <div className="coach-metric-card" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px' }}>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
-                  Study Resilience
-                </div>
-                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: telemetryDiagnostics.studyStamina.color, lineHeight: 1.25 }}>
-                  {telemetryDiagnostics.studyStamina.title}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
-                  {telemetryDiagnostics.studyStamina.subtext}
                 </div>
               </div>
 
@@ -989,7 +976,7 @@ export default function CoachPage() {
             <div className="coach-strategy-actions" style={{ display: 'flex', gap: '0.65rem' }}>
               <button
                 type="button"
-                onClick={handleReturnHome}
+                onClick={() => setChooseBreak(true)}
                 disabled={applyingHome}
                 className="btn-primary"
                 style={{
@@ -1074,7 +1061,7 @@ export default function CoachPage() {
                   Reflection Journal & Sentiment Log
                 </h3>
                 <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Live history of your Quick Reflections and cognitive pacing check-ins.
+                  Quick Reflections expire after 48 hours.
                 </p>
               </div>
               <span style={{ fontSize: '0.72rem', background: 'rgba(95, 143, 94, 0.1)', color: '#27522d', padding: '3px 8px', borderRadius: '6px', fontWeight: 600, whiteSpace: 'nowrap' }}>

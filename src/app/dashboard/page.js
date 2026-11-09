@@ -13,6 +13,7 @@ import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
+import { readReflectionJournal, retainReflections } from '@/lib/reflectionJournal';
 import { reflectionInputError } from '@/lib/reflectionInput';
 import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport, stressContextFeedback } from '@/lib/reflectionPlan';
 import coachStyles from '@/components/CoachLayout.module.css';
@@ -764,22 +765,11 @@ export default function CommandCenterPage() {
       setLoadingTodos(false);
     }
     
-    // Fetch Journal History from LocalStorage
-    const historyKey = `ifocus_journal_history_${userName}`;
-    let storedHistory = localStorage.getItem(historyKey);
-    if (!storedHistory && userName === 'richardx') {
-      storedHistory = localStorage.getItem('ifocus_journal_history');
-      if (storedHistory) localStorage.setItem(historyKey, storedHistory); // migrate
-    }
-    
-    if (storedHistory) {
-      setPastEntries(JSON.parse(storedHistory));
-    } else {
-      setPastEntries([]);
-    }
+    setPastEntries(readReflectionJournal(userName));
   }, [userName, status]);
 
   const saveHistory = (newHistory, telemetry = {}) => {
+    newHistory = retainReflections(newHistory).slice(0, 50);
     setPastEntries(newHistory);
     try {
       localStorage.setItem(`ifocus_journal_history_${userName}`, JSON.stringify(newHistory));
@@ -805,7 +795,7 @@ export default function CommandCenterPage() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     reconcileCloudTelemetry().then((res) => {
-      if (res?.mergedJournal && Array.isArray(res.mergedJournal) && res.mergedJournal.length > 0) {
+      if (res?.mergedJournal && Array.isArray(res.mergedJournal)) {
         setPastEntries(res.mergedJournal);
       }
       if (res?.effectiveTimerState) {
@@ -820,18 +810,15 @@ export default function CommandCenterPage() {
 
   // Real-time listener for Journal updates across devices
   useEffect(() => {
-    const handleJournalUpdate = (e) => {
-      if (e?.detail && Array.isArray(e.detail)) {
-        setPastEntries(e.detail);
-      } else {
-        try {
-          const stored = localStorage.getItem(`ifocus_journal_history_${userName}`) || localStorage.getItem('ifocus_journal_history');
-          if (stored) setPastEntries(JSON.parse(stored));
-        } catch (e) {}
-      }
+    const handleJournalUpdate = () => {
+      setPastEntries(readReflectionJournal(userName));
     };
     window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
-    return () => window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
+    const interval = setInterval(handleJournalUpdate, 30_000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
+    };
   }, [userName]);
 
   // Audio Track Source Map
@@ -992,6 +979,7 @@ export default function CommandCenterPage() {
           }
         }
         if (parsed.isFocus !== undefined) setIsFocus(parsed.isFocus);
+        setIsAiRestRecovery(Boolean(parsed.isAiRestRecovery));
         if (parsed.timerPreset) setTimerPreset(parsed.timerPreset);
         let maxS = 4;
         if (parsed.timerPreset === 'Custom') {
@@ -2020,12 +2008,13 @@ export default function CommandCenterPage() {
         timerPreset: 'Custom', customWorkDuration: workMinutes * 60, customBreakDuration: breakMinutes * 60,
         customSessions: targetSessions, sessionCount: 1, presencePaused: false, lastPresenceElapsed: 0,
         lastPresenceRemaining: workMinutes * 60, lastPresenceCheckElapsed: 0, breakGatePending: false };
+      const { reflectionText, ...savedReply } = aiReply;
       const telemetry = { state, sentiment: state, reason: data.actionPlan, actionPlan: data.actionPlan,
         source: data.responseSource === 'fallback' ? 'reflection_submission_fallback' : 'reflection_submission', timestamp };
       try {
         localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
         localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiReply));
+        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(savedReply));
         localStorage.setItem('ifocus_timer_state', JSON.stringify(timer));
         for (const key of ['ifocus_latest_telemetry', `ifocus_telemetry_insight_${userName}`, 'ifocus_telemetry_insight_anonymous']) {
           localStorage.setItem(key, JSON.stringify(telemetry));
@@ -2035,8 +2024,8 @@ export default function CommandCenterPage() {
         window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated', { detail: telemetry }));
       } catch { /* The current plan remains usable when browser storage is unavailable. */ }
       // Reflection, telemetry and timer preferences use one cloud save instead of separate writes.
-      saveHistory([{ id: crypto.randomUUID(), date: timestamp, text, state, aiReply }, ...pastEntries], {
-        latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: aiReply,
+      saveHistory([{ id: crypto.randomUUID(), date: timestamp, text, state, aiReply: savedReply }, ...pastEntries], {
+        latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: savedReply,
       });
       setReflectionInput('');
       if (orderChanged && !await persistTaskOrder(newOrder)) {
@@ -2661,7 +2650,7 @@ export default function CommandCenterPage() {
           <HelpButton topic="breakgate" title="BreakGate Challenge Tutorial" />
         </div>
 
-        {/* AI Prescribed Rest Recovery Banner */}
+        {/* Optional pre-focus break banner */}
         {isAiRestRecovery && !isFocus && (
           <div 
             style={{
@@ -2684,7 +2673,7 @@ export default function CommandCenterPage() {
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
-            <span>AI Prescribed Rest: 5m Recovery Protocol</span>
+            <span>Optional 5-minute break</span>
           </div>
         )}
 
@@ -2700,7 +2689,7 @@ export default function CommandCenterPage() {
               {formatTime(timeLeft)}
             </div>
             <div className="timer-label">
-              {isFocus ? 'Focus Time' : (isAiRestRecovery ? 'AI Restorative Break' : 'Break Time')}
+              {isFocus ? 'Focus Time' : (isAiRestRecovery ? 'Pre-Focus Break' : 'Break Time')}
             </div>
           </div>
         </div>
@@ -4123,10 +4112,10 @@ export default function CommandCenterPage() {
 
             <div>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.45rem 0', color: '#111827', letterSpacing: '-0.02em' }}>
-                Exit Restorative Break Early?
+                End Break Early?
               </h3>
               <p style={{ margin: 0, fontSize: '0.88rem', color: '#4b5563', lineHeight: 1.55 }}>
-                Your AI Study Coach specifically prescribed this 5-minute restorative recovery to prevent cognitive saturation and protect long-term retention. Are you sure you want to end your recovery early?
+                End your optional break and return to the focus timer?
               </p>
             </div>
 

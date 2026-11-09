@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
+import { mergeReflections, pruneReflectionTelemetry } from '../../../../lib/reflectionJournal';
 import { mergeResolvedSessions } from '../../../../lib/recoveryState';
 import { advanceFocusClock, resolveFocusClock, recoverableFocusSessions } from '../../../../lib/focusClock';
 
@@ -31,6 +32,15 @@ export async function GET() {
       try {
         parsedTelemetry = JSON.parse(user.telemetryState);
       } catch (e) {}
+    }
+    const retained = pruneReflectionTelemetry(parsedTelemetry);
+    if (retained !== parsedTelemetry) {
+      // Compare the snapshot so cleanup cannot overwrite another device's updates.
+      await prisma.user.updateMany({
+        where: { id: session.user.id, telemetryState: user.telemetryState },
+        data: { telemetryState: JSON.stringify(retained) },
+      });
+      parsedTelemetry = retained;
     }
     const recoverySessions = recoverableFocusSessions(parsedTelemetry?.focusClock);
     // Internal time evidence is maintained by the server, not synchronized as UI state.
@@ -121,18 +131,8 @@ export async function POST(req) {
               .slice(-50);
           }
 
-          // Deep merge journalHistory array so reflection entries are never lost between devices
           if (Array.isArray(incoming.journalHistory)) {
-            const existingJournal = Array.isArray(existingTelemetry.journalHistory) ? existingTelemetry.journalHistory : [];
-            const journalMap = new Map();
-            [...existingJournal, ...incoming.journalHistory].forEach(entry => {
-              if (!entry) return;
-              const key = entry.id || entry.date || entry.timestamp || (entry.text ? entry.text.slice(0, 40) : null);
-              if (key) journalMap.set(key, entry);
-            });
-            merged.journalHistory = Array.from(journalMap.values())
-              .sort((a, b) => new Date(b.date || b.timestamp || 0).getTime() - new Date(a.date || a.timestamp || 0).getTime())
-              .slice(0, 50);
+            merged.journalHistory = mergeReflections(existingTelemetry.journalHistory, incoming.journalHistory);
           }
 
           // Deep merge or replace masteredCards array so flashcard mastery is synchronized across all devices
@@ -158,7 +158,7 @@ export async function POST(req) {
             merged.cognitiveReset = Math.max(ex, inc);
           }
 
-          updateData.telemetryState = JSON.stringify(merged);
+          updateData.telemetryState = JSON.stringify(pruneReflectionTelemetry(merged));
         }
 
         if (body.timerPreferences !== undefined) {
