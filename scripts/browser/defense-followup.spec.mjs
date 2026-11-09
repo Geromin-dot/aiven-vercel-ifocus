@@ -139,6 +139,7 @@ test('Coach and Feature Guide explain uncertainty and applying a strategy leaves
   const habits = disclaimer.getByRole('region', { name: 'Research-backed study habits' });
   await expect(habits.getByRole('link', { name: 'Agarwal et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-021-09595-9');
   await expect(habits.getByRole('link', { name: 'Latimier et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-020-09572-8');
+  await expect(habits.getByRole('link', { name: 'Ginns et al. (2023)' })).toHaveAttribute('href', 'https://doi.org/10.1080/20590776.2023.2225700');
   await disclaimer.getByRole('button', { name: 'Got it' }).click();
   await expect(disclaimer).toHaveCount(0);
 
@@ -177,7 +178,14 @@ test('Coach offers an optional five-minute break and leaves focus stopped at the
   await page.goto('/coach');
   await expect(page.getByText('Study Resilience', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
-  await page.getByRole('button', { name: 'Take a 5-minute break' }).click();
+  const choices = page.getByRole('dialog', { name: 'Ready to focus?' });
+  const takeBreak = choices.getByRole('button', { name: 'Take a 5-minute break' });
+  const continueFocus = choices.getByRole('button', { name: 'Continue to focus' });
+  await expect(takeBreak).toBeVisible();
+  expect(Math.abs((await takeBreak.boundingBox()).y - (await continueFocus.boundingBox()).y)).toBeLessThan(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect((await continueFocus.boundingBox()).y).toBeGreaterThan((await takeBreak.boundingBox()).y);
+  await takeBreak.click();
   await expect(page).toHaveURL(/dashboard$/);
   const timer = () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');

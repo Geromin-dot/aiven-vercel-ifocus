@@ -776,12 +776,18 @@ export default function CoachPage() {
       {chooseBreak && (
         <AppDialog titleId="coach-break-choice" onDismiss={() => setChooseBreak(false)}>
           <h2 id="coach-break-choice">Ready to focus?</h2>
-          <p>You can take a short break first. When the break ends, start the focus timer when you feel ready.</p>
-          <footer>
-            <button type="button" className="btn-secondary" onClick={() => setChooseBreak(false)}>Cancel</button>
-            <button type="button" className="btn-secondary" onClick={() => handleReturnHome(false)}>Continue to focus</button>
-            <button type="button" className="btn-primary" onClick={() => handleReturnHome(true)}>Take a 5-minute break</button>
-          </footer>
+          <p>Take a short break if you need one, or set up your focus timer now. You decide when to start focusing.</p>
+          <div className={coachStyles.breakChoices}>
+            <button type="button" className={coachStyles.breakPrimary} aria-label="Take a 5-minute break" onClick={() => handleReturnHome(true)}>
+              <strong>Take a 5-minute break</strong>
+              <span>Start the break timer now</span>
+            </button>
+            <button type="button" aria-label="Continue to focus" onClick={() => handleReturnHome(false)}>
+              <strong>Continue to focus</strong>
+              <span>Open your suggested timer</span>
+            </button>
+          </div>
+          <button type="button" className={coachStyles.breakCancel} onClick={() => setChooseBreak(false)}>Cancel</button>
         </AppDialog>
       )}
 
@@ -797,7 +803,7 @@ export default function CoachPage() {
             borderRadius: '16px', 
             border: insight?.isIntervention ? '1.5px solid var(--warning)' : '1px solid var(--glass-border)',
             boxShadow: insight ? '0 4px 18px rgba(217, 119, 6, 0.1)' : '0 2px 10px rgba(0,0,0,0.02)', 
-            height: '100%', 
+            alignSelf: 'start',
             minHeight: 0, 
             display: 'flex', 
             flexDirection: 'column', 

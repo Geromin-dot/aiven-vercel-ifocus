@@ -23,6 +23,7 @@ export default function CoachDisclaimer() {
             <ul>
               <li><strong>Practice retrieval.</strong> Answer a flashcard or practice question from memory, then check your answer. <a href="https://doi.org/10.1007/s10648-021-09595-9" target="_blank" rel="noopener noreferrer">Agarwal et al. (2021)</a></li>
               <li><strong>Space your review.</strong> Revisit the material on different days and spend extra time on items you missed. <a href="https://doi.org/10.1007/s10648-020-09572-8" target="_blank" rel="noopener noreferrer">Latimier et al. (2021)</a></li>
+              <li><strong>Take a short break before focusing.</strong> A study tested a five-minute break after a demanding task and before a lesson. Try this option when you need a pause. <a href="https://doi.org/10.1080/20590776.2023.2225700" target="_blank" rel="noopener noreferrer">Ginns et al. (2023)</a></li>
             </ul>
           </section>
           <footer><button type="button" className="btn-primary" onClick={() => setOpen(false)}>Got it</button></footer>

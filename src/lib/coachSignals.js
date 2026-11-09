@@ -31,11 +31,11 @@ export function formatCoachInsight(signal) {
     reason: signal.source?.startsWith('keystroke')
       ? 'Your recent typing showed frequent corrections or input friction. If the task feels difficult, take a moment to slow down and regroup.'
       : 'Your latest reflection indicates stress or frustration. A gentler study pace may help you get started.',
-    actionPlan: 'Pause briefly if you need to, then choose one manageable task. Continue with a shorter focus block and reassess how you feel afterward.',
-    steps: ['Pause and take a few slow breaths', 'Choose one manageable task', 'Resume with a short focus block'],
+    actionPlan: 'If you need a moment, step away before you start. Pick one manageable task, such as reviewing a single concept or answering one practice question. After a short focus block, check what you can explain from memory and decide whether to continue or take another break.',
+    steps: ['Choose an optional break or start when ready', 'Set one small goal for this focus block', 'Recall one thing you learned and check it against your notes'],
   } : fatigued ? {
     reason: 'Your latest interaction suggests a slower study pace or tiredness. Give yourself room to recover before tackling harder material.',
-    actionPlan: 'Take a brief stretch or water break if needed. Return with a lighter task and a shorter focus block.',
+    actionPlan: 'Take a short break if you feel tired. When you are ready, return with a lighter task, such as reviewing a few familiar flashcards. After the focus block, decide whether you feel ready to tackle a harder topic or would benefit from more rest.',
     steps: ['Check whether you need a short break', 'Choose a lighter task', 'Return at a comfortable pace'],
   } : distracted ? {
     reason: 'Your latest reflection indicates distraction. A clear, smaller task can help you regain focus.',

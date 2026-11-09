@@ -583,7 +583,7 @@ export default function CommandCenterPage() {
       const backspaceRatio = totalKeystrokesRef.current > 0 ? backspaceCountRef.current / totalKeystrokesRef.current : 0;
 
       triggerTelemetryAlert(
-        "Multiple simultaneous keys detected. It looks like you might be feeling overwhelmed or experiencing keyboard friction.",
+        "Several keys were pressed together while you were typing. If studying feels difficult right now, try a short pause or choose one small task.",
         "Take your hands off the keyboard for a moment. Take a slow, deep breath to reset before writing your reflection.",
         avgDwell, avgFlight, backspaceRatio,
         "Coach has noticed something"
