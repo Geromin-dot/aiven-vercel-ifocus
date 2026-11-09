@@ -746,42 +746,51 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Row 1, Col 2: BreakGate Activity */}
-        <div style={{
+        <section aria-labelledby="breakgate-activity-title" style={{
+          alignSelf: 'start',
+          width: '100%',
+          minWidth: 0,
           padding: '0.9rem 1.15rem',
-          background: '#ffffff',
+          background: '#fff',
           borderRadius: '16px',
           border: '1px solid var(--glass-border)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 0
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
         }}>
-          <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.45rem', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+          <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.55rem' }}>
+            <h3 id="breakgate-activity-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
               BreakGate Activity
             </h3>
-            <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-              Challenges recorded today.
+            <p style={{ margin: '0.1rem 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+              A daily summary of your break-time review challenges.
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', flex: 1, justifyContent: 'center', padding: '0.35rem 0' }}>
-
+          <dl style={{ display: 'grid', gap: '0.45rem', margin: '0.65rem 0 0' }}>
             {[
-              ['Challenges logged', breakGateActivity.completed + breakGateActivity.skipped],
-              ['Completed', breakGateActivity.completed],
-              ['Skipped', breakGateActivity.skipped],
-            ].map(([label, count]) => (
-              <div key={label} style={{ padding: '0.65rem 0.95rem', background: '#f8faf8', borderRadius: '12px', border: '1px solid rgba(95, 143, 94, 0.14)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1f2937' }}>{label}</span>
-                <strong style={{ fontSize: '0.86rem', color: '#27522d' }}>{count}</strong>
+              ['Challenges logged', 'All completed and skipped challenges today.', breakGateActivity.completed + breakGateActivity.skipped, 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z', '#27522d', '#e8f1e7'],
+              ['Completed', 'Challenges you finished before taking a break.', breakGateActivity.completed, 'm5 12 4 4L19 6', '#166534', '#e5f3e9'],
+              ['Skipped', 'Challenges you chose to skip to start your break.', breakGateActivity.skipped, 'm5 5 10 7-10 7V5Zm13 0v14', '#475569', '#eef2f5'],
+            ].map(([label, description, count, icon, color, tint]) => (
+              <div key={label} style={{ padding: '0.55rem 0.7rem', background: '#f8faf8', borderRadius: '10px', border: '1px solid #e4ebe3', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: '0.55rem' }}>
+                <dt style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                  <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center', width: '1.85rem', height: '1.85rem', flexShrink: 0, borderRadius: '7px', background: tint, color }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d={icon} />
+                    </svg>
+                  </span>
+                  <span>
+                    <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#1f2937' }}>{label}</span>
+                    <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.35, color: '#52635a' }}>{description}</span>
+                  </span>
+                </dt>
+                <dd style={{ margin: 0, padding: '0.15rem 0.45rem', borderRadius: '6px', background: tint, color, fontSize: '0.86rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{count}</dd>
               </div>
             ))}
-
-          </div>
-        </div>
+          </dl>
+          {breakGateActivity.completed + breakGateActivity.skipped === 0 && (
+            <p style={{ margin: '0.6rem 0 0', fontSize: '0.72rem', color: '#52635a' }}>Your first logged challenge will appear here.</p>
+          )}
+        </section>
 
         {/* Row 2, Col 1: Recent Study Sessions */}
         <div style={{

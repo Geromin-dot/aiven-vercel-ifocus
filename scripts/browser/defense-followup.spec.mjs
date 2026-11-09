@@ -206,7 +206,13 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
   await expect(page.getByText('Expired reflection fixture', { exact: false })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_journal_history_History Student')).map(entry => entry.id))).toEqual(['recent']);
   await page.goto('/analytics');
-  await expect(page.getByRole('heading', { name: 'BreakGate Activity' })).toBeVisible();
-  await expect(page.getByText('Challenges logged', { exact: true }).locator('..')).toHaveText('Challenges logged2');
-  await expect(page.getByText('Skipped', { exact: true }).locator('..')).toHaveText('Skipped1');
+  const activity = page.getByRole('region', { name: 'BreakGate Activity' });
+  await expect(activity.locator('dd')).toHaveText(['2', '1', '1']);
+  await expect(activity).toContainText('All completed and skipped challenges today.');
+  await expect(activity.locator('svg')).toHaveCount(3);
+  const [heading, firstRow] = await Promise.all([
+    activity.getByRole('heading').boundingBox(),
+    activity.locator('dl > div').first().boundingBox(),
+  ]);
+  expect(firstRow.y - (heading.y + heading.height)).toBeLessThan(50);
 });
