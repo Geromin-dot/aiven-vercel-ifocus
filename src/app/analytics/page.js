@@ -426,17 +426,23 @@ export default function AnalyticsPage() {
           flex-shrink: 0;
         }
         .analytics-grid-2x2 {
-          flex: 1;
-          min-height: 0;
+          flex: 0 0 auto;
           display: grid;
           grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
           gap: 0.65rem;
         }
         .analytics-focus-column {
           display: grid;
-          grid-template-rows: minmax(250px, 1.25fr) minmax(180px, 1fr);
+          grid-template-rows: minmax(250px, 1fr) auto;
           gap: 0.65rem;
           min-width: 0;
+        }
+        .analytics-chart-body {
+          flex: 1;
+          min-height: 0;
+          position: relative;
+          contain: size;
+          padding-top: 0.35rem;
         }
         .analytics-review-column {
           display: flex;
@@ -466,7 +472,7 @@ export default function AnalyticsPage() {
           .analytics-review-column > :first-child { order: 1; }
           .analytics-focus-column > :last-child { order: 2; }
           .analytics-review-column > :last-child { order: 3; }
-          .analytics-focus-column canvas { min-height: 180px; }
+          .analytics-chart-body { flex: none; height: 190px; }
         }
       `}</style>
 
@@ -760,7 +766,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%', paddingTop: '0.35rem' }}>
+            <div className="analytics-chart-body">
               <Bar data={focusChartData} options={focusChartOptions} />
             </div>
           </div>

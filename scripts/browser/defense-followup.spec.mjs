@@ -196,6 +196,9 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
       { id: 'recent', text: 'Recent reflection fixture', date: new Date(Date.now() - 1000).toISOString() },
     ]));
     const date = new Date().toISOString();
+    localStorage.setItem('ifocus_session_history', JSON.stringify(
+      [1, 2].map(id => ({ id, date, duration: 1, durationSeconds: 60, type: 'pomodoro', synced: true }))
+    ));
     localStorage.setItem('ifocus_breakgate_events', JSON.stringify([
       { id: 'complete', status: 'completed', date }, { id: 'skip', status: 'skipped', date },
       { id: 'yesterday', status: 'skipped', date: new Date(Date.now() - 86400000).toISOString() },
@@ -208,6 +211,7 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
   await page.goto('/analytics');
   const activity = page.getByRole('region', { name: 'BreakGate Activity' });
   await expect(activity.locator('dd')).toHaveText(['2', '1', '1']);
+  await expect(page.getByText('1 min Pomodoro Focus Session', { exact: true })).toHaveCount(2);
   await expect(activity).toContainText('All completed and skipped challenges today.');
   await expect(activity.locator('svg')).toHaveCount(3);
   const [heading, firstRow] = await Promise.all([
@@ -221,4 +225,16 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
   ]);
   expect(retention.y - (activityBox.y + activityBox.height)).toBeGreaterThan(0);
   expect(retention.y - (activityBox.y + activityBox.height)).toBeLessThan(36);
+  const [focusColumn, reviewColumn, recallCard] = await Promise.all([
+    page.locator('.analytics-focus-column').boundingBox(),
+    page.locator('.analytics-review-column').boundingBox(),
+    page.locator('.analytics-review-column > :last-child').boundingBox(),
+  ]);
+  expect(Math.abs(focusColumn.y + focusColumn.height - (recallCard.y + recallCard.height))).toBeLessThan(3);
+  expect(reviewColumn.height).toBeLessThan(620);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const chart = page.locator('.analytics-chart-body');
+  await expect(chart).toBeVisible();
+  expect((await chart.boundingBox()).height).toBeGreaterThanOrEqual(180);
+  await expect(page.getByRole('heading', { name: 'Active Recall Retention' })).toBeVisible();
 });
