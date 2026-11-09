@@ -415,7 +415,7 @@ export default function AnalyticsPage() {
           max-width: 1440px;
           margin: 0 auto;
           gap: 0.65rem;
-          overflow: hidden;
+          overflow-y: auto;
           box-sizing: border-box;
           animation: flashcardFadeIn 0.25s ease;
         }
@@ -429,9 +429,20 @@ export default function AnalyticsPage() {
           flex: 1;
           min-height: 0;
           display: grid;
-          grid-template-columns: 1.15fr 0.85fr;
-          grid-template-rows: 1.25fr 1fr;
+          grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
           gap: 0.65rem;
+        }
+        .analytics-focus-column {
+          display: grid;
+          grid-template-rows: minmax(250px, 1.25fr) minmax(180px, 1fr);
+          gap: 0.65rem;
+          min-width: 0;
+        }
+        .analytics-review-column {
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+          min-width: 0;
         }
         @media (max-width: 960px) {
           .analytics-page-root {
@@ -449,6 +460,13 @@ export default function AnalyticsPage() {
             flex-direction: column !important;
             flex: none !important;
           }
+          .analytics-focus-column, .analytics-review-column {
+            display: contents;
+          }
+          .analytics-review-column > :first-child { order: 1; }
+          .analytics-focus-column > :last-child { order: 2; }
+          .analytics-review-column > :last-child { order: 3; }
+          .analytics-focus-column canvas { min-height: 180px; }
         }
       `}</style>
 
@@ -671,348 +689,351 @@ export default function AnalyticsPage() {
       {/* Main 2x2 Dashboard Grid */}
       <div className="analytics-grid-2x2">
 
-        {/* Row 1, Col 1: Weekly Focus Bar Chart */}
-        <div style={{
-          padding: '0.9rem 1.15rem',
-          background: '#ffffff',
-          borderRadius: '16px',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-          overflow: 'hidden'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingBottom: '0.45rem', borderBottom: '1px solid rgba(0, 0, 0, 0.05)', flexShrink: 0 }}>
-            <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
-                Weekly Focus Activity
-              </h3>
-              <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
-                {scaleMode === '10mins'
-                  ? 'Measured in 10-minute intervals (Green indicates today).'
-                  : 'Measured in total hours (Green indicates today).'}
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', border: '1px solid rgba(0,0,0,0.06)' }}>
-                <button
-                  type="button"
-                  onClick={() => setScaleMode('10mins')}
-                  style={{
-                    border: 'none',
-                    background: scaleMode === '10mins' ? '#ffffff' : 'transparent',
-                    color: scaleMode === '10mins' ? '#0f172a' : '#64748b',
-                    fontSize: '0.74rem',
-                    fontWeight: scaleMode === '10mins' ? 700 : 500,
-                    padding: '0.25rem 0.65rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    boxShadow: scaleMode === '10mins' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Per 10 Mins
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setScaleMode('hours')}
-                  style={{
-                    border: 'none',
-                    background: scaleMode === 'hours' ? '#ffffff' : 'transparent',
-                    color: scaleMode === 'hours' ? '#0f172a' : '#64748b',
-                    fontSize: '0.74rem',
-                    fontWeight: scaleMode === 'hours' ? 700 : 500,
-                    padding: '0.25rem 0.65rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    boxShadow: scaleMode === 'hours' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Per Hours
-                </button>
+        <div className="analytics-focus-column">
+          {/* Weekly Focus Bar Chart */}
+          <div style={{
+            padding: '0.9rem 1.15rem',
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid var(--glass-border)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingBottom: '0.45rem', borderBottom: '1px solid rgba(0, 0, 0, 0.05)', flexShrink: 0 }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
+                  Weekly Focus Activity
+                </h3>
+                <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
+                  {scaleMode === '10mins'
+                    ? 'Measured in 10-minute intervals (Green indicates today).'
+                    : 'Measured in total hours (Green indicates today).'}
+                </p>
               </div>
 
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#27522d', background: 'rgba(95, 143, 94, 0.12)', padding: '0.25rem 0.7rem', borderRadius: '999px' }}>
-                {weekHoursFormatted}h Total
-              </div>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%', paddingTop: '0.35rem' }}>
-            <Bar data={focusChartData} options={focusChartOptions} />
-          </div>
-        </div>
-
-        <section aria-labelledby="breakgate-activity-title" style={{
-          alignSelf: 'start',
-          width: '100%',
-          minWidth: 0,
-          padding: '0.9rem 1.15rem',
-          background: '#fff',
-          borderRadius: '16px',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-        }}>
-          <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.55rem' }}>
-            <h3 id="breakgate-activity-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              BreakGate Activity
-            </h3>
-            <p style={{ margin: '0.1rem 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-              A daily summary of your break-time review challenges.
-            </p>
-          </div>
-
-          <dl style={{ display: 'grid', gap: '0.45rem', margin: '0.65rem 0 0' }}>
-            {[
-              ['Challenges logged', 'All completed and skipped challenges today.', breakGateActivity.completed + breakGateActivity.skipped, 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z', '#27522d', '#e8f1e7'],
-              ['Completed', 'Challenges you finished before taking a break.', breakGateActivity.completed, 'm5 12 4 4L19 6', '#166534', '#e5f3e9'],
-              ['Skipped', 'Challenges you chose to skip to start your break.', breakGateActivity.skipped, 'm5 5 10 7-10 7V5Zm13 0v14', '#475569', '#eef2f5'],
-            ].map(([label, description, count, icon, color, tint]) => (
-              <div key={label} style={{ padding: '0.55rem 0.7rem', background: '#f8faf8', borderRadius: '10px', border: '1px solid #e4ebe3', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: '0.55rem' }}>
-                <dt style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                  <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center', width: '1.85rem', height: '1.85rem', flexShrink: 0, borderRadius: '7px', background: tint, color }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={icon} />
-                    </svg>
-                  </span>
-                  <span>
-                    <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#1f2937' }}>{label}</span>
-                    <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.35, color: '#52635a' }}>{description}</span>
-                  </span>
-                </dt>
-                <dd style={{ margin: 0, padding: '0.15rem 0.45rem', borderRadius: '6px', background: tint, color, fontSize: '0.86rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{count}</dd>
-              </div>
-            ))}
-          </dl>
-          {breakGateActivity.completed + breakGateActivity.skipped === 0 && (
-            <p style={{ margin: '0.6rem 0 0', fontSize: '0.72rem', color: '#52635a' }}>Your first logged challenge will appear here.</p>
-          )}
-        </section>
-
-        {/* Row 2, Col 1: Recent Study Sessions */}
-        <div style={{
-          padding: '0.9rem 1.15rem',
-          background: '#ffffff',
-          borderRadius: '16px',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 0, 0, 0.05)', paddingBottom: '0.4rem', marginBottom: '0.45rem', flexShrink: 0 }}>
-            <div>
-              <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
-                Recent Study Sessions
-              </h3>
-              <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
-                Your logged Pomodoro focus sessions.
-              </p>
-            </div>
-
-            <Link href="/dashboard" style={{ fontSize: '0.78rem', color: 'var(--primary-accent)', fontWeight: 700, textDecoration: 'none' }}>
-              Open Timer →
-            </Link>
-          </div>
-
-          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.45rem', justifyContent: 'flex-start' }}>
-            {baseStats.recentSessions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
-                No focus sessions logged yet. Complete a Pomodoro session in the timer to see activity here!
-              </div>
-            ) : (
-              <>
-                {baseStats.recentSessions.slice(0, 2).map((session, idx) => (
-                  <div
-                    key={idx}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setScaleMode('10mins')}
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.55rem 0.85rem',
-                      background: '#fbfdfa',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(0, 0, 0, 0.05)'
+                      border: 'none',
+                      background: scaleMode === '10mins' ? '#ffffff' : 'transparent',
+                      color: scaleMode === '10mins' ? '#0f172a' : '#64748b',
+                      fontSize: '0.74rem',
+                      fontWeight: scaleMode === '10mins' ? 700 : 500,
+                      padding: '0.25rem 0.65rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      boxShadow: scaleMode === '10mins' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s ease'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '8px',
-                        background: session.type === 'breakgate' ? 'rgba(46, 125, 50, 0.12)' : 'rgba(95, 143, 94, 0.12)',
-                        color: session.type === 'breakgate' ? '#2e7d32' : 'var(--primary-accent)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        {session.type === 'breakgate' ? (
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                          </svg>
-                        ) : (
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                        )}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {session.duration} min {session.type === 'breakgate' ? 'BreakGate Micro-Challenge' : 'Pomodoro Focus Session'}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                          {formatSessionTime(session.date)}
-                        </div>
-                      </div>
-                    </div>
+                    Per 10 Mins
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScaleMode('hours')}
+                    style={{
+                      border: 'none',
+                      background: scaleMode === 'hours' ? '#ffffff' : 'transparent',
+                      color: scaleMode === 'hours' ? '#0f172a' : '#64748b',
+                      fontSize: '0.74rem',
+                      fontWeight: scaleMode === 'hours' ? 700 : 500,
+                      padding: '0.25rem 0.65rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      boxShadow: scaleMode === 'hours' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    Per Hours
+                  </button>
+                </div>
 
-                    <span style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 800,
-                      color: '#2e7d32',
-                      background: 'rgba(46, 125, 50, 0.1)',
-                      padding: '0.2rem 0.55rem',
-                      borderRadius: '999px',
-                      letterSpacing: '0.03em',
-                      textTransform: 'uppercase'
-                    }}>
-                      Completed
-                    </span>
-                  </div>
-                ))}
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#27522d', background: 'rgba(95, 143, 94, 0.12)', padding: '0.25rem 0.7rem', borderRadius: '999px' }}>
+                  {weekHoursFormatted}h Total
+                </div>
+              </div>
+            </div>
 
-                {/* Helpful Goal Tile when only 1 session is logged, to keep card filled & purposeful */}
-                {baseStats.recentSessions.length === 1 && (
-                  <div style={{
-                    padding: '0.5rem 0.85rem',
-                    background: 'rgba(95, 143, 94, 0.05)',
-                    borderRadius: '10px',
-                    border: '1px dashed rgba(95, 143, 94, 0.25)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.5rem'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: "rgba(95, 143, 94, 0.15)", color: "#27522d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <circle cx="12" cy="12" r="6" />
-                          <circle cx="12" cy="12" r="2" />
-                        </svg>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                          Ready for your next round?
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                          Start another focus block to level up today's streak.
-                        </div>
-                      </div>
-                    </div>
-                    <Link
-                      href="/dashboard"
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', width: '100%', height: '100%', paddingTop: '0.35rem' }}>
+              <Bar data={focusChartData} options={focusChartOptions} />
+            </div>
+          </div>
+
+          {/* Recent Study Sessions */}
+          <div style={{
+            padding: '0.9rem 1.15rem',
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid var(--glass-border)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(0, 0, 0, 0.05)', paddingBottom: '0.4rem', marginBottom: '0.45rem', flexShrink: 0 }}>
+              <div>
+                <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.01em' }}>
+                  Recent Study Sessions
+                </h3>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '0.1rem 0 0 0' }}>
+                  Your logged Pomodoro focus sessions.
+                </p>
+              </div>
+
+              <Link href="/dashboard" style={{ fontSize: '0.78rem', color: 'var(--primary-accent)', fontWeight: 700, textDecoration: 'none' }}>
+                Open Timer →
+              </Link>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.45rem', justifyContent: 'flex-start' }}>
+              {baseStats.recentSessions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                  No focus sessions logged yet. Complete a Pomodoro session in the timer to see activity here!
+                </div>
+              ) : (
+                <>
+                  {baseStats.recentSessions.slice(0, 2).map((session, idx) => (
+                    <div
+                      key={idx}
                       style={{
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        color: '#27522d',
-                        textDecoration: 'none',
-                        background: '#ffffff',
-                        padding: '0.25rem 0.65rem',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(0,0,0,0.08)',
-                        whiteSpace: 'nowrap'
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.55rem 0.85rem',
+                        background: '#fbfdfa',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(0, 0, 0, 0.05)'
                       }}
                     >
-                      Start Timer →
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          background: session.type === 'breakgate' ? 'rgba(46, 125, 50, 0.12)' : 'rgba(95, 143, 94, 0.12)',
+                          color: session.type === 'breakgate' ? '#2e7d32' : 'var(--primary-accent)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {session.type === 'breakgate' ? (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            </svg>
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {session.duration} min {session.type === 'breakgate' ? 'BreakGate Micro-Challenge' : 'Pomodoro Focus Session'}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            {formatSessionTime(session.date)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 800,
+                        color: '#2e7d32',
+                        background: 'rgba(46, 125, 50, 0.1)',
+                        padding: '0.2rem 0.55rem',
+                        borderRadius: '999px',
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase'
+                      }}>
+                        Completed
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Helpful Goal Tile when only 1 session is logged, to keep card filled & purposeful */}
+                  {baseStats.recentSessions.length === 1 && (
+                    <div style={{
+                      padding: '0.5rem 0.85rem',
+                      background: 'rgba(95, 143, 94, 0.05)',
+                      borderRadius: '10px',
+                      border: '1px dashed rgba(95, 143, 94, 0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div style={{ width: "24px", height: "24px", borderRadius: "6px", background: "rgba(95, 143, 94, 0.15)", color: "#27522d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <circle cx="12" cy="12" r="6" />
+                            <circle cx="12" cy="12" r="2" />
+                          </svg>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            Ready for your next round?
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                            Start another focus block to level up today's streak.
+                          </div>
+                        </div>
+                      </div>
+                      <Link
+                        href="/dashboard"
+                        style={{
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          color: '#27522d',
+                          textDecoration: 'none',
+                          background: '#ffffff',
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(0,0,0,0.08)',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Start Timer →
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Row 2, Col 2: Active Recall Retention */}
-        <div style={{
-          padding: '0.9rem 1.15rem',
-          background: '#ffffff',
-          borderRadius: '16px',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 0
-        }}>
-          <div>
-            <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.4rem', marginBottom: '0.45rem', flexShrink: 0 }}>
-              <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                Active Recall Retention
+        <div className="analytics-review-column">
+          <section aria-labelledby="breakgate-activity-title" style={{
+            alignSelf: 'start',
+            width: '100%',
+            minWidth: 0,
+            padding: '0.9rem 1.15rem',
+            background: '#fff',
+            borderRadius: '16px',
+            border: '1px solid var(--glass-border)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+          }}>
+            <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.55rem' }}>
+              <h3 id="breakgate-activity-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                BreakGate Activity
               </h3>
-              <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                Mastery distribution across study decks.
+              <p style={{ margin: '0.1rem 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                A daily summary of your break-time review challenges.
               </p>
             </div>
 
-            {/* Mastered Progress Bar */}
-            <div style={{ marginTop: '0.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#374151' }}>Mastered Concepts</span>
-                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#059669' }}>{masteryPercent}%</span>
+            <dl style={{ display: 'grid', gap: '0.45rem', margin: '0.65rem 0 0' }}>
+              {[
+                ['Challenges logged', 'All completed and skipped challenges today.', breakGateActivity.completed + breakGateActivity.skipped, 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z', '#27522d', '#e8f1e7'],
+                ['Completed', 'Challenges you finished before taking a break.', breakGateActivity.completed, 'm5 12 4 4L19 6', '#166534', '#e5f3e9'],
+                ['Skipped', 'Challenges you chose to skip to start your break.', breakGateActivity.skipped, 'm5 5 10 7-10 7V5Zm13 0v14', '#475569', '#eef2f5'],
+              ].map(([label, description, count, icon, color, tint]) => (
+                <div key={label} style={{ padding: '0.55rem 0.7rem', background: '#f8faf8', borderRadius: '10px', border: '1px solid #e4ebe3', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: '0.55rem' }}>
+                  <dt style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center', width: '1.85rem', height: '1.85rem', flexShrink: 0, borderRadius: '7px', background: tint, color }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d={icon} />
+                      </svg>
+                    </span>
+                    <span>
+                      <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#1f2937' }}>{label}</span>
+                      <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.35, color: '#52635a' }}>{description}</span>
+                    </span>
+                  </dt>
+                  <dd style={{ margin: 0, padding: '0.15rem 0.45rem', borderRadius: '6px', background: tint, color, fontSize: '0.86rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{count}</dd>
+                </div>
+              ))}
+            </dl>
+            {breakGateActivity.completed + breakGateActivity.skipped === 0 && (
+              <p style={{ margin: '0.6rem 0 0', fontSize: '0.72rem', color: '#52635a' }}>Your first logged challenge will appear here.</p>
+            )}
+          </section>
+
+          {/* Active Recall Retention */}
+          <div style={{
+            padding: '0.9rem 1.15rem',
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid var(--glass-border)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            minHeight: 0
+          }}>
+            <div>
+              <div style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.4rem', marginBottom: '0.45rem', flexShrink: 0 }}>
+                <h3 style={{ margin: 0, fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                  Active Recall Retention
+                </h3>
+                <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  Mastery distribution across study decks.
+                </p>
               </div>
-              <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
-                <div style={{ width: `${masteryPercent}%`, height: '100%', background: 'linear-gradient(90deg, #10b981, #059669)', borderRadius: '999px', transition: 'width 0.4s ease' }} />
+
+              {/* Mastered Progress Bar */}
+              <div style={{ marginTop: '0.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#374151' }}>Mastered Concepts</span>
+                  <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#059669' }}>{masteryPercent}%</span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div style={{ width: `${masteryPercent}%`, height: '100%', background: 'linear-gradient(90deg, #10b981, #059669)', borderRadius: '999px', transition: 'width 0.4s ease' }} />
+                </div>
+              </div>
+
+              {/* Mini Stats Breakdown */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem', marginTop: '0.55rem' }}>
+                <div style={{ background: '#f8faf8', padding: '0.45rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(95, 143, 94, 0.12)' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Total Cards</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '1px' }}>{totalFlashcards}</div>
+                </div>
+                <div style={{ background: '#f8faf8', padding: '0.45rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(95, 143, 94, 0.12)' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Mastered</div>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#059669', marginTop: '1px' }}>{masteredCount}</div>
+                </div>
               </div>
             </div>
 
-            {/* Mini Stats Breakdown */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem', marginTop: '0.55rem' }}>
-              <div style={{ background: '#f8faf8', padding: '0.45rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(95, 143, 94, 0.12)' }}>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Total Cards</div>
-                <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '1px' }}>{totalFlashcards}</div>
-              </div>
-              <div style={{ background: '#f8faf8', padding: '0.45rem 0.75rem', borderRadius: '10px', border: '1px solid rgba(95, 143, 94, 0.12)' }}>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Mastered</div>
-                <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#059669', marginTop: '1px' }}>{masteredCount}</div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.45rem' }}>
+              <Link
+                href="/flashcards"
+                style={{
+                  textDecoration: 'none',
+                  textAlign: 'center',
+                  padding: '0.55rem 1rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  background: '#27522d',
+                  color: '#ffffff',
+                  borderRadius: '12px',
+                  boxShadow: '0 2px 8px rgba(39, 82, 45, 0.22)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                </svg>
+                Practice Flashcards
+              </Link>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '0.45rem' }}>
-            <Link
-              href="/flashcards"
-              style={{
-                textDecoration: 'none',
-                textAlign: 'center',
-                padding: '0.55rem 1rem',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                background: '#27522d',
-                color: '#ffffff',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(39, 82, 45, 0.22)',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
-              Practice Flashcards
-            </Link>
           </div>
         </div>
-
       </div>
 
     </div>

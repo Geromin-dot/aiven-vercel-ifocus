@@ -215,4 +215,10 @@ test('Coach hides expired reflections and Analytics shows only recorded BreakGat
     activity.locator('dl > div').first().boundingBox(),
   ]);
   expect(firstRow.y - (heading.y + heading.height)).toBeLessThan(50);
+  const [activityBox, retention] = await Promise.all([
+    activity.boundingBox(),
+    page.getByRole('heading', { name: 'Active Recall Retention' }).boundingBox(),
+  ]);
+  expect(retention.y - (activityBox.y + activityBox.height)).toBeGreaterThan(0);
+  expect(retention.y - (activityBox.y + activityBox.height)).toBeLessThan(36);
 });
