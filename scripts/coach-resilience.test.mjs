@@ -28,3 +28,12 @@ test('only skips from today count toward the five-skip BreakGate suggestion', ()
   assert.equal(result.canTurnOff, true);
   assert.match(result.message, /turning off BreakGate/);
 });
+
+test('the notice fires at multiples of five even after the saved history rolls over', () => {
+  for (const count of [4, 5, 6, 9, 10, 11, 15, 50, 51, 55]) {
+    const events = Array.from({ length: count }, (_, index) => ({ ...skip, dailySkipNumber: index + 1 })).slice(-50);
+    const result = getBreakGateGuidance(events, now);
+    assert.equal(result.skipped, count);
+    assert.equal(result.shouldNotify, count % 5 === 0);
+  }
+});

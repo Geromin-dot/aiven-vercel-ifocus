@@ -3,7 +3,7 @@
 import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { BREAKGATE_SKIP_THRESHOLD, getBreakGateGuidance } from '@/lib/coachResilience';
+import { getBreakGateGuidance } from '@/lib/coachResilience';
 
 // Crystal-clear Web Audio Synthesis for BreakGate Unlock Chime
 const playBreakGateUnlockChime = () => {
@@ -274,6 +274,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       const iso = now.toISOString();
       events.push({
         status: 'skipped',
+        dailySkipNumber: getBreakGateGuidance(events, now).skipped + 1,
         score: 0,
         total: total,
         date: iso,
@@ -281,7 +282,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       });
       const trimmed = events.slice(-50);
       const guidance = getBreakGateGuidance(trimmed, now);
-      if (guidance.skipped === BREAKGATE_SKIP_THRESHOLD) notice = guidance.message;
+      if (guidance.shouldNotify) notice = guidance.message;
       localStorage.setItem('ifocus_breakgate_events', JSON.stringify(trimmed));
       window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
       fetch('/api/user/telemetry', {

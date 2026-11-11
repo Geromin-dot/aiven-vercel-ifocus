@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
-import { reconcileCloudTelemetry, setAiTimerAdjustment } from '@/lib/telemetrySync';
+import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
 import { getBreakGateGuidance } from '@/lib/coachResilience';
 import { latestCoachSignal, formatCoachInsight } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
@@ -946,9 +946,9 @@ export default function CoachPage() {
                   <span>Apply Strategy to Dashboard</span>
                 )}
               </button>}
-              {telemetryDiagnostics.canTurnOffBreakGate && (
+              {telemetryDiagnostics.canTurnOffBreakGate && session?.user?.id && (
                 <button type="button" className="btn-secondary" style={{ margin: 0 }}
-                  onClick={() => window.dispatchEvent(new CustomEvent('ifocus_breakgate_strategy', { detail: telemetryDiagnostics.breakGateMessage }))}>
+                  onClick={() => setBreakGateDeck(null, session.user.id)}>
                   Apply BreakGate Strategy
                 </button>
               )}

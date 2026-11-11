@@ -4,6 +4,7 @@
 
 import AppDialog from '@/components/AppDialog';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
+import CoachNotice from '@/components/CoachNotice';
 import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -4469,49 +4470,11 @@ export default function CommandCenterPage() {
         </div>
       )}
 
-            {/* Keystroke Telemetrics Intervention Toast (iOS Spring Popup Style) */}
       {telemetryToast.show && (
-        <div className="ios-notification-toast">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(78, 130, 83, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-accent)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-              </div>
-              <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>{telemetryToast.title || "Coach has noticed something"}</h4>
-            </div>
-            <button
-              onClick={dismissTelemetryToast}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.95rem', padding: '2px', display: 'flex', alignItems: 'center' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 0.85rem 0', lineHeight: '1.45' }}>
-            {telemetryToast.reason}
-          </p>
-
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              className="btn-primary"
-              onClick={goToCoach}
-              style={{ flex: 1, padding: '0.5rem', fontSize: '0.82rem', borderRadius: '9999px', margin: 0, height: '36px' }}
-            >
-              View Coach Strategy
-            </button>
-            <button
-              onClick={dismissTelemetryToast}
-              style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '9999px', padding: '0.5rem 0.85rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+        <CoachNotice title={telemetryToast.title || undefined} message={telemetryToast.reason}
+          onView={goToCoach} onDismiss={dismissTelemetryToast} />
       )}
-      
+
     </div>
   );
 }

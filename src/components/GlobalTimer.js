@@ -4,10 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
-import AppDialog from './AppDialog';
-import coachStyles from './CoachLayout.module.css';
+import CoachNotice from './CoachNotice';
 import FeatureGuideModal from "./FeatureGuideModal";
-import { clearAiTimerAdjustment, reconcileCloudTelemetry, setBreakGateDeck } from "../lib/telemetrySync";
+import { clearAiTimerAdjustment, reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '../lib/verifiedStudyClient';
@@ -1841,12 +1840,6 @@ export default function GlobalTimer() {
     }
   }, [timerState.breakGatePending, activeBreakGateDeck, handleBreakGateComplete]);
 
-  useEffect(() => {
-    const openStrategy = event => setBreakGateNotice(event.detail);
-    window.addEventListener('ifocus_breakgate_strategy', openStrategy);
-    return () => window.removeEventListener('ifocus_breakgate_strategy', openStrategy);
-  }, []);
-
   const handleBreakGateSkip = (notice) => {
     handleBreakGateComplete();
     if (notice) setBreakGateNotice(notice);
@@ -3161,19 +3154,17 @@ export default function GlobalTimer() {
       />
 
       {breakGateNotice && session?.user?.id && (
-        <AppDialog titleId="breakgate-notice-title" onDismiss={() => setBreakGateNotice('')}>
-          <div className={coachStyles.breakGateNotice}>
-            <h2 id="breakgate-notice-title">Coach has noticed something</h2>
-            <p>{breakGateNotice}</p>
-            <footer className={coachStyles.breakGateNoticeActions}>
-              <button type="button" className="btn-secondary" onClick={() => setBreakGateNotice('')} autoFocus>Dismiss</button>
-              <button type="button" className="btn-primary" onClick={() => {
-                setBreakGateDeck(null, session.user.id);
-                setBreakGateNotice('');
-              }}>Turn off BreakGate</button>
-            </footer>
-          </div>
-        </AppDialog>
+        <CoachNotice
+          message={breakGateNotice}
+          style={{ zIndex: 99999 }}
+          onDismiss={() => setBreakGateNotice('')}
+          onView={() => {
+            setBreakGateNotice('');
+            setShowCycleCompleteModal(false);
+            setShowReflectionModal(false);
+            router.push('/coach');
+          }}
+        />
       )}
 
       {/* Global Interactive Visual Feature Guide Modal */}
