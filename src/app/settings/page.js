@@ -11,14 +11,7 @@ import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 import { PwaInstallControl } from '@/components/PwaRegistrar';
 import { isTimerSessionOngoing } from '@/lib/timerState';
 import VerificationBadge from '@/components/VerificationBadge';
-import { feedbackEmailLink, IFOCUS_SUPPORT_EMAIL } from '@/lib/feedbackEmail';
-
-const feedbackCategories = [
-  { id: 'feedback', label: 'Feature Request' },
-  { id: 'bug', label: 'Bug Report' },
-  { id: 'ui', label: 'Design Suggestion' },
-  { id: 'question', label: 'General Inquiry' },
-];
+import { FEEDBACK_CATEGORIES, IFOCUS_SUPPORT_EMAIL, MAX_FEEDBACK_LENGTH, sendFeedback } from '@/lib/feedbackEmail';
 
 const accountVerification = {
   PENDING: {
@@ -243,6 +236,8 @@ export default function SettingsPage() {
   // 3. Feedback State
   const [feedbackCategory, setFeedbackCategory] = useState('feedback');
   const [feedbackText, setFeedbackText] = useState('');
+  const [sendingFeedback, setSendingFeedback] = useState(false);
+  const [feedbackResult, setFeedbackResult] = useState(null);
 
   // Unsaved Changes Baseline State
   const [initialFocusPrefs, setInitialFocusPrefs] = useState({
@@ -858,14 +853,20 @@ export default function SettingsPage() {
   };
 
   // 7. Send Feedback
-  const handleSendFeedback = (e) => {
+  const handleSendFeedback = async (e) => {
     e.preventDefault();
-    if (!feedbackText.trim()) {
-      showToast('error', 'Please write a message before sending.');
-      return;
+    if (sendingFeedback || !feedbackText.trim()) return;
+    setSendingFeedback(true);
+    setFeedbackResult(null);
+    try {
+      await sendFeedback({ category: feedbackCategory, message: feedbackText });
+      setFeedbackText('');
+      setFeedbackResult({ sent: true });
+    } catch (error) {
+      setFeedbackResult({ error: error.message });
+    } finally {
+      setSendingFeedback(false);
     }
-    const topic = feedbackCategories.find(category => category.id === feedbackCategory)?.label || 'Feedback';
-    window.location.href = feedbackEmailLink(topic, feedbackText);
   };
 
   // Play audio test chime scaled by user-selected volume (Silent if Muted 0%)
@@ -2099,16 +2100,18 @@ export default function SettingsPage() {
           {/* 4. FEEDBACK & SUPPORT PANEL */}
           {activeSection === 'feedback' && (
             <form onSubmit={handleSendFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <p className="subtitle">Send feedback through your email app to{' '}
+              <p className="subtitle">Send feedback to{' '}
                 <a href={`mailto:${IFOCUS_SUPPORT_EMAIL}`} style={{ color: '#27522d' }}>{IFOCUS_SUPPORT_EMAIL}</a>.
               </p>
               <div>
                 <label className="settings-label" style={{ fontSize: '0.82rem' }}>Category</label>
                 <div className="option-chips-container" style={{ gap: '0.45rem', marginTop: '0.25rem' }}>
-                  {feedbackCategories.map((c) => (
+                  {FEEDBACK_CATEGORIES.map((c) => (
                     <button 
                       key={c.id} 
                       type="button" 
+                      disabled={sendingFeedback}
+                      aria-pressed={feedbackCategory === c.id}
                       className={`option-chip ${feedbackCategory === c.id ? 'selected' : ''}`}
                       onClick={() => setFeedbackCategory(c.id)}
                       style={{ padding: '0.35rem 0.75rem', fontSize: '0.82rem' }}
@@ -2120,25 +2123,31 @@ export default function SettingsPage() {
               </div>
 
               <div className="settings-input-group">
-                <label className="settings-label" style={{ fontSize: '0.82rem' }}>Message</label>
+                <label htmlFor="support-message" className="settings-label" style={{ fontSize: '0.82rem' }}>Message</label>
                 <textarea 
+                  id="support-message"
                   rows={3} 
                   className="settings-textarea" 
                   placeholder="Describe your feedback, bug report, or ideas..."
                   value={feedbackText}
+                  maxLength={MAX_FEEDBACK_LENGTH}
+                  readOnly={sendingFeedback}
                   onChange={(e) => setFeedbackText(e.target.value)}
                   style={{ padding: '0.55rem 0.85rem', fontSize: '0.85rem', resize: 'none' }}
                   required
                 />
               </div>
 
+              {feedbackResult?.sent && <p role="status">Feedback sent to the iFocus team.</p>}
+              {feedbackResult?.error && <p role="alert" style={{ color: 'var(--text-primary)' }}>{feedbackResult.error}</p>}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
                 <button 
                   type="submit" 
+                  disabled={sendingFeedback || !feedbackText.trim()}
                   className="btn-primary" 
                   style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem' }}
                 >
-                  Open Email Draft
+                  {sendingFeedback ? 'Sending…' : 'Send Feedback'}
                 </button>
               </div>
             </form>

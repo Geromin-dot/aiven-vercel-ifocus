@@ -4,12 +4,16 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import IFocusLogo from "@/components/IFocusLogo";
-import { feedbackEmailLink, IFOCUS_SUPPORT_EMAIL } from "@/lib/feedbackEmail";
+import { CONTACT_TOPICS, IFOCUS_SUPPORT_EMAIL, MAX_FEEDBACK_LENGTH, sendFeedback } from "@/lib/feedbackEmail";
+
+const emptyContactForm = { name: "", email: "", category: "general", message: "", website: "" };
 
 export default function LandingPage() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState(0);
-  const [contactForm, setContactForm] = useState({ name: "", email: "", topic: "General Feedback", message: "" });
+  const [contactForm, setContactForm] = useState(emptyContactForm);
+  const [sendingContact, setSendingContact] = useState(false);
+  const [contactResult, setContactResult] = useState(null);
   const [faqOpen, setFaqOpen] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [pillStyle, setPillStyle] = useState({ left: 6, top: 6, width: 0, height: 0, opacity: 0 });
@@ -80,10 +84,20 @@ export default function LandingPage() {
     setFaqOpen(faqOpen === index ? null : index);
   };
 
-  const handleContactSubmit = (e) => {
+  const handleContactSubmit = async (e) => {
     e.preventDefault();
-    if (!contactForm.email || !contactForm.message.trim()) return;
-    window.location.href = feedbackEmailLink(contactForm.topic, contactForm.message, contactForm);
+    if (sendingContact || !contactForm.message.trim()) return;
+    setSendingContact(true);
+    setContactResult(null);
+    try {
+      await sendFeedback({ source: 'contact', ...contactForm });
+      setContactForm(emptyContactForm);
+      setContactResult({ sent: true });
+    } catch (error) {
+      setContactResult({ error: error.message });
+    } finally {
+      setSendingContact(false);
+    }
   };
 
   // The 4 REAL pages from the iFocus system with their actual screenshots and features
@@ -1445,7 +1459,7 @@ export default function LandingPage() {
               Contact the iFocus Team
             </h2>
             <p style={{ color: '#64748b', fontSize: '1rem' }}>
-              Share feedback through your email app or write to{' '}
+              Send a message below or email{' '}
               <a href={`mailto:${IFOCUS_SUPPORT_EMAIL}`} style={{ color: '#27522d' }}>{IFOCUS_SUPPORT_EMAIL}</a>.
             </p>
           </div>
@@ -1458,13 +1472,25 @@ export default function LandingPage() {
           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)'
         }}>
             <form onSubmit={handleContactSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input
+                type="text"
+                name="website"
+                hidden
+                tabIndex={-1}
+                autoComplete="off"
+                value={contactForm.website}
+                onChange={(e) => setContactForm({ ...contactForm, website: e.target.value })}
+              />
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label htmlFor="contact-name" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                   Your Name
                 </label>
                 <input
+                  id="contact-name"
                   type="text"
                   required
+                  maxLength={120}
+                  readOnly={sendingContact}
                   placeholder="e.g. Maria Santos"
                   value={contactForm.name}
                   onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
@@ -1483,12 +1509,15 @@ export default function LandingPage() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label htmlFor="contact-email" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                   Email Address
                 </label>
                 <input
+                  id="contact-email"
                   type="email"
                   required
+                  maxLength={254}
+                  readOnly={sendingContact}
                   placeholder="e.g. msantos@ua.edu.ph"
                   value={contactForm.email}
                   onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
@@ -1507,12 +1536,14 @@ export default function LandingPage() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label htmlFor="contact-topic" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                   Feedback Topic
                 </label>
                 <select
-                  value={contactForm.topic}
-                  onChange={(e) => setContactForm({ ...contactForm, topic: e.target.value })}
+                  id="contact-topic"
+                  disabled={sendingContact}
+                  value={contactForm.category}
+                  onChange={(e) => setContactForm({ ...contactForm, category: e.target.value })}
                   style={{
                     width: '100%',
                     padding: '10px 14px',
@@ -1524,21 +1555,20 @@ export default function LandingPage() {
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="General Feedback">General Feedback</option>
-                  <option value="BreakGate Algorithm Suggestion">BreakGate™ Algorithm Suggestion</option>
-                  <option value="Flashcard Deck Feature">Flashcard Deck Feature</option>
-                  <option value="UA Academic Research Inquiry">UA Academic Research Inquiry</option>
-                  <option value="Bug Report">Bug Report</option>
+                  {CONTACT_TOPICS.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label htmlFor="contact-message" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                   Your Message
                 </label>
                 <textarea
+                  id="contact-message"
                   required
                   rows={4}
+                  maxLength={MAX_FEEDBACK_LENGTH}
+                  readOnly={sendingContact}
                   placeholder="Share your thoughts on how iFocus helps your study sessions..."
                   value={contactForm.message}
                   onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
@@ -1558,12 +1588,15 @@ export default function LandingPage() {
                 />
               </div>
 
+              {contactResult?.sent && <p role="status" style={{ color: '#27522d' }}>Message sent to the iFocus team.</p>}
+              {contactResult?.error && <p role="alert" style={{ color: '#991b1b' }}>{contactResult.error}</p>}
               <button
                 type="submit"
+                disabled={sendingContact}
                 className="landing-btn-primary"
                 style={{ width: '100%', padding: '12px', fontSize: '1rem', marginTop: '4px' }}
               >
-                Open Email Draft &rarr;
+                {sendingContact ? 'Sending…' : 'Send Message'}
               </button>
             </form>
         </div>

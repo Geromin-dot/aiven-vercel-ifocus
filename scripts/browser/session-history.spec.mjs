@@ -1,17 +1,60 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
-test('landing contact and Settings feedback point to the iFocus team email', async ({ page, context }) => {
+test('the landing contact form sends without signing in', async ({ page }) => {
+  let submission;
+  await page.route('**/api/feedback', async route => {
+    submission = route.request().postDataJSON();
+    await route.fulfill({ json: { sent: true } });
+  });
+  await page.goto('/#contact');
+  await expect(page.getByRole('link', { name: 'grv_manese.student@ua.edu.ph', exact: true }))
+    .toHaveAttribute('href', 'mailto:grv_manese.student@ua.edu.ph');
+  await page.getByLabel('Your Name').fill('Maria Santos');
+  await page.getByLabel('Email Address', { exact: true }).fill('maria@example.com');
+  await page.getByLabel('Feedback Topic').selectOption('research');
+  await page.getByLabel('Your Message').fill('Can I learn more about the project?');
+  await page.getByRole('button', { name: 'Send Message' }).click();
+  await expect(page.getByText('Message sent to the iFocus team.')).toBeVisible();
+  await expect(page.getByLabel('Your Message')).toBeEmpty();
+  expect(submission).toMatchObject({
+    source: 'contact',
+    category: 'research',
+    name: 'Maria Santos',
+    email: 'maria@example.com',
+    message: 'Can I learn more about the project?',
+  });
+});
+
+test('Settings sends feedback directly and keeps the message available for retries', async ({ page, context }) => {
   await accountFixture(context);
   const address = 'grv_manese.student@ua.edu.ph';
   const contact = page.getByRole('link', { name: address, exact: true });
-  await page.goto('/#contact');
-  await expect(contact).toHaveAttribute('href', `mailto:${address}`);
-  await expect(page.getByRole('button', { name: /Open Email Draft/ })).toBeVisible();
   await page.goto('/settings');
   await page.getByText('Feedback & Support', { exact: true }).click();
   await expect(contact).toHaveAttribute('href', `mailto:${address}`);
-  await expect(page.getByRole('button', { name: 'Open Email Draft', exact: true })).toBeVisible();
+
+  const submissions = [];
+  await page.route('**/api/feedback', async route => {
+    submissions.push(route.request().postDataJSON());
+    if (submissions.length === 1) {
+      await route.fulfill({ status: 502, json: { error: 'Feedback could not be sent.' } });
+      return;
+    }
+    await route.fulfill({ json: { sent: true } });
+  });
+  const message = page.getByLabel('Message', { exact: true });
+  const send = page.getByRole('button', { name: 'Send Feedback' });
+  await expect(send).toBeDisabled();
+  await page.getByRole('button', { name: 'Bug Report' }).click();
+  await message.fill('The timer display stopped updating.');
+  await send.click();
+  await expect(page.getByText('Feedback could not be sent.')).toBeVisible();
+  await expect(message).toHaveValue('The timer display stopped updating.');
+  await send.click();
+  await expect(page.getByText('Feedback sent to the iFocus team.')).toBeVisible();
+  await expect(message).toBeEmpty();
+  expect(submissions).toEqual(Array(2).fill({ category: 'bug', message: 'The timer display stopped updating.' }));
 });
 
 test('Privacy & Security shows the current account verification status', async ({ page, context }) => {
