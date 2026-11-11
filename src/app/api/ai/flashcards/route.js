@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { callGemini } from '@/lib/gemini';
+import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session?.user?.id || session.error) {
       return NextResponse.json({ error: "Unauthorized. Please sign in to generate flashcards." }, { status: 401 });
     }
+    if (!canUseStudyAI(session.user)) return NextResponse.json({ error: AI_VERIFICATION_MESSAGE }, { status: 403 });
 
     const { type, text, pdfBase64, cardCount = 8 } = await request.json();
 

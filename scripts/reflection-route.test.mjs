@@ -5,13 +5,15 @@ import vm from 'node:vm';
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
 const plans = await import(moduleUrl(await readFile(new URL('../src/lib/reflectionPlan.js', import.meta.url), 'utf8')));
 const input = await import(moduleUrl(await readFile(new URL('../src/lib/reflectionInput.js', import.meta.url), 'utf8')));
+const verification = await import(moduleUrl(await readFile(new URL('../src/lib/aiVerification.js', import.meta.url), 'utf8')));
 const route = await readFile(new URL('../src/app/api/ai/coach/route.js', import.meta.url), 'utf8');
-function endpoint(callGemini, session = { user: { id: 'student' } }) {
-  const context = vm.createContext({ ...plans, ...input, callGemini, getServerSession: async () => session, authOptions: {},
+const flashcardRoute = await readFile(new URL('../src/app/api/ai/flashcards/route.js', import.meta.url), 'utf8');
+function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route) {
+  const context = vm.createContext({ ...plans, ...input, ...verification, callGemini, getServerSession: async () => session, authOptions: {},
     console: { warn() {} }, NextResponse: { json: (data, options) => ({ data, status: options?.status || 200 }) },
   });
-  vm.runInContext(route.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
-  return body => context.post({ text: async () => JSON.stringify(body) });
+  vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
+  return body => context.post({ text: async () => JSON.stringify(body), json: async () => body });
 }
 const tasks = [{ id: 'a', text: 'Review anatomy', priority: 'Low' }, { id: 'b', text: 'Solve physiology', priority: 'High' }];
 
@@ -112,6 +114,18 @@ test('invalid reflections require context instead of inventing a successful AI r
 test('signed-out users cannot invoke the AI Coach', async () => {
   const post = endpoint(async () => assert.fail('signed-out requests must not reach the AI provider'), null);
   assert.equal((await post({ text: 'I am ready to study', tasks })).status, 401);
+});
+
+test('both AI endpoints reject pending, rejected, and missing verification before invoking AI', async () => {
+  for (const source of [route, flashcardRoute]) {
+    for (const verificationStatus of ['PENDING', 'REJECTED', undefined]) {
+      const post = endpoint(async () => assert.fail('Unverified accounts must never reach the AI provider'),
+        { user: { id: 'student', verificationStatus } }, source);
+      const result = await post({ type: 'text', text: 'Study notes on anatomy', tasks });
+      assert.equal(result.status, 403);
+      assert.equal(result.data.error, verification.AI_VERIFICATION_MESSAGE);
+    }
+  }
 });
 
 test('unclear and personal stress hold study planning even when the provider is unavailable', async () => {

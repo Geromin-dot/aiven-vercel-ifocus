@@ -22,6 +22,7 @@ export async function GET(req) {
         email: true,
         image: true,
         createdAt: true,
+        verificationStatus: true,
         _count: {
           select: {
             studySessions: true,
@@ -58,7 +59,8 @@ export async function GET(req) {
         username: user.username || user.email?.split('@')[0] || 'user',
         email: user.email,
         image: user.image || null,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        verificationStatus: user.verificationStatus ?? 'PENDING'
       },
       stats: {
         totalSessions: user._count.studySessions || 0,

@@ -4,12 +4,14 @@ import { reflectionInputError } from '@/lib/reflectionInput';
 import { generateCognitiveFallback, normalizeReflectionPlan, generateSafetySupport } from '@/lib/reflectionPlan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
+import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
 
 export const maxDuration = 60;
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.error) return NextResponse.json({ error: 'Please sign in to use the AI Coach.' }, { status: 401 });
+  if (!canUseStudyAI(session.user)) return NextResponse.json({ error: AI_VERIFICATION_MESSAGE }, { status: 403 });
   let body = {};
   try {
     const raw = await request.text();

@@ -52,7 +52,7 @@ export const authOptions = {
           // Study history and synchronized telemetry are large and not needed to sign in.
           select: {
             id: true, name: true, username: true, email: true, image: true,
-            password: true, role: true, status: true, statusReason: true,
+            password: true, role: true, status: true, statusReason: true, verificationStatus: true,
           }
         });
 
@@ -117,6 +117,7 @@ export const authOptions = {
         token.role = user.role || "STUDENT";
         token.status = user.status || "ACTIVE";
         token.statusReason = user.statusReason || null;
+        token.verificationStatus = user.verificationStatus ?? 'PENDING';
 
         // Each device keeps its own signed login identity. A new login does not
         // replace another device or require a write to the shared user record.
@@ -138,7 +139,7 @@ export const authOptions = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { id: true, status: true, statusReason: true, role: true }
+            select: { id: true, status: true, statusReason: true, role: true, verificationStatus: true }
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
@@ -151,10 +152,12 @@ export const authOptions = {
           token.status = dbUser.status;
           token.statusReason = dbUser.statusReason;
           token.role = dbUser.role;
+          token.verificationStatus = dbUser.verificationStatus ?? 'PENDING';
           // A previously observed conflict must not stick after live verification succeeds.
           delete token.error;
         } catch (e) {
-          // If DB is temporarily unreachable, maintain cached token
+          // Keep the login during a temporary outage, but require a fresh verification check for AI.
+          delete token.verificationStatus;
         }
       }
 
@@ -176,6 +179,7 @@ export const authOptions = {
         session.user.role = token.role || "STUDENT";
         session.user.status = token.status || "ACTIVE";
         session.user.statusReason = token.statusReason || null;
+        session.user.verificationStatus = token.verificationStatus ?? null;
       }
       return session;
     },

@@ -14,6 +14,7 @@ import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } fro
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
 import { readReflectionJournal, retainReflections } from '@/lib/reflectionJournal';
+import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
 import { reflectionInputError } from '@/lib/reflectionInput';
 import { generateCognitiveFallback, normalizeReflectionPlan, applyReflectionTaskOrder, generateSafetySupport, stressContextFeedback } from '@/lib/reflectionPlan';
 import coachStyles from '@/components/CoachLayout.module.css';
@@ -45,6 +46,7 @@ const playAlertSound = () => {
 
 export default function CommandCenterPage() {
   const { data: session, status } = useSession();
+  const aiAvailable = canUseStudyAI(session?.user);
   const userName = session?.user?.name || 'anonymous';
   const router = useRouter();
 
@@ -1985,6 +1987,10 @@ export default function CommandCenterPage() {
 
   const submitReflection = async (retryText) => {
     if (reflectionPendingRef.current) return;
+    if (!aiAvailable) {
+      setReflectionError(AI_VERIFICATION_MESSAGE);
+      return;
+    }
     const text = (typeof retryText === 'string' ? retryText : reflectionInput).trim();
     setStressFeedback(null);
     const safety = generateSafetySupport(text);
@@ -2010,6 +2016,10 @@ export default function CommandCenterPage() {
           body: JSON.stringify({ text, tasks: activeTasks, recentAdvice: pastEntries.slice(0, 2).map(entry => entry.aiReply?.message || '') }),
         });
         const result = await response.json();
+        if (response.status === 401 || response.status === 403) {
+          setReflectionError(result.error || (response.status === 403 ? AI_VERIFICATION_MESSAGE : 'Please sign in to use the AI Coach.'));
+          return;
+        }
         if (response.status === 422) {
           setReflectionError(result.error || 'Please describe how you feel or what you want to study.');
           return;
@@ -3141,7 +3151,9 @@ export default function CommandCenterPage() {
             </div>
             <CoachDisclaimer />
           </div>
-          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>Clear your mind. AI coach will adapt your plan.</p>
+          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>
+            {aiAvailable ? 'Clear your mind. AI coach will adapt your plan.' : AI_VERIFICATION_MESSAGE}
+          </p>
           
           {/* Quick Starter Inspiration Chips */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.45rem' }}>
@@ -3153,6 +3165,7 @@ export default function CommandCenterPage() {
               <button
                 key={chip.label}
                 type="button"
+                disabled={!aiAvailable}
                 onClick={() => setReflectionInput(chip.text)}
                 style={{
                   background: 'rgba(0,0,0,0.03)',
@@ -3185,7 +3198,7 @@ export default function CommandCenterPage() {
             aria-describedby={reflectionError ? "reflection-input-error" : undefined}
               aria-invalid={Boolean(reflectionError)}
               placeholder="Type how you feel or pick a starter above..."
-            disabled={isSubmittingReflection}
+            disabled={!aiAvailable || isSubmittingReflection}
             style={{ 
               flex: 1,
               width: '100%',
@@ -3207,7 +3220,7 @@ export default function CommandCenterPage() {
             className="btn-primary" 
             aria-busy={isSubmittingReflection}
             onClick={submitReflection}
-            disabled={isSubmittingReflection || !reflectionInput.trim()}
+            disabled={!aiAvailable || isSubmittingReflection || !reflectionInput.trim()}
             style={{ width: '100%', height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: '0 0 0.75rem 0' }}
           >
             {isSubmittingReflection ? (

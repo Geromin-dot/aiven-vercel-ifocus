@@ -98,6 +98,21 @@ test('subsequent session reads still refresh account restrictions', async () => 
   assert.equal(await auth.callbacks.session({ token, session: { user: {} } }), null);
 });
 
+test('AI verification follows the live account and is withheld when the lookup fails', async () => {
+  let verificationStatus = 'VERIFIED';
+  const auth = authWith({ async findUnique() {
+    if (!verificationStatus) throw new Error('Database unavailable');
+    return { id: 'student', status: 'ACTIVE', role: 'STUDENT', verificationStatus };
+  } });
+  const token = { sub: 'student', sessionId: 'login-1' };
+  const session = async () => auth.callbacks.session({ session: { user: {} }, token: await auth.callbacks.jwt({ token }) });
+  assert.equal((await session()).user.verificationStatus, 'VERIFIED');
+  verificationStatus = 'PENDING';
+  assert.equal((await session()).user.verificationStatus, 'PENDING');
+  verificationStatus = null;
+  assert.equal((await session()).user.verificationStatus, null);
+});
+
 test('signout cancels only jobs belonging to this login, leaving another device active', async () => {
   let filter;
   const auth = authWith({}, { async updateMany({ where, data }) {

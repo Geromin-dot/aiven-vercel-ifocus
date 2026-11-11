@@ -11,6 +11,27 @@ import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 import { PwaInstallControl } from '@/components/PwaRegistrar';
 import { isTimerSessionOngoing } from '@/lib/timerState';
 
+const accountVerification = {
+  PENDING: {
+    message: 'This account has not been verified yet. It is pending review by the College Dean’s Office.',
+    color: '#78350f',
+    background: '#fffbeb',
+    border: '#fde68a',
+  },
+  VERIFIED: {
+    message: 'This account has been verified.',
+    color: '#166534',
+    background: '#f0fdf4',
+    border: '#bbf7d0',
+  },
+  REJECTED: {
+    message: 'This account is unverified. Contact the College Dean’s Office for details about your review.',
+    color: '#991b1b',
+    background: '#fef2f2',
+    border: '#fecaca',
+  },
+};
+
 const checkIntervalsAreLocked = () => {
   try { return isTimerSessionOngoing(JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null')); }
   catch { return true; }
@@ -107,6 +128,8 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState(null);
+  const verification = accountVerification[verificationStatus];
   const [avatarUrl, setAvatarUrl] = useState('');
   const [createdAt, setCreatedAt] = useState(null);
 
@@ -295,6 +318,7 @@ export default function SettingsPage() {
             setName(data.user.name || '');
             setUsername(data.user.username || '');
             setEmail(data.user.email || '');
+            setVerificationStatus(data.user.verificationStatus ?? 'PENDING');
             setInitialProfile({ name: data.user.name || '', username: data.user.username || '' });
             setCreatedAt(data.user.createdAt);
             
@@ -1942,7 +1966,20 @@ export default function SettingsPage() {
           {/* 3. PRIVACY & SECURITY PANEL */}
           {activeSection === 'privacy' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              
+              {verification && (
+                <div role="status" style={{
+                  padding: '0.65rem 0.85rem',
+                  border: `1px solid ${verification.border}`,
+                  borderRadius: 'var(--radius-sm)',
+                  background: verification.background,
+                  color: verification.color,
+                  fontSize: '0.82rem',
+                }}>
+                  <strong>Account verification</strong>
+                  <p style={{ margin: '0.2rem 0 0' }}>{verification.message}</p>
+                </div>
+              )}
+
               {/* Account Details */}
               <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="settings-form-grid" style={{ gap: '0.75rem' }}>

@@ -1,6 +1,38 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
+test('Privacy & Security shows the current account verification status', async ({ page, context }) => {
+  await accountFixture(context);
+  let verificationStatus = 'PENDING';
+  await page.route('**/api/user/profile', route => route.fulfill({
+    json: { user: { name: 'History Student', username: 'history-student', verificationStatus } },
+  }));
+  const notice = page.getByRole('status').filter({ hasText: 'Account verification' });
+  for (const [status, message] of [
+    ['PENDING', 'This account has not been verified yet.'],
+    ['VERIFIED', 'This account has been verified.'],
+    ['REJECTED', 'This account is unverified.'],
+  ]) {
+    verificationStatus = status;
+    await page.goto('/settings');
+    await page.getByText('Privacy & Security', { exact: true }).click();
+    await expect(notice).toContainText(message);
+  }
+});
+
+test('pending accounts see disabled AI reflection and flashcard generation', async ({ page, context }) => {
+  await accountFixture(context, true, { verificationStatus: 'PENDING' });
+  const message = 'Your account must be verified by the College Dean’s Office before you can use AI features.';
+  await page.goto('/dashboard');
+  await expect(page.locator('.journal-textarea')).toBeDisabled();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Submit & Analyze' })).toBeDisabled();
+  await page.goto('/flashcards');
+  await page.getByRole('button', { name: /Create New Deck/ }).click();
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate Flashcards with AI' })).toBeDisabled();
+});
+
 test('deleted username login shows the account notice above the form', async ({ page, context }) => {
   await accountFixture(context, false);
   await context.route('**/api/auth/callback/credentials', route => route.fulfill({
