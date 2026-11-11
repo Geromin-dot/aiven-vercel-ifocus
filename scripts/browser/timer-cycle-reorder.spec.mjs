@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
-test('a long task list scrolls inside the dashboard panel', async ({ page, context }) => {
+test('long task lists keep full-height rows and scroll inside the dashboard panel', async ({ page, context }) => {
   await accountFixture(context);
   const tasks = Array.from({ length: 30 }, (_, index) => ({
     id: String(index), text: `Study task ${index + 1}`, priority: 'medium', completed: false,
@@ -15,22 +15,38 @@ test('a long task list scrolls inside the dashboard panel', async ({ page, conte
     await page.setViewportSize({ width, height: 900 });
     taskCount = 1;
     await page.goto('/dashboard');
-    await expect(list.locator('[data-todo-id]')).toHaveCount(1);
+    const rows = list.locator('[data-todo-id]');
+    await expect(rows).toHaveCount(1);
     const initialHeight = (await panel.boundingBox()).height;
+    const rowHeight = (await rows.first().boundingBox()).height;
 
-    taskCount = tasks.length;
+    taskCount = width === 390 ? 12 : 17;
     await page.reload();
-    await expect(list.locator('[data-todo-id]')).toHaveCount(tasks.length);
+    await expect(rows).toHaveCount(taskCount);
     const panelHeight = (await panel.boundingBox()).height;
     if (width >= 769) expect(panelHeight).toBeCloseTo(initialHeight, 0);
+    const rowHeights = await rows.evaluateAll(elements => elements.map(row => row.offsetHeight));
+    expect(Math.min(...rowHeights)).toBeGreaterThanOrEqual(Math.floor(rowHeight));
 
     const heading = page.getByRole('heading', { name: 'Tasks List' });
+    await rows.nth(3).locator('.todo-text').hover();
     const headingTop = (await heading.boundingBox()).y;
-    const scroll = await list.evaluate(element => {
-      element.scrollTop = element.scrollHeight;
-      return element.scrollTop;
-    });
-    expect(scroll).toBeGreaterThan(0);
+    if (width === 390) {
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      const text = await rows.nth(3).locator('.todo-text').boundingBox();
+      const x = Math.round(text.x + text.width / 2);
+      const y = Math.round(text.y + text.height / 2);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (const distance of [15, 45, 85, 120]) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - distance }] });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+    } else {
+      await page.mouse.wheel(0, 240);
+    }
+    await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
     expect((await heading.boundingBox()).y).toBeCloseTo(headingTop, 0);
   }
 });

@@ -611,13 +611,13 @@ main {
   user-select: none;
 }
 
+.todo-list > .todo-item {
+  flex-shrink: 0;
+}
+
 .todo-reorderable .todo-text,
 .todo-reorderable .todo-priority-badge {
   cursor: grab;
-}
-
-.todo-reorderable .todo-text {
-  touch-action: none;
 }
 
 .todo-reorderable .todo-text:active {

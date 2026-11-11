@@ -1919,7 +1919,7 @@ export default function CommandCenterPage() {
     if (!event.isPrimary || event.button !== 0 || editingTodoId === todoId) return;
     const handle = event.target.closest('.todo-drag-handle');
     if (!handle && event.target.closest('button, input, select, .todo-checkbox, .todo-action-pill')) return;
-    if (event.pointerType === 'touch' && !handle && !event.target.closest('.todo-text')) return;
+    if (event.pointerType === 'touch' && !handle) return;
     const captureTarget = handle || event.currentTarget;
     captureTarget.setPointerCapture(event.pointerId);
     todoDrag.current = {

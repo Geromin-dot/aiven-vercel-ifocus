@@ -23,8 +23,10 @@ export async function GET(req) {
       );
     }
 
-    // High level metrics (Strictly filtered for registered Students, excluding Admin test accounts)
-    const notAdmin = { NOT: { username: "adminUAnursing" } };
+    const studentsOnly = {
+      role: "STUDENT",
+      OR: [{ username: null }, { username: { not: "adminUAnursing" } }]
+    };
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -39,28 +41,28 @@ export async function GET(req) {
       studentsList
     ] = await Promise.all([
       prisma.user.count({
-        where: notAdmin
+        where: studentsOnly
       }),
       prisma.deck.count({
         where: {
-          user: notAdmin
+          user: studentsOnly
         }
       }),
       prisma.card.count({
         where: {
           deck: {
-            user: notAdmin
+            user: studentsOnly
           }
         }
       }),
       prisma.studySession.count({
         where: {
-          user: notAdmin
+          user: studentsOnly
         }
       }),
       prisma.studySession.aggregate({
         where: {
-          user: notAdmin
+          user: studentsOnly
         },
         _sum: {
           duration: true
@@ -68,13 +70,13 @@ export async function GET(req) {
       }),
       prisma.studySession.count({
         where: {
-          user: notAdmin,
+          user: studentsOnly,
           createdAt: { gte: startOfToday }
         }
       }),
       prisma.studySession.aggregate({
         where: {
-          user: notAdmin,
+          user: studentsOnly,
           createdAt: { gte: startOfToday }
         },
         _sum: {
@@ -82,11 +84,7 @@ export async function GET(req) {
         }
       }),
       prisma.user.findMany({
-        where: {
-          NOT: {
-            username: "adminUAnursing"
-          }
-        },
+        where: studentsOnly,
         select: {
           id: true,
           name: true,
