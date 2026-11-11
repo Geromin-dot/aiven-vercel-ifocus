@@ -10,13 +10,14 @@ import HelpButton from '@/components/HelpButton';
 import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 import { PwaInstallControl } from '@/components/PwaRegistrar';
 import { isTimerSessionOngoing } from '@/lib/timerState';
+import VerificationBadge from '@/components/VerificationBadge';
 
 const accountVerification = {
   PENDING: {
     message: 'This account has not been verified yet. It is pending review by the College Dean’s Office.',
-    color: '#78350f',
-    background: '#fffbeb',
-    border: '#fde68a',
+    color: '#991b1b',
+    background: '#fef2f2',
+    border: '#fecaca',
   },
   VERIFIED: {
     message: 'This account has been verified.',
@@ -128,6 +129,7 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [yearLevel, setYearLevel] = useState('');
   const [verificationStatus, setVerificationStatus] = useState(null);
   const verification = accountVerification[verificationStatus];
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -318,6 +320,7 @@ export default function SettingsPage() {
             setName(data.user.name || '');
             setUsername(data.user.username || '');
             setEmail(data.user.email || '');
+            setYearLevel(data.user.yearLevel || '');
             setVerificationStatus(data.user.verificationStatus ?? 'PENDING');
             setInitialProfile({ name: data.user.name || '', username: data.user.username || '' });
             setCreatedAt(data.user.createdAt);
@@ -847,17 +850,7 @@ export default function SettingsPage() {
     }
   };
 
-  // 7. Clear Session Cache
-  const handleClearCache = () => {
-    if (confirm("Are you sure you want to clear your local session cache? Your cloud data will remain safe.")) {
-      localStorage.removeItem('ifocus_session_history');
-      localStorage.removeItem('ifocus_focus_stats');
-      setStats(prev => ({ ...prev, totalSessions: 0, focusHours: 0, streakDays: 0 }));
-      showToast('success', 'Local session cache cleared.');
-    }
-  };
-
-  // 8. Send Feedback
+  // 7. Send Feedback
   const handleSendFeedback = (e) => {
     e.preventDefault();
     if (!feedbackText.trim()) {
@@ -1329,7 +1322,9 @@ export default function SettingsPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
             </div>
             <div className="settings-cat-info">
-              <span className="settings-cat-title">Privacy & Security</span>
+              <span className="settings-cat-title">
+                Privacy & Security {verification && verificationStatus !== 'VERIFIED' && <VerificationBadge />}
+              </span>
               <span className="settings-cat-sub">Account & passwords</span>
             </div>
           </div>
@@ -1976,7 +1971,7 @@ export default function SettingsPage() {
                   fontSize: '0.82rem',
                 }}>
                   <strong>Account verification</strong>
-                  <p style={{ margin: '0.2rem 0 0' }}>{verification.message}</p>
+                  <p style={{ margin: '0.2rem 0 0', color: 'inherit' }}>{verification.message}</p>
                 </div>
               )}
 
@@ -2017,7 +2012,12 @@ export default function SettingsPage() {
                       Customizable handle used to log in and on your public cards.
                     </span>
                   </div>
-                  <div className="settings-input-group full-width">
+                  <div className="settings-input-group">
+                    <label htmlFor="profile-year-level" className="settings-label" style={{ fontSize: '0.82rem' }}>Year Level</label>
+                    <input id="profile-year-level" className="settings-input" value={yearLevel || 'Not assigned'} disabled />
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Locked academic record. Contact the College Dean’s Office for changes.</span>
+                  </div>
+                  <div className="settings-input-group">
                     <label className="settings-label" style={{ fontSize: '0.82rem' }}>Email Address</label>
                     <input 
                       type="email" 
@@ -2089,26 +2089,6 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </form>
-              </div>
-
-              {/* Data Export & Cache */}
-              <div style={{ display: 'flex', gap: '0.65rem', paddingTop: '0.75rem', borderTop: '1px solid var(--glass-border)' }}>
-                <a 
-                  href="/api/user/export"
-                  className="btn-secondary" 
-                  style={{ flex: 1, justifyContent: 'center', padding: '0.45rem', fontSize: '0.82rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  Export Study Data (JSON)
-                </a>
-                <button 
-                  type="button"
-                  onClick={handleClearCache}
-                  className="btn-secondary" 
-                  style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem', color: 'var(--warning)', borderColor: 'rgba(217, 119, 6, 0.3)' }}
-                >
-                  Clear Cache
-                </button>
               </div>
 
             </div>

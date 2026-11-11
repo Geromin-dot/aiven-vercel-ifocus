@@ -29,4 +29,4 @@ export async function proxy(request) {
   return noStore(NextResponse.next());
 }
 
-export const config = { matcher: ['/login', '/api/:path*', '/dashboard/:path*', '/flashcards/:path*', '/coach/:path*', '/analytics/:path*', '/settings/:path*', '/admin/:path*'] };
+export const config = { matcher: ['/login', '/api/:path*', '/dashboard/:path*', '/flashcards/:path*', '/coach/:path*', '/analytics/:path*', '/settings/:path*', '/admin/:path*', '/complete-profile'] };

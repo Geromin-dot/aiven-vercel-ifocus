@@ -3151,7 +3151,7 @@ export default function CommandCenterPage() {
             </div>
             <CoachDisclaimer />
           </div>
-          <p className="subtitle" style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>
+          <p className={aiAvailable ? 'subtitle' : 'account-verification-warning'} style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>
             {aiAvailable ? 'Clear your mind. AI coach will adapt your plan.' : AI_VERIFICATION_MESSAGE}
           </p>
           

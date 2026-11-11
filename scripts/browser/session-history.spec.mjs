@@ -2,10 +2,11 @@ import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
 test('Privacy & Security shows the current account verification status', async ({ page, context }) => {
-  await accountFixture(context);
+  const account = {};
+  await accountFixture(context, true, account);
   let verificationStatus = 'PENDING';
   await page.route('**/api/user/profile', route => route.fulfill({
-    json: { user: { name: 'History Student', username: 'history-student', verificationStatus } },
+    json: { user: { name: 'History Student', username: 'history-student', verificationStatus, yearLevel: '2nd Year' } },
   }));
   const notice = page.getByRole('status').filter({ hasText: 'Account verification' });
   for (const [status, message] of [
@@ -14,10 +15,42 @@ test('Privacy & Security shows the current account verification status', async (
     ['REJECTED', 'This account is unverified.'],
   ]) {
     verificationStatus = status;
+    account.verificationStatus = status;
     await page.goto('/settings');
-    await page.getByText('Privacy & Security', { exact: true }).click();
+    const privacy = page.locator('.settings-cat-btn').filter({ hasText: 'Privacy & Security' });
+    const badges = page.getByRole('img', { name: 'Account verification required' });
+    await expect(privacy.getByRole('img', { name: 'Account verification required' })).toHaveCount(status === 'VERIFIED' ? 0 : 1);
+    await expect(page.getByRole('link', { name: /Settings/ }).filter({ has: badges })).toHaveCount(status === 'VERIFIED' ? 0 : 1);
+    await privacy.click();
     await expect(notice).toContainText(message);
+    await expect(page.getByLabel('Year Level', { exact: true })).toHaveValue('2nd Year');
+    await expect(page.getByLabel('Year Level', { exact: true })).toBeDisabled();
+    await expect(page.getByText('Export Study Data (JSON)', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Clear Cache' })).toHaveCount(0);
   }
+});
+
+test('Google students must complete their existing account before opening the dashboard', async ({ page, context }) => {
+  const account = { needsProfileSetup: true, verificationStatus: 'PENDING' };
+  await accountFixture(context, true, account);
+  let submitted;
+  await page.route('**/api/auth/complete-profile', route => {
+    submitted = route.request().postDataJSON();
+    account.needsProfileSetup = false;
+    return route.fulfill({ json: { success: true } });
+  });
+  await page.goto('/dashboard');
+  await expect(page).toHaveURL(/\/complete-profile$/);
+  await page.getByLabel('Full name').fill('History Student');
+  await page.getByLabel('Year level').selectOption('2nd Year');
+  await page.getByLabel('Username').fill('history-student');
+  await page.getByLabel('Password').fill('chosen-password');
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole('heading', { name: 'Tasks List' })).toBeVisible();
+  expect(submitted).toEqual({
+    name: 'History Student', yearLevel: '2nd Year', username: 'history-student', password: 'chosen-password',
+  });
 });
 
 test('pending accounts see disabled AI reflection and flashcard generation', async ({ page, context }) => {
@@ -26,6 +59,7 @@ test('pending accounts see disabled AI reflection and flashcard generation', asy
   await page.goto('/dashboard');
   await expect(page.locator('.journal-textarea')).toBeDisabled();
   await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByText(message, { exact: true })).toHaveCSS('color', 'rgb(153, 27, 27)');
   await expect(page.getByRole('button', { name: 'Submit & Analyze' })).toBeDisabled();
   await page.goto('/flashcards');
   await page.getByRole('button', { name: /Create New Deck/ }).click();

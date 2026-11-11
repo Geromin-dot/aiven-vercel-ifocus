@@ -19,7 +19,7 @@ async function isGoogleRegistration() {
   const callback = store.get('__Secure-next-auth.callback-url')?.value || store.get('next-auth.callback-url')?.value;
   if (!callback) return false;
   const target = URL.parse(callback, 'http://localhost');
-  return target?.pathname === '/dashboard' && target.searchParams.get('register') === 'google';
+  return Boolean(target && ['/dashboard', '/complete-profile'].includes(target.pathname) && target.searchParams.get('register') === 'google');
 }
 
 export const authOptions = {
@@ -104,7 +104,7 @@ export const authOptions = {
       }
       return true;
     },
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, account, trigger, session }) {
       if (user) {
         delete token.error;
         const newSessionId = randomUUID();
@@ -118,6 +118,7 @@ export const authOptions = {
         token.status = user.status || "ACTIVE";
         token.statusReason = user.statusReason || null;
         token.verificationStatus = user.verificationStatus ?? 'PENDING';
+        token.needsProfileSetup = account?.provider === 'google' && token.role === 'STUDENT' && !user.password;
 
         // Each device keeps its own signed login identity. A new login does not
         // replace another device or require a write to the shared user record.
@@ -139,7 +140,7 @@ export const authOptions = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { id: true, status: true, statusReason: true, role: true, verificationStatus: true }
+            select: { id: true, name: true, username: true, password: true, status: true, statusReason: true, role: true, verificationStatus: true }
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
@@ -152,6 +153,9 @@ export const authOptions = {
           token.status = dbUser.status;
           token.statusReason = dbUser.statusReason;
           token.role = dbUser.role;
+          token.name = dbUser.name || dbUser.username;
+          token.username = dbUser.username;
+          token.needsProfileSetup = dbUser.role === 'STUDENT' && dbUser.password === null;
           token.verificationStatus = dbUser.verificationStatus ?? 'PENDING';
           // A previously observed conflict must not stick after live verification succeeds.
           delete token.error;
@@ -180,6 +184,7 @@ export const authOptions = {
         session.user.status = token.status || "ACTIVE";
         session.user.statusReason = token.statusReason || null;
         session.user.verificationStatus = token.verificationStatus ?? null;
+        session.user.needsProfileSetup = token.needsProfileSetup === true;
       }
       return session;
     },

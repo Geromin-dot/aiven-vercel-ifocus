@@ -30,6 +30,7 @@ const isExemptPath = (path) => {
   return (
     cleanPath === "/" ||
     cleanPath === "/login" ||
+    cleanPath === "/complete-profile" ||
     cleanPath === "/signup" ||
     cleanPath.startsWith("/admin") ||
     cleanPath.startsWith("/showcase-preview") ||

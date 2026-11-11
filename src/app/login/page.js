@@ -1144,7 +1144,7 @@ function LoginContent() {
           {/* Google Sign In */}
           <button
             type="button"
-            onClick={() => signIn("google", { callbackUrl: activeTab === "register" ? "/dashboard?register=google" : "/dashboard" })}
+            onClick={() => signIn("google", { callbackUrl: activeTab === "register" ? "/complete-profile?register=google" : "/complete-profile" })}
             className="google-signin-btn"
           >
             <svg width="18" height="18" viewBox="0 0 24 24">

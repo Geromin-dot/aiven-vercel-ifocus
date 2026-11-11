@@ -1160,7 +1160,7 @@ export default function FlashcardsPage() {
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1 }}>
-            {!aiAvailable && <p className="subtitle">{AI_VERIFICATION_MESSAGE}</p>}
+            {!aiAvailable && <p className="account-verification-warning">{AI_VERIFICATION_MESSAGE}</p>}
             
             {/* Deck Name and Target Cards Count */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '1rem' }}>

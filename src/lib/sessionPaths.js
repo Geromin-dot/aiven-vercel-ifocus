@@ -1,4 +1,4 @@
-const privateRoots = ['/dashboard', '/flashcards', '/coach', '/analytics', '/settings', '/admin'];
+const privateRoots = ['/dashboard', '/flashcards', '/coach', '/analytics', '/settings', '/admin', '/complete-profile'];
 
 export function isProtectedPath(pathname) {
   return typeof pathname === 'string' && privateRoots.some(root => pathname === root || pathname.startsWith(`${root}/`));

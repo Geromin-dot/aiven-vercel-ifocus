@@ -84,8 +84,21 @@ test('deleted Google accounts receive the notice and can explicitly register aga
   const queries = { findUnique: async () => null };
   const signIn = authWith(queries, {}, { deleted }).callbacks.signIn;
   assert.equal(await signIn({ user, account }), '/login?error=ACCOUNT_DELETED');
-  const register = authWith(queries, {}, { deleted, callbackUrl: 'https://example.com/dashboard?register=google' }).callbacks.signIn;
+  const register = authWith(queries, {}, { deleted, callbackUrl: 'https://example.com/complete-profile?register=google' }).callbacks.signIn;
   assert.equal(await register({ user, account }), true);
+});
+
+test('a Google student needs setup until the same account has a password', async () => {
+  const user = { id: 'student', role: 'STUDENT', status: 'ACTIVE', password: null };
+  const auth = authWith({ findUnique: async () => user });
+  const token = await auth.callbacks.jwt({ token: {}, user, account: { provider: 'google' } });
+  assert.equal(token.needsProfileSetup, true);
+  Object.assign(user, { name: 'Student Name', username: 'student-name', password: 'hash' });
+  const refreshed = await auth.callbacks.jwt({ token });
+  const session = await auth.callbacks.session({ session: { user: {} }, token: refreshed });
+  assert.equal(session.user.needsProfileSetup, false);
+  assert.equal(session.user.username, 'student-name');
+  assert.equal(session.user.password, undefined);
 });
 
 test('subsequent session reads still refresh account restrictions', async () => {

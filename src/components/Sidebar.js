@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { clearPrivateCache, logoutAccount } from '@/lib/logoutAccount';
 import { useEffect, useState } from 'react';
 import IFocusLogo from './IFocusLogo';
+import VerificationBadge from './VerificationBadge';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -12,6 +13,7 @@ export default function Sidebar() {
   const { data: session, status } = useSession();
 
   const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.username === 'adminUAnursing';
+  const verificationRequired = Boolean(session?.user?.id) && session.user.verificationStatus !== 'VERIFIED';
 
 
 
@@ -72,7 +74,7 @@ export default function Sidebar() {
     }
   }, [status, isAdmin, userStatus, userStatusReason, pathname, router]);
 
-  if (pathname === '/' || pathname === '/login' || pathname.startsWith('/showcase-preview')) return null;
+  if (pathname === '/' || pathname === '/login' || pathname === '/complete-profile' || pathname.startsWith('/showcase-preview')) return null;
 
   // Dedicated Admin Sidebar (Zero Student Features)
   if (isAdmin) {
@@ -308,7 +310,7 @@ export default function Sidebar() {
 
           <Link href="/settings" onClick={(e) => handleNavClick(e, '/settings')} className={`nav-settings-link ${pathname === '/settings' ? 'active' : ''}`}>
             <span>Settings</span>
-            {pathname === '/settings' && <span className="nav-indicator-dot" />}
+            {verificationRequired ? <VerificationBadge /> : pathname === '/settings' && <span className="nav-indicator-dot" />}
           </Link>
 
           <button
@@ -495,7 +497,7 @@ export default function Sidebar() {
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
-          <span>Settings</span>
+          <span className="settings-tab-label">Settings {verificationRequired && <VerificationBadge />}</span>
         </Link>
       </nav>
     </>

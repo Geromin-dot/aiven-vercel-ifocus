@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
+import { studentYearLevel } from '@/lib/studentYearLevels';
 
 export async function GET(req) {
   try {
@@ -23,6 +24,8 @@ export async function GET(req) {
         image: true,
         createdAt: true,
         verificationStatus: true,
+        yearLevel: true,
+        yearSection: true,
         _count: {
           select: {
             studySessions: true,
@@ -60,7 +63,8 @@ export async function GET(req) {
         email: user.email,
         image: user.image || null,
         createdAt: user.createdAt,
-        verificationStatus: user.verificationStatus ?? 'PENDING'
+        verificationStatus: user.verificationStatus ?? 'PENDING',
+        yearLevel: studentYearLevel(user)
       },
       stats: {
         totalSessions: user._count.studySessions || 0,

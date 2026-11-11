@@ -10,6 +10,7 @@ export default function ProtectedSessionBoundary({ children }) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
   const protectedPage = isProtectedPath(pathname);
+  const needsSetup = session?.user?.needsProfileSetup && pathname !== '/complete-profile';
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [signingOut, setSigningOut] = useState(false);
@@ -22,6 +23,10 @@ export default function ProtectedSessionBoundary({ children }) {
       window.location.replace(session?.error === 'ACCOUNT_DELETED' ? '/login?error=ACCOUNT_DELETED' : '/login');
     }
   }, [protectedPage, status, session?.user?.id, session?.error]);
+
+  useEffect(() => {
+    if (protectedPage && needsSetup && !signingOut) window.location.replace('/complete-profile');
+  }, [protectedPage, needsSetup, signingOut]);
 
   useEffect(() => {
     let disposed = false;
@@ -107,7 +112,7 @@ export default function ProtectedSessionBoundary({ children }) {
     };
   }, [protectedPage, pathname, session?.user?.id, session?.user?.sessionId]);
 
-  const signedIn = status === 'authenticated' && session?.user?.id && !session.error;
+  const signedIn = status === 'authenticated' && session?.user?.id && !session.error && !needsSetup;
   // Keep drafts/timers mounted during verification, but hide their private DOM.
   // Actual signout or an unauthenticated session removes the private subtree.
   return <>
@@ -116,7 +121,7 @@ export default function ProtectedSessionBoundary({ children }) {
         data-testid={protectedPage ? 'protected-content' : undefined}>{children}</div>
     )}
     {protectedPage && (!signedIn || checking || signingOut) && <div style={{ padding: '3rem', textAlign: 'center' }}>
-      <p role="status">{error || (signingOut ? 'Signing out…' : 'Checking your session…')}</p>
+      <p role="status">{error || (signingOut ? 'Signing out…' : needsSetup ? 'Opening account setup…' : 'Checking your session…')}</p>
       {error && <button className="btn-primary" onClick={() => signingOut ? logoutAccount() : window.location.reload()}>Try Again</button>}
     </div>}
   </>;

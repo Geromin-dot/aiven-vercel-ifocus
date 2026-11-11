@@ -4431,3 +4431,31 @@ textarea:focus {
 html[data-ifocus-auth-pending="true"] [data-ifocus-private="true"] {
   visibility: hidden !important;
 }
+.account-verification-warning {
+    color: #991b1b;
+}
+
+.verification-badge {
+    display: inline-grid;
+    place-items: center;
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #b91c1c;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.settings-tab-label {
+    position: relative;
+}
+
+.settings-tab-label .verification-badge {
+    position: absolute;
+    inset-inline-start: 100%;
+    bottom: 100%;
+}
