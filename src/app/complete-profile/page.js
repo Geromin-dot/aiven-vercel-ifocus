@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { logoutAccount } from '@/lib/logoutAccount';
-import { STUDENT_YEAR_LEVELS } from '@/lib/studentYearLevels';
+import { ENROLLMENT_YEAR_LEVELS } from '@/lib/studentYearLevels';
 
 export default function CompleteProfilePage() {
   const { data: session } = useSession();
@@ -12,6 +12,7 @@ export default function CompleteProfilePage() {
   const user = session?.user;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!user?.id || user.needsProfileSetup) return;
@@ -56,7 +57,7 @@ export default function CompleteProfilePage() {
           <label className="settings-label" htmlFor="setup-year">Year level</label>
           <select id="setup-year" name="yearLevel" className="settings-input" defaultValue="" required>
             <option value="" disabled>Select your year level</option>
-            {STUDENT_YEAR_LEVELS.map(year => <option key={year} value={year}>{year}</option>)}
+            {ENROLLMENT_YEAR_LEVELS.map(year => <option key={year} value={year}>{year}</option>)}
           </select>
         </div>
         <div className="settings-input-group">
@@ -65,7 +66,30 @@ export default function CompleteProfilePage() {
         </div>
         <div className="settings-input-group">
           <label className="settings-label" htmlFor="setup-password">Password</label>
-          <input id="setup-password" name="password" type="password" className="settings-input" autoComplete="new-password" minLength={6} required />
+          <div style={{ position: 'relative' }}>
+            <input id="setup-password" name="password" type={showPassword ? 'text' : 'password'} className="settings-input" style={{ paddingInlineEnd: '3rem' }} autoComplete="new-password" minLength={6} required />
+            <button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-controls="setup-password"
+              onClick={() => setShowPassword(visible => !visible)}
+              style={{ position: 'absolute', insetBlock: 0, insetInlineEnd: 0, width: 44, display: 'grid', placeItems: 'center', background: 'transparent', border: 0, color: 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {showPassword ? (
+                  <>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
         {error && <p role="alert" className="account-verification-warning">{error}</p>}
         <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save and continue'}</button>

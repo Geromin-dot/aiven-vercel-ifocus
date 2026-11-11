@@ -1,4 +1,5 @@
-export const STUDENT_YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];
+export const ENROLLMENT_YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+export const STUDENT_YEAR_LEVELS = [...ENROLLMENT_YEAR_LEVELS, 'Graduated'];
 
 export function studentYearLevel(student) {
   return student.yearLevel?.trim() || student.yearSection?.split(' - ')[0].trim() || '';

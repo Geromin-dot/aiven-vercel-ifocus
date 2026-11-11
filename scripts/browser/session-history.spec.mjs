@@ -42,9 +42,19 @@ test('Google students must complete their existing account before opening the da
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/complete-profile$/);
   await page.getByLabel('Full name').fill('History Student');
+  await expect(page.getByLabel('Year level').locator('option')).toHaveText([
+    'Select your year level', '1st Year', '2nd Year', '3rd Year', '4th Year',
+  ]);
   await page.getByLabel('Year level').selectOption('2nd Year');
   await page.getByLabel('Username').fill('history-student');
-  await page.getByLabel('Password').fill('chosen-password');
+  const password = page.getByLabel('Password', { exact: true });
+  await password.fill('chosen-password');
+  await expect(password).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await expect(password).toHaveValue('chosen-password');
+  await page.getByRole('button', { name: 'Hide password' }).click();
+  await expect(password).toHaveAttribute('type', 'password');
   await page.getByRole('button', { name: 'Save and continue' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Tasks List' })).toBeVisible();

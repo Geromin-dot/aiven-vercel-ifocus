@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { authOptions } from '../[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { STUDENT_YEAR_LEVELS, updatedYearSection } from '@/lib/studentYearLevels';
+import { ENROLLMENT_YEAR_LEVELS, updatedYearSection } from '@/lib/studentYearLevels';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -19,7 +19,7 @@ export async function POST(request) {
   if (!name || name.length > 120) {
     return NextResponse.json({ error: 'Enter your full name using up to 120 characters.' }, { status: 400 });
   }
-  if (!STUDENT_YEAR_LEVELS.includes(yearLevel)) {
+  if (!ENROLLMENT_YEAR_LEVELS.includes(yearLevel)) {
     return NextResponse.json({ error: 'Select your year level.' }, { status: 400 });
   }
   if (!/^[a-z0-9_.-]{3,30}$/.test(username) || username.includes('admin')) {
