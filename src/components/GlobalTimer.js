@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 import CoachNotice from './CoachNotice';
+import { playNotificationChime } from '@/lib/coachNoticeSound';
 import FeatureGuideModal from "./FeatureGuideModal";
 import { clearAiTimerAdjustment, reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
@@ -1842,7 +1843,10 @@ export default function GlobalTimer() {
 
   const handleBreakGateSkip = (notice) => {
     handleBreakGateComplete();
-    if (notice) setBreakGateNotice(notice);
+    if (notice) {
+      setBreakGateNotice(notice);
+      playNotificationChime();
+    }
   };
 
   const toggleMiniTimerPlay = (e) => {

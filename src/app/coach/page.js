@@ -691,6 +691,7 @@ export default function CoachPage() {
   };
 
   const insightColor = insight?.isIntervention ? '#d97706' : '#27522d';
+  const canApplyBreakGate = telemetryDiagnostics.canTurnOffBreakGate && Boolean(session?.user?.id);
   const actionPlan = insight?.actionPlan ? getSynchronizedActionPlan(insight.actionPlan) : '';
   const normalizeGuidance = text => String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const showReason = insight?.reason && (!actionPlan || (
@@ -921,9 +922,9 @@ export default function CoachPage() {
           {/* Action Footer for Card 1 */}
           <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
             <div className="coach-strategy-actions" style={{ display: 'flex', gap: '0.65rem' }}>
-              {(telemetryDiagnostics.canApply || applyingHome) && <button
+              {(canApplyBreakGate || telemetryDiagnostics.canApply || applyingHome) && <button
                 type="button"
-                onClick={handleReturnHome}
+                onClick={canApplyBreakGate ? () => setBreakGateDeck(null, session.user.id) : handleReturnHome}
                 disabled={applyingHome}
                 className="btn-primary"
                 style={{
@@ -946,12 +947,6 @@ export default function CoachPage() {
                   <span>Apply Strategy to Dashboard</span>
                 )}
               </button>}
-              {telemetryDiagnostics.canTurnOffBreakGate && session?.user?.id && (
-                <button type="button" className="btn-secondary" style={{ margin: 0 }}
-                  onClick={() => setBreakGateDeck(null, session.user.id)}>
-                  Apply BreakGate Strategy
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => {

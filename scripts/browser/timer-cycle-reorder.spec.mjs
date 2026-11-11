@@ -11,6 +11,19 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   };
   await page.route('**/api/decks', route => route.fulfill({ json: [deck] }));
   await page.addInitScript(activeDeck => localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(activeDeck)), deck);
+  await page.addInitScript(() => {
+    window.coachChimeNotes = [];
+    const createOscillator = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () {
+      const oscillator = createOscillator.call(this);
+      const setFrequency = oscillator.frequency.setValueAtTime.bind(oscillator.frequency);
+      oscillator.frequency.setValueAtTime = (frequency, time) => {
+        if (frequency === 659.25 || frequency === 987.77) window.coachChimeNotes.push(frequency);
+        return setFrequency(frequency, time);
+      };
+      return oscillator;
+    };
+  });
   await page.goto('/settings');
   const settingsCount = page.getByLabel('BreakGate Questions Count', { exact: true });
   await settingsCount.fill('24');
@@ -70,21 +83,26 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   await skipWithHistory(4);
   const notice = page.getByRole('complementary', { name: 'Coach has noticed something' });
   await expect(notice).toContainText('5 BreakGate challenges');
+  expect(await page.evaluate(() => window.coachChimeNotes)).toEqual([659.25, 987.77]);
   expect(await notice.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(await notice.evaluate(element => element.clientWidth));
   await notice.getByRole('button', { name: 'Dismiss' }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).not.toBeNull();
   await openGate();
   await skipWithHistory(5);
   await expect(notice).toHaveCount(0);
+  expect(await page.evaluate(() => window.coachChimeNotes)).toEqual([]);
   await openGate();
+  await page.evaluate(() => localStorage.setItem('ifocus_sound_preferences', JSON.stringify({ telemetryChime: false })));
   await skipWithHistory(9);
   await expect(notice).toContainText('10 BreakGate challenges');
+  expect(await page.evaluate(() => window.coachChimeNotes)).toEqual([]);
   await notice.getByRole('button', { name: 'View Coach Strategy' }).click();
   await expect(page).toHaveURL(/\/coach$/);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).not.toBeNull();
-  await expect(page.getByRole('button', { name: 'Apply Strategy to Dashboard' })).toHaveCount(0);
+  const apply = page.getByRole('button', { name: 'Apply Strategy to Dashboard' });
+  await expect(apply).toHaveClass(/btn-primary/);
   const timerBefore = await page.evaluate(() => localStorage.getItem('ifocus_timer_state'));
-  await page.getByRole('button', { name: 'Apply BreakGate Strategy' }).click();
+  await apply.click();
   await expect(notice).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).toBeNull();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_timer_state'))).toBe(timerBefore);

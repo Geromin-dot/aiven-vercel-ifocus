@@ -5,6 +5,7 @@
 import AppDialog from '@/components/AppDialog';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import CoachNotice from '@/components/CoachNotice';
+import { playNotificationChime } from '@/lib/coachNoticeSound';
 import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -385,56 +386,6 @@ export default function CommandCenterPage() {
       router.push('/coach');
     } else {
       window.location.href = '/coach';
-    }
-  };
-
-  const playNotificationChime = () => {
-    try {
-      let chimeEnabled = true;
-      let volFactor = 0.7;
-      try {
-        const soundPrefs = JSON.parse(localStorage.getItem('ifocus_sound_preferences') || '{}');
-        if (soundPrefs.telemetryChime !== undefined) chimeEnabled = soundPrefs.telemetryChime;
-        if (soundPrefs.ambientVolume !== undefined) volFactor = Math.max(0, Math.min(100, Number(soundPrefs.ambientVolume))) / 100;
-      } catch (e) {}
-
-      if (!chimeEnabled || volFactor <= 0) return;
-
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      const now = ctx.currentTime;
-      
-      // Note 1: E5 (659.25 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(659.25, now);
-      gain1.gain.setValueAtTime(0.18 * volFactor, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      // Note 2: B5 (987.77 Hz) - iOS Harmonic Chime
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(987.77, now + 0.1);
-      gain2.gain.setValueAtTime(0, now);
-      gain2.gain.setValueAtTime(0.22 * volFactor, now + 0.1);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.1);
-      osc2.stop(now + 0.55);
-    } catch (e) {
-      console.warn("Web Audio chime failed:", e);
     }
   };
 
