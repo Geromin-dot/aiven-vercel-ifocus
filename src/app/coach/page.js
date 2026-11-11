@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
-import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { reconcileCloudTelemetry, setAiTimerAdjustment } from '@/lib/telemetrySync';
 import { adaptCoachToResilience } from '@/lib/coachResilience';
 import { latestCoachSignal, currentCoachResilience, formatCoachInsight } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
@@ -88,14 +88,13 @@ export default function CoachPage() {
         customBreakDuration: bMin * 60
       }));
 
-      localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-      localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify({
+      setAiTimerAdjustment({
         title,
         state: stateName,
         rhythm: reply?.rhythm || `${wMin}m Focus / ${bMin}m Rest`,
         sessions: targetSess,
         message: reply?.message || "AI Coach recommended cadence applied."
-      }));
+      });
 
       const syncPayload = {
         isRunning: false,
@@ -661,8 +660,7 @@ export default function CoachPage() {
         sessions: targetSessions,
         message: insight?.actionPlan || telemetryDiagnostics?.recommendedRhythm?.subtext || "AI Coach recommended strategy applied."
       };
-      localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-      localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiDetails));
+      const aiAdjustment = setAiTimerAdjustment(aiDetails);
 
       localStorage.removeItem('ifocus_ai_rest_recovery');
       const now = Date.now();
@@ -712,8 +710,7 @@ export default function CoachPage() {
             ...(!takeBreak && { latestTelemetry: null, activeIdleAlert: null, cognitiveReset: now }),
             activeTimerState: syncPayload,
             customTimer: customTimer,
-            aiAdjustedTimer: true,
-            aiAdjustedDetails: aiDetails,
+            ...aiAdjustment,
             updatedAt: new Date().toISOString()
           },
           timerPreferences: {

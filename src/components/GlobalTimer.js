@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 import FeatureGuideModal from "./FeatureGuideModal";
-import { reconcileCloudTelemetry } from "../lib/telemetrySync";
+import { clearAiTimerAdjustment, reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '../lib/verifiedStudyClient';
@@ -577,6 +577,19 @@ export default function GlobalTimer() {
     };
   }, [session?.user?.id, session?.user?.sessionId, session?.error, isAdmin, getEffectivePath, readStorageState]);
 
+  const finishTimerCycle = useCallback((completedState, sessionsCompleted) => {
+    playCompletionAlarm();
+    clearAiTimerAdjustment();
+    commitStorageState(completedState, true);
+    setCompletedCycleDetails({
+      sessionsCompleted,
+      timerPreset: completedState.timerPreset,
+      wasCustom: completedState.timerPreset === 'Custom',
+    });
+    setShowCycleCompleteModal(true);
+    window.dispatchEvent(new CustomEvent('ifocus_cycle_completed', { detail: { sessionsCompleted } }));
+  }, [commitStorageState]);
+
   const handleReturnToDefaultPreset = useCallback(() => {
     setShowCycleCompleteModal(false);
     const defaultState = {
@@ -592,10 +605,7 @@ export default function GlobalTimer() {
       lastPresenceElapsed: 0,
       breakGatePending: false,
     };
-    try {
-      localStorage.removeItem('ifocus_ai_adjusted_active');
-      localStorage.removeItem('ifocus_ai_adjusted_details');
-    } catch (e) {}
+    clearAiTimerAdjustment();
     commitStorageState(defaultState, true);
   }, [commitStorageState]);
 
@@ -1153,7 +1163,6 @@ export default function GlobalTimer() {
       else if (current.timerPreset === "Custom" && current.customBreakDuration) breakDuration = current.customBreakDuration;
 
       if (nextCount > maxSessions) {
-        playCompletionAlarm();
         const completedCycleState = {
           ...current,
           isFocus: true,
@@ -1169,14 +1178,7 @@ export default function GlobalTimer() {
           customWorkDuration: focusDuration,
           customBreakDuration: breakDuration,
         };
-        commitStorageState(completedCycleState, true);
-        setCompletedCycleDetails({
-          sessionsCompleted: maxSessions,
-          timerPreset: current.timerPreset,
-          wasCustom: current.timerPreset === "Custom"
-        });
-        setShowCycleCompleteModal(true);
-        window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: maxSessions } }));
+        finishTimerCycle(completedCycleState, maxSessions);
         return;
       }
 
@@ -1235,7 +1237,7 @@ export default function GlobalTimer() {
       window.removeEventListener("ifocus_test_reflection_prompt", handleTestReflection);
       window.removeEventListener("ifocus_test_cycle_complete", handleTestCycleComplete);
     };
-  }, [readStorageState, triggerPresencePause]);
+  }, [readStorageState, triggerPresencePause, finishTimerCycle]);
 
   // Bi-Directional Cloud Telemetry & Preference Reconciliation on mount (PC to iPhone PWA parity)
   useEffect(() => {
@@ -1421,7 +1423,6 @@ export default function GlobalTimer() {
 
           // If BreakGate is NOT active and this was the final planned session, complete cycle immediately!
           if (!breakGateDeck && isCycleFinished) {
-            playCompletionAlarm();
             const completedCycleState = {
               ...current,
               isFocus: true,
@@ -1437,14 +1438,7 @@ export default function GlobalTimer() {
               customWorkDuration: focusDuration,
               customBreakDuration: breakDuration,
             };
-            commitStorageState(completedCycleState, true);
-            setCompletedCycleDetails({
-              sessionsCompleted: currentCount,
-              timerPreset: current.timerPreset,
-              wasCustom: current.timerPreset === "Custom"
-            });
-            setShowCycleCompleteModal(true);
-            window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: currentCount } }));
+            finishTimerCycle(completedCycleState, currentCount);
             return;
           }
 
@@ -1557,7 +1551,6 @@ export default function GlobalTimer() {
           }
 
           if (isBreakCycleFinished) {
-            playCompletionAlarm();
             // Entire cycle completed! Reset back to Session 1 and pause timer (no continuous run)
             const completedCycleState = {
               ...current,
@@ -1574,14 +1567,7 @@ export default function GlobalTimer() {
               customWorkDuration: focusDuration,
               customBreakDuration: breakDuration,
             };
-            commitStorageState(completedCycleState, true);
-            setCompletedCycleDetails({
-              sessionsCompleted: maxSessions,
-              timerPreset: current.timerPreset,
-              wasCustom: current.timerPreset === "Custom"
-            });
-            setShowCycleCompleteModal(true);
-            window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: maxSessions } }));
+            finishTimerCycle(completedCycleState, maxSessions);
             return;
           }
 
@@ -1663,7 +1649,7 @@ export default function GlobalTimer() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [readStorageState, commitStorageState, getEffectivePath, isAdmin, session?.user?.id, session?.error]);
+  }, [readStorageState, commitStorageState, finishTimerCycle, getEffectivePath, isAdmin, session?.user?.id, session?.error]);
 
   // Handle Active Presence Confirmation
   const handleConfirmPresence = () => {
@@ -1784,7 +1770,6 @@ export default function GlobalTimer() {
 
     const currentCount = current.sessionCount || 1;
     if (currentCount >= maxSessions) {
-      playCompletionAlarm();
       const completedCycleState = {
         ...current,
         isFocus: true,
@@ -1800,14 +1785,7 @@ export default function GlobalTimer() {
         customWorkDuration: focusDuration,
         customBreakDuration: breakDuration,
       };
-      commitStorageState(completedCycleState, true);
-      setCompletedCycleDetails({
-        sessionsCompleted: currentCount,
-        timerPreset: current.timerPreset,
-        wasCustom: current.timerPreset === "Custom"
-      });
-      setShowCycleCompleteModal(true);
-      window.dispatchEvent(new CustomEvent("ifocus_cycle_completed", { detail: { sessionsCompleted: currentCount } }));
+      finishTimerCycle(completedCycleState, currentCount);
       return;
     }
 
@@ -1852,7 +1830,7 @@ export default function GlobalTimer() {
       customBreakDuration: breakDuration,
     };
     commitStorageState(breakState, true);
-  }, [readStorageState, commitStorageState]);
+  }, [readStorageState, commitStorageState, finishTimerCycle]);
 
   useEffect(() => {
     if (timerState.breakGatePending && !localStorage.getItem('ifocus_active_breakgate_deck')) {

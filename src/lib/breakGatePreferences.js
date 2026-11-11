@@ -1,2 +1,6 @@
 export const DEFAULT_BREAK_GATE_QUESTIONS = 5;
-export const MAX_BREAK_GATE_QUESTIONS = 20;
+
+export function normalizeBreakGateQuestionCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count > 0 ? count : DEFAULT_BREAK_GATE_QUESTIONS;
+}

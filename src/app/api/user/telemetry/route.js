@@ -98,6 +98,12 @@ export async function POST(req) {
             : body.telemetryState;
 
           const merged = { ...existingTelemetry, ...incoming };
+          if (Object.hasOwn(incoming, 'aiAdjustedTimer') &&
+              (Number(incoming.aiAdjustedUpdatedAt) || 0) < (Number(existingTelemetry.aiAdjustedUpdatedAt) || 0)) {
+            merged.aiAdjustedTimer = existingTelemetry.aiAdjustedTimer;
+            merged.aiAdjustedDetails = existingTelemetry.aiAdjustedDetails;
+            merged.aiAdjustedUpdatedAt = existingTelemetry.aiAdjustedUpdatedAt;
+          }
           if (Object.hasOwn(incoming, 'activeBreakGateDeck') &&
               (Number(incoming.activeBreakGateDeckUpdatedAt) || 0) < (Number(existingTelemetry.activeBreakGateDeckUpdatedAt) || 0)) {
             merged.activeBreakGateDeck = existingTelemetry.activeBreakGateDeck;

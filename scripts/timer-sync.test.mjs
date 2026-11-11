@@ -71,6 +71,19 @@ test('an unversioned cloud deck cannot restore a previously cleared local select
   assert.equal(storage.has('ifocus_active_breakgate_deck'), false);
 });
 
+test('a stale cloud response cannot reactivate an AI timer adjustment cleared in flight', async () => {
+  const { storage, requests } = await setup({}, {
+    aiAdjustedTimer: true, aiAdjustedDetails: { title: 'Earlier strategy' }, aiAdjustedUpdatedAt: 100,
+  }, local => local.set('ifocus_ai_adjusted_updated_at', '200'));
+  assert.equal(storage.has('ifocus_ai_adjusted_active'), false);
+  assert.equal(storage.has('ifocus_ai_adjusted_details'), false);
+  const write = requests.find(request => request.options?.method === 'POST');
+  const telemetry = JSON.parse(write.options.body).telemetryState;
+  assert.equal(telemetry.aiAdjustedTimer, false);
+  assert.equal(telemetry.aiAdjustedDetails, null);
+  assert.equal(telemetry.aiAdjustedUpdatedAt, 200);
+});
+
 test('a stale cloud countdown cannot roll back a local presence pause', async () => {
   const local = { deviceId: 'phone', timeLeft: 720, totalTime: 900, isRunning: false, presencePaused: true, updatedAt: 200 };
   const { storage, events } = await setup({ ifocus_timer_state: JSON.stringify(local) }, {
@@ -162,10 +175,13 @@ test('less than a minute of checkpoint progress is never offered for recovery', 
 });
 
 
-test('telemetry sync retries a conflict and never clears resolved sessions with a stale payload', async () => {
+test('telemetry sync retries a conflict and preserves newer timer decisions over stale payloads', async () => {
   const newSignal = { state: 'Stressed', timestamp: '2026-11-01T01:01:00Z' };
   const oldSignal = { state: 'idle', timestamp: '2026-11-01T01:00:00Z' };
-  let row = { telemetryState: JSON.stringify({resolvedTimerSessions:['pc-discard'], latestTelemetry: newSignal}), timerPreferences: '{}' };
+  let row = { telemetryState: JSON.stringify({
+    resolvedTimerSessions: ['pc-discard'], latestTelemetry: newSignal,
+    aiAdjustedTimer: false, aiAdjustedDetails: null, aiAdjustedUpdatedAt: 200,
+  }), timerPreferences: '{}' };
   let attempts = 0;
   globalThis.__recoveryTestDb = {
     $transaction: async (callback, options) => {
@@ -184,10 +200,15 @@ test('telemetry sync retries a conflict and never clears resolved sessions with 
     .replace("'../../../../lib/focusClock'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8')).toString('base64')}`));
   const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
   for(const resolvedTimerSessions of [null, [], ['phone-save']]) {
-    const result=await POST({json:async()=>({telemetryState:{resolvedTimerSessions,latestTelemetry:oldSignal,activeTimerState:{updatedAt:200}}})});
+    const result=await POST({json:async()=>({telemetryState:{
+      resolvedTimerSessions, latestTelemetry: oldSignal, activeTimerState: { updatedAt: 200 },
+      aiAdjustedTimer: true, aiAdjustedDetails: { title: 'Earlier strategy' }, aiAdjustedUpdatedAt: 100,
+    }})});
     assert.equal(result.status,200);
     assert.ok(JSON.parse(row.telemetryState).resolvedTimerSessions.includes('pc-discard'));
     assert.equal(JSON.parse(row.telemetryState).latestTelemetry.state, 'Stressed');
+    assert.equal(JSON.parse(row.telemetryState).aiAdjustedTimer, false);
+    assert.equal(JSON.parse(row.telemetryState).aiAdjustedDetails, null);
   }
   assert.deepEqual(JSON.parse(row.telemetryState).resolvedTimerSessions,['pc-discard','phone-save']);
   delete globalThis.__recoveryTestDb;

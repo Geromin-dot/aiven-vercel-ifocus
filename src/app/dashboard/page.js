@@ -4,12 +4,12 @@
 
 import AppDialog from '@/components/AppDialog';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
-import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
+import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
-import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
+import { clearAiTimerAdjustment, reconcileCloudTelemetry, setAiTimerAdjustment } from '@/lib/telemetrySync';
 import { remainingTime, settlePresence, toggleTimerState, getTimerDeviceId } from '@/lib/timerState';
 import { formatFocusMinutes, sessionMinutes } from '@/lib/studyStats';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '@/lib/verifiedStudyClient';
@@ -186,8 +186,7 @@ export default function CommandCenterPage() {
     setAiAdjustedDetails(details);
 
     try {
-      localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-      localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(details));
+      setAiTimerAdjustment(details);
       localStorage.setItem('ifocus_custom_timer', JSON.stringify({
         customWorkTime: { min: wMin, sec: 0 },
         customBreakTime: { min: bMin, sec: 0 },
@@ -1169,6 +1168,7 @@ export default function CommandCenterPage() {
     };
 
     const handleCycleCompleted = (e) => {
+      setPendingTimerChange(null);
       const count = e?.detail?.sessionsCompleted || 1;
       setSaveSessionToast({
         show: true,
@@ -1182,6 +1182,7 @@ export default function CommandCenterPage() {
 
     window.addEventListener('ifocus_timer_tick', handleTick);
     window.addEventListener('ifocus_timer_sync', handleSync);
+    window.addEventListener('ifocus_ai_timer_adjustment_changed', handleSync);
     window.addEventListener('ifocus_breakgate_trigger', handleBreakGate);
     window.addEventListener('ifocus_cycle_completed', handleCycleCompleted);
     window.addEventListener('focus', handleWindowFocusSync);
@@ -1191,6 +1192,7 @@ export default function CommandCenterPage() {
     return () => {
       window.removeEventListener('ifocus_timer_tick', handleTick);
       window.removeEventListener('ifocus_timer_sync', handleSync);
+      window.removeEventListener('ifocus_ai_timer_adjustment_changed', handleSync);
       window.removeEventListener('ifocus_breakgate_trigger', handleBreakGate);
       window.removeEventListener('ifocus_cycle_completed', handleCycleCompleted);
       window.removeEventListener('focus', handleWindowFocusSync);
@@ -1533,7 +1535,8 @@ export default function CommandCenterPage() {
     const validatedSessions = Math.min(5, Math.max(1, parseInt(customSessions, 10) || 1));
     setCustomSessions(validatedSessions);
 
-    const customQuestionCount = parseInt(customBreakGateQuestions) || DEFAULT_BREAK_GATE_QUESTIONS;
+    const customQuestionCount = normalizeBreakGateQuestionCount(customBreakGateQuestions);
+    setCustomBreakGateQuestions(customQuestionCount);
     localStorage.setItem('ifocus_breakgate_question_count', String(customQuestionCount));
 
     try {
@@ -1609,10 +1612,7 @@ export default function CommandCenterPage() {
   const confirmOverrideAi = () => {
     setIsAiAdjustedTimer(false);
     setAiAdjustedDetails(null);
-    try {
-      localStorage.removeItem('ifocus_ai_adjusted_active');
-      localStorage.removeItem('ifocus_ai_adjusted_details');
-    } catch (e) {}
+    clearAiTimerAdjustment();
 
     const pending = pendingTimerChange;
     setPendingTimerChange(null);
@@ -2082,10 +2082,10 @@ export default function CommandCenterPage() {
       const { reflectionText, ...savedReply } = aiReply;
       const telemetry = { state, sentiment: state, reason: data.actionPlan, actionPlan: data.actionPlan,
         source: data.responseSource === 'fallback' ? 'reflection_submission_fallback' : 'reflection_submission', timestamp };
+      let aiAdjustment = { aiAdjustedTimer: true, aiAdjustedDetails: savedReply, aiAdjustedUpdatedAt: Date.parse(timestamp) };
       try {
         localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
-        localStorage.setItem('ifocus_ai_adjusted_active', 'true');
-        localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(savedReply));
+        aiAdjustment = setAiTimerAdjustment(savedReply);
         localStorage.setItem('ifocus_timer_state', JSON.stringify(timer));
         for (const key of ['ifocus_latest_telemetry', `ifocus_telemetry_insight_${userName}`, 'ifocus_telemetry_insight_anonymous']) {
           localStorage.setItem(key, JSON.stringify(telemetry));
@@ -2096,7 +2096,7 @@ export default function CommandCenterPage() {
       } catch { /* The current plan remains usable when browser storage is unavailable. */ }
       // Reflection, telemetry and timer preferences use one cloud save instead of separate writes.
       saveHistory([{ id: crypto.randomUUID(), date: timestamp, text, state, aiReply: savedReply }, ...pastEntries], {
-        latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: savedReply,
+        latestTelemetry: telemetry, activeIdleAlert: null, customTimer, ...aiAdjustment,
       });
       setReflectionInput('');
       resetTelemetry();
@@ -3782,19 +3782,18 @@ export default function CommandCenterPage() {
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.4rem' }}>
-                    <label style={{ display: 'block', margin: 0, color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>BreakGate Questions</label>
+                    <label htmlFor="custom-breakgate-questions" style={{ display: 'block', margin: 0, color: '#27522d', fontSize: '0.84rem', fontWeight: 700 }}>BreakGate Questions</label>
                     <HelpButton topic="breakgate" title="BreakGate Questions Tutorial" size={12} style={{ width: '20px', height: '20px' }} />
                   </div>
                   <input 
                     type="number" 
                     min="1" 
-                    max={MAX_BREAK_GATE_QUESTIONS}
+                    id="custom-breakgate-questions"
                     disabled={!activeBreakGateDeck}
                     value={!activeBreakGateDeck ? 0 : (customBreakGateQuestions === 0 || customBreakGateQuestions === '0' ? '' : customBreakGateQuestions)}
                     onChange={e => {
                       if (!activeBreakGateDeck) return;
-                      const val = e.target.value === '' ? '' : Math.max(1, Math.min(MAX_BREAK_GATE_QUESTIONS, parseInt(e.target.value) || 1));
-                      setCustomBreakGateQuestions(val);
+                      setCustomBreakGateQuestions(e.target.value);
                     }}
                     placeholder={!activeBreakGateDeck ? '0 (Locked)' : 'e.g. 5 Questions'}
                     style={{ 

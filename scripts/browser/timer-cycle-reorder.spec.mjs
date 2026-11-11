@@ -1,6 +1,82 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
+test('BreakGate saves more than 20 questions and fits the progress bar on desktop and phone', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context);
+  const deck = {
+    id: 'long-deck', title: 'Long review deck', userId: 'history-student',
+    cards: Array.from({ length: 28 }, (_, index) => ({ front: `Term ${index + 1}`, back: `Definition ${index + 1}` })),
+  };
+  await page.route('**/api/decks', route => route.fulfill({ json: [deck] }));
+  await page.addInitScript(activeDeck => localStorage.setItem('ifocus_active_breakgate_deck', JSON.stringify(activeDeck)), deck);
+  await page.goto('/settings');
+  const settingsCount = page.getByLabel('BreakGate Questions Count', { exact: true });
+  await settingsCount.fill('24');
+  await page.getByRole('button', { name: 'Save Preferences', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_breakgate_question_count'))).toBe('24');
+
+  await page.goto('/dashboard');
+  await page.getByTitle('Custom Timer Settings').click();
+  const customCount = page.getByLabel('BreakGate Questions', { exact: true });
+  await expect(customCount).toHaveValue('24');
+  await customCount.fill('26');
+  await page.getByRole('button', { name: 'Save Settings', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_breakgate_question_count'))).toBe('26');
+  await page.evaluate(() => {
+    localStorage.setItem('ifocus_timer_state', JSON.stringify({
+      isFocus: true, isRunning: true, sessionCount: 1, timerPreset: 'Custom',
+      timeLeft: 1, totalTime: 1, targetEndTime: Date.now() + 1000,
+      customWorkDuration: 1, customBreakDuration: 1, customSessions: 1,
+      timerSessionId: 'breakgate-long-test', authSessionId: 'history-login', userId: 'history-student',
+    }));
+  });
+  await page.reload();
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
+  await page.clock.fastForward(1100);
+  const dialog = page.getByRole('dialog', { name: 'Break Retrieval Challenge' });
+  const progress = dialog.getByRole('progressbar', { name: 'BreakGate progress' });
+  await expect(dialog.getByText('Question 1 of 26')).toBeVisible();
+  await expect(progress).toHaveAttribute('aria-valuemax', '26');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    expect(await dialog.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(await dialog.evaluate(element => element.clientWidth));
+  }
+  await dialog.getByRole('button', { name: /^A Definition/ }).click();
+  await expect(progress).toHaveAttribute('aria-valuenow', '1');
+  await dialog.getByRole('button', { name: 'Next Question' }).click();
+  await expect(dialog.getByText('Question 2 of 26')).toBeVisible();
+});
+
+test('custom settings open directly after a one-second focus and break cycle', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context);
+  await page.addInitScript(() => {
+    localStorage.setItem('ifocus_timer_preferences', JSON.stringify({ autoStartBreaks: true, autoStartFocus: true }));
+    localStorage.setItem('ifocus_sound_preferences', JSON.stringify({ dailyReminder: false }));
+    localStorage.setItem('ifocus_ai_adjusted_active', 'true');
+    localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify({ state: 'Adaptive', rhythm: '1s Focus / 1s Rest', sessions: 2 }));
+    localStorage.setItem('ifocus_timer_state', JSON.stringify({
+      isFocus: true, isRunning: true, sessionCount: 1, timerPreset: 'Custom',
+      timeLeft: 1, totalTime: 1, targetEndTime: Date.now() + 1000,
+      customWorkDuration: 1, customBreakDuration: 1, customSessions: 2,
+      timerSessionId: 'short-cycle-test', authSessionId: 'history-login', userId: 'history-student',
+    }));
+  });
+  await page.goto('/dashboard');
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
+  for (const phase of [false, true]) {
+    await page.clock.fastForward(1100);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_timer_state')).isFocus)).toBe(phase);
+  }
+  await page.clock.fastForward(1100);
+  await expect(page.getByText('All Planned Sessions Finished!')).toBeVisible();
+  await page.getByRole('button', { name: 'Keep Custom Rhythm' }).click();
+  await page.getByTitle('Custom Timer Settings').click();
+  await expect(page.getByRole('heading', { name: 'Custom Timer Settings' })).toBeVisible();
+  await expect(page.getByText('Override AI Recommendation?')).toHaveCount(0);
+});
+
 test('long task lists keep full-height rows and scroll inside the dashboard panel', async ({ page, context }) => {
   await accountFixture(context);
   const tasks = Array.from({ length: 30 }, (_, index) => ({

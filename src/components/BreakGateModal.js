@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
+import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
@@ -59,7 +59,8 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
   const { data: session } = useSession();
   const [deck, setDeck] = useState(null);
   const [challengeCards, setChallengeCards] = useState([]);
-  const [optionsPerCard, setOptionsPerCard] = useState([]);
+  const [deckCards, setDeckCards] = useState([]);
+  const [currentOptions, setCurrentOptions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isOptionChecked, setIsOptionChecked] = useState(false);
@@ -160,16 +161,15 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       try {
         const savedCount = localStorage.getItem('ifocus_breakgate_question_count');
         if (savedCount) {
-          questionCount = parseInt(savedCount) || DEFAULT_BREAK_GATE_QUESTIONS;
+          questionCount = normalizeBreakGateQuestionCount(savedCount);
         } else {
           const timerPrefs = localStorage.getItem('ifocus_timer_preferences');
           if (timerPrefs) {
             const parsed = JSON.parse(timerPrefs);
-            if (parsed.breakGateQuestionCount) questionCount = parseInt(parsed.breakGateQuestionCount) || DEFAULT_BREAK_GATE_QUESTIONS;
+            questionCount = normalizeBreakGateQuestionCount(parsed.breakGateQuestionCount);
           }
         }
       } catch (e) {}
-      questionCount = Math.max(1, Math.min(questionCount, MAX_BREAK_GATE_QUESTIONS));
 
       // Select cards based on user's configured question count
       const picked = [...allCards]
@@ -177,10 +177,8 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         .slice(0, Math.min(questionCount, allCards.length));
 
       setChallengeCards(picked);
-
-      // Generate 4 options for each challenge card
-      const generatedOptions = picked.map(card => generateOptionsForCard(card, allCards));
-      setOptionsPerCard(generatedOptions);
+      setDeckCards(allCards);
+      setCurrentOptions(generateOptionsForCard(picked[0], allCards));
 
     } catch (e) {
       console.error('Error loading BreakGate deck', e);
@@ -197,7 +195,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
 
   const total = challengeCards.length;
   const currentCard = challengeCards[currentIndex];
-  const currentOptions = optionsPerCard[currentIndex] || [];
+  const answered = currentIndex + Number(isOptionChecked);
 
   const handleSelectOption = (opt) => {
     if (isOptionChecked) return;
@@ -233,6 +231,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
 
   const handleNextQuestion = () => {
     if (currentIndex + 1 < total) {
+      setCurrentOptions(generateOptionsForCard(challengeCards[currentIndex + 1], deckCards));
       setCurrentIndex(prev => prev + 1);
       setSelectedOption(null);
       setIsOptionChecked(false);
@@ -307,7 +306,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       justifyContent: 'center',
       padding: '1rem'
     }}>
-      <div style={{
+      <div role="dialog" aria-modal="true" aria-labelledby="breakgate-title" style={{
         background: '#ffffff',
         border: '1px solid rgba(0, 0, 0, 0.1)',
         borderRadius: '20px',
@@ -320,7 +319,8 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
         gap: '0.85rem',
         animation: 'flashcardFadeIn 0.25s ease',
         maxHeight: 'calc(100dvh - 32px)',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        overflowWrap: 'anywhere'
       }}>
 
         {/* Modal Header */}
@@ -348,7 +348,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                 {deck?.title || 'Active Deck'}
               </span>
             </div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            <h2 id="breakgate-title" style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
               {isFinished ? 'BreakGate Unlocked' : 'Break Retrieval Challenge'}
             </h2>
           </div>
@@ -439,20 +439,15 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
           /* Active Multiple Choice Challenge */
           <>
             {/* Question Progress Tracker */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              <span>Question {currentIndex + 1} of {total}</span>
-              <div style={{ display: 'flex', gap: '0.35rem' }}>
-                {challengeCards.map((_, i) => (
-                  <div key={i} style={{
-                    width: '32px',
-                    height: '6px',
-                    borderRadius: '3px',
-                    background: i < currentIndex ? '#2e7d32' : i === currentIndex ? 'var(--primary-accent)' : 'rgba(0,0,0,0.1)',
-                    transition: 'background 0.3s ease'
-                  }} />
-                ))}
+            {total > 0 && (
+              <div style={{ display: 'grid', gap: '0.35rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                <span>Question {currentIndex + 1} of {total}</span>
+                <div role="progressbar" aria-label="BreakGate progress" aria-valuemin={0} aria-valuemax={total} aria-valuenow={answered}
+                  style={{ width: '100%', height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(0,0,0,0.1)' }}>
+                  <div style={{ width: `${answered / total * 100}%`, height: '100%', background: 'var(--primary-accent)' }} />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Question Prompt Card */}
             <div style={{

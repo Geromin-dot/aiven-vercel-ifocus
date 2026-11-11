@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_BREAK_GATE_QUESTIONS, MAX_BREAK_GATE_QUESTIONS } from '@/lib/breakGatePreferences';
+import { DEFAULT_BREAK_GATE_QUESTIONS, normalizeBreakGateQuestionCount } from '@/lib/breakGatePreferences';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
@@ -711,7 +711,7 @@ export default function SettingsPage() {
     if (e && e.preventDefault) e.preventDefault();
     setIsSavingProfile(true);
     try {
-      const cleanBgCount = Number(breakGateQuestionCount || DEFAULT_BREAK_GATE_QUESTIONS);
+      const cleanBgCount = normalizeBreakGateQuestionCount(breakGateQuestionCount);
       setBreakGateQuestionCount(cleanBgCount);
 
       const savedPrefs = savedCheckIntervals();
@@ -1356,7 +1356,7 @@ export default function SettingsPage() {
               <div className="settings-input-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.4rem' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
-                    <label className="settings-label" style={{ fontSize: '0.85rem', margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    <label htmlFor="settings-breakgate-questions" className="settings-label" style={{ fontSize: '0.85rem', margin: 0, fontWeight: 700, whiteSpace: 'nowrap' }}>
                       BreakGate Questions Count
                     </label>
                     <HelpButton topic="breakgate" title="BreakGate Challenge Questions Tutorial" size={12} style={{ width: '20px', height: '20px', flexShrink: 0 }} />
@@ -1377,14 +1377,13 @@ export default function SettingsPage() {
                 <input 
                   type="number" 
                   min="1" 
-                  max={MAX_BREAK_GATE_QUESTIONS}
+                  id="settings-breakgate-questions"
                   disabled={!hasActiveBreakGateDeck}
                   className="settings-input"
                   value={!hasActiveBreakGateDeck ? 0 : (breakGateQuestionCount === 0 || breakGateQuestionCount === '0' ? '' : breakGateQuestionCount)}
                   onChange={(e) => {
                     if (!hasActiveBreakGateDeck) return;
-                    const val = e.target.value === '' ? '' : Math.max(1, Math.min(MAX_BREAK_GATE_QUESTIONS, parseInt(e.target.value) || 1));
-                    setBreakGateQuestionCount(val);
+                    setBreakGateQuestionCount(e.target.value);
                   }}
                   placeholder={!hasActiveBreakGateDeck ? '0 (Locked)' : 'e.g. 5 Questions'}
                   style={{ 

@@ -10,6 +10,35 @@ let reconciliationPromise = null;
 let lastReconciliationAt = 0;
 const RECONCILIATION_COOLDOWN_MS = 10000;
 
+function writeAiTimerAdjustment(details, updatedAt) {
+  if (details) {
+    localStorage.setItem('ifocus_ai_adjusted_active', 'true');
+    localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(details));
+  } else {
+    localStorage.removeItem('ifocus_ai_adjusted_active');
+    localStorage.removeItem('ifocus_ai_adjusted_details');
+  }
+  localStorage.setItem('ifocus_ai_adjusted_updated_at', String(updatedAt));
+}
+
+export function setAiTimerAdjustment(details) {
+  const previous = Number(localStorage.getItem('ifocus_ai_adjusted_updated_at')) || 0;
+  const updatedAt = Math.max(Date.now(), previous + 1);
+  writeAiTimerAdjustment(details, updatedAt);
+  return { aiAdjustedTimer: Boolean(details), aiAdjustedDetails: details, aiAdjustedUpdatedAt: updatedAt };
+}
+
+export function clearAiTimerAdjustment() {
+  try {
+    if (localStorage.getItem('ifocus_ai_adjusted_active') !== 'true') return;
+    const telemetryState = setAiTimerAdjustment(null);
+    fetch('/api/user/telemetry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ telemetryState }),
+    }).catch(() => {});
+  } catch {}
+}
+
 export function setBreakGateDeck(deck, userId) {
   const key = 'ifocus_active_breakgate_deck';
   const versionKey = `ifocus_breakgate_deck_updated_at_${userId}`;
@@ -88,12 +117,6 @@ async function reconcileCloudTelemetryInternal() {
     try {
       const raw = localStorage.getItem("ifocus_custom_timer");
       if (raw) localCustomTimer = JSON.parse(raw);
-    } catch (e) {}
-
-    let localAiDetails = null;
-    try {
-      const raw = localStorage.getItem("ifocus_ai_adjusted_details");
-      if (raw) localAiDetails = JSON.parse(raw);
     } catch (e) {}
 
     let localMastered = [];
@@ -214,10 +237,19 @@ async function reconcileCloudTelemetryInternal() {
       localStorage.setItem("ifocus_custom_timer", JSON.stringify(effectiveCustomTimer));
     }
 
-    // Reconcile AI Adjusted Details
-    if (cloud.aiAdjustedDetails) {
-      localStorage.setItem("ifocus_ai_adjusted_details", JSON.stringify(cloud.aiAdjustedDetails));
-      localStorage.setItem("ifocus_ai_adjusted_active", "true");
+    // Read the latest local decision after the cloud request completes.
+    const localAiVersion = Number(localStorage.getItem('ifocus_ai_adjusted_updated_at')) || 0;
+    const cloudAiVersion = Number(cloud.aiAdjustedUpdatedAt) || 0;
+    let localAiUpdate = null;
+    if (localAiVersion > cloudAiVersion) {
+      try {
+        const active = localStorage.getItem('ifocus_ai_adjusted_active') === 'true';
+        const details = active ? JSON.parse(localStorage.getItem('ifocus_ai_adjusted_details') || 'null') : null;
+        localAiUpdate = { aiAdjustedTimer: active, aiAdjustedDetails: details, aiAdjustedUpdatedAt: localAiVersion };
+      } catch {}
+    } else if (cloudAiVersion > localAiVersion || (!localAiVersion && cloud.aiAdjustedDetails)) {
+      writeAiTimerAdjustment(cloud.aiAdjustedTimer === false ? null : cloud.aiAdjustedDetails, cloudAiVersion);
+      window.dispatchEvent(new CustomEvent('ifocus_ai_timer_adjustment_changed'));
     }
 
     // A cloud checkpoint is saved work, never a live countdown on another device.
@@ -277,13 +309,15 @@ async function reconcileCloudTelemetryInternal() {
       isCloudBehindInsight ||
       isCloudMissingPrefs ||
       isCloudMissingDeck ||
-      isCloudMissingCustomTimer
+      isCloudMissingCustomTimer ||
+      localAiUpdate
     ) {
       fetch("/api/user/telemetry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           telemetryState: {
+            ...localAiUpdate,
             breakGateEvents: mergedEvents,
             journalHistory: mergedJournal,
             masteredCards: mergedMastered,
