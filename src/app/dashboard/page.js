@@ -738,7 +738,6 @@ export default function CommandCenterPage() {
   const [currentTrack, setCurrentTrack] = useState('Chill Lofi');
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
-  const audioRef = useRef(null);
   const tracks = [
     { id: 'Chill Lofi', name: 'Chill Lofi', desc: 'Calming Lo-Fi beats & ambient chill study vibes', tag: 'Lo-Fi', icon: 'coffee' },
     { id: 'Study Music', name: 'Study Music', desc: 'Classical acoustic focus melodies for deep work', tag: 'Acoustic', icon: 'book' },
@@ -827,14 +826,6 @@ export default function CommandCenterPage() {
       window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
     };
   }, [userName]);
-
-  // Audio Track Source Map
-  const getTrackSrc = (name) => {
-    if (name === 'Chill Lofi') return '/music/Lofi Chill.mp3';
-    if (name === 'Study Music') return '/music/Study Music.mp3';
-    if (name === 'Rain Ambient') return '/music/rain.mp3';
-    return '/music/Lofi Chill.mp3';
-  };
 
   // Ambient Soundscape Sync with Global Engine
   useEffect(() => {
@@ -3345,6 +3336,7 @@ export default function CommandCenterPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-secondary)' }}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
               <input 
                 type="range" 
+                aria-label="Soundscape volume"
                 min="0" 
                 max="100" 
                 value={volume}

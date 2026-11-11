@@ -48,6 +48,8 @@ const getSharedAudioContext = () => {
   return window.__ifocusSharedAudioCtx;
 };
 
+const defaultMusicState = { isPlaying: false, currentTrack: 'Chill Lofi', volume: 70 };
+
 // Automatic One-Time Audio Unlocker for iOS Safari WebKit (requires user gesture)
 if (typeof window !== "undefined") {
   const unlockEvents = ["touchstart", "touchend", "pointerdown", "mousedown", "click"];
@@ -193,6 +195,7 @@ export default function GlobalTimer() {
     }
     return pathnameRef.current || pathname || "/";
   }, [pathname]);
+  const showTimer = !isAdmin && !isExemptPath(pathname);
 
   // Master Timer State
   const [timerState, setTimerState] = useState({
@@ -231,8 +234,9 @@ export default function GlobalTimer() {
   const [guideTopic, setGuideTopic] = useState("pomodoro");
 
   // Global Music & Soundscapes State (Synced with Dashboard)
-  const [musicState, setMusicState] = useState({ isPlaying: false, currentTrack: 'Chill Lofi', volume: 70 });
+  const [musicState, setMusicState] = useState(defaultMusicState);
   const globalAudioRef = useRef(null);
+  const soundscapeOutputRef = useRef(null);
 
   // Navigation Slide-In Animation & Audio State
   const [isNavSliding, setIsNavSliding] = useState(false);
@@ -265,38 +269,72 @@ export default function GlobalTimer() {
 
   // Sync Ambient Music across all pages
   useEffect(() => {
+    let currentMusic = defaultMusicState;
+    const mountedAudio = globalAudioRef.current;
+
+    const syncMusic = (detail) => {
+      currentMusic = { ...currentMusic, ...detail };
+      setMusicState(currentMusic);
+      const audio = globalAudioRef.current;
+      if (!audio) return;
+      if (!showTimer || !currentMusic.isPlaying || currentMusic.currentTrack === 'None') {
+        audio.pause();
+        return;
+      }
+
+      // iOS can ignore HTMLMediaElement.volume. Apply volume in the audio graph.
+      if (soundscapeOutputRef.current?.audio !== audio) {
+        soundscapeOutputRef.current?.gain.disconnect();
+        soundscapeOutputRef.current = null;
+        try {
+          const context = getSharedAudioContext();
+          if (context) {
+            const gain = context.createGain();
+            context.createMediaElementSource(audio).connect(gain);
+            gain.connect(context.destination);
+            audio.volume = 1;
+            audio.muted = false;
+            soundscapeOutputRef.current = { audio, context, gain };
+          }
+        } catch {
+          // Use native media volume if the Web Audio graph is unavailable.
+        }
+      }
+
+      const volume = Number(currentMusic.volume);
+      const level = Number.isFinite(volume) ? Math.max(0, Math.min(100, volume)) / 100 : defaultMusicState.volume / 100;
+      const output = soundscapeOutputRef.current;
+      if (output) {
+        const { context, gain } = output;
+        gain.gain.setValueAtTime(level, context.currentTime);
+        if (context.state === 'suspended' || context.state === 'interrupted') {
+          context.resume().catch(() => {});
+        }
+      } else {
+        audio.volume = level;
+        audio.muted = level === 0;
+      }
+
+      const targetSrc = new URL(getTrackSrc(currentMusic.currentTrack), window.location.origin).href;
+      const trackChanged = audio.src !== targetSrc;
+      if (trackChanged) audio.src = targetSrc;
+      if (trackChanged || audio.paused) {
+        audio.play().catch((err) => console.warn("Global audio play prevented:", err));
+      }
+    };
+
     try {
       const saved = localStorage.getItem('ifocus_music_state');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed.isPlaying === 'boolean') {
-          setMusicState(parsed);
+          syncMusic(parsed);
         }
       }
     } catch (e) {}
 
     const handleMusicSync = (e) => {
-      if (e?.detail) {
-        const detail = e.detail;
-        setMusicState((prev) => ({ ...prev, ...detail }));
-        if (globalAudioRef.current) {
-          if (detail.volume !== undefined) {
-            globalAudioRef.current.volume = Math.max(0, Math.min(1, detail.volume / 100));
-          }
-          if (typeof detail.isPlaying === 'boolean') {
-            if (detail.isPlaying && detail.currentTrack !== 'None') {
-              const targetSrc = getTrackSrc(detail.currentTrack || musicState.currentTrack || 'Chill Lofi');
-              if (!globalAudioRef.current.src.endsWith(targetSrc)) {
-                globalAudioRef.current.src = targetSrc;
-                globalAudioRef.current.load();
-              }
-              globalAudioRef.current.play().catch((err) => console.warn("Global audio play prevented:", err));
-            } else {
-              globalAudioRef.current.pause();
-            }
-          }
-        }
-      }
+      if (e?.detail) syncMusic(e.detail);
     };
     window.addEventListener('ifocus_music_sync', handleMusicSync);
 
@@ -308,37 +346,17 @@ export default function GlobalTimer() {
 
     const handleEmergencyStop = () => {
       setTimerState((prev) => ({ ...prev, isRunning: false, targetEndTime: null }));
-      if (globalAudioRef.current) {
-        globalAudioRef.current.pause();
-      }
-      setMusicState((prev) => ({ ...prev, isPlaying: false }));
+      syncMusic({ isPlaying: false });
     };
     window.addEventListener('ifocus_emergency_stop', handleEmergencyStop);
 
     return () => {
+      mountedAudio?.pause();
       window.removeEventListener('ifocus_music_sync', handleMusicSync);
       window.removeEventListener('ifocus_open_guide', handleGuideOpen);
       window.removeEventListener('ifocus_emergency_stop', handleEmergencyStop);
     };
-  }, []);
-
-  // Global Audio Playback Controller
-  useEffect(() => {
-    if (globalAudioRef.current) {
-      const vol = Math.max(0, Math.min(1, (musicState.volume !== undefined ? musicState.volume : 70) / 100));
-      globalAudioRef.current.volume = vol;
-      if (musicState.isPlaying && musicState.currentTrack !== 'None' && vol > 0) {
-        const targetSrc = getTrackSrc(musicState.currentTrack || 'Chill Lofi');
-        if (!globalAudioRef.current.src.endsWith(targetSrc)) {
-          globalAudioRef.current.src = targetSrc;
-          globalAudioRef.current.load();
-        }
-        globalAudioRef.current.play().catch((e) => console.warn("Global audio play prevented:", e));
-      } else {
-        globalAudioRef.current.pause();
-      }
-    }
-  }, [musicState.isPlaying, musicState.currentTrack, musicState.volume]);
+  }, [showTimer]);
 
   // Navigation Route Change Trigger: Slide In from Right + Elegant Chime
   useEffect(() => {
@@ -1903,13 +1921,10 @@ export default function GlobalTimer() {
     ? "ifocusPillPulseWarning 2s ease-in-out infinite"
     : "none";
 
-  const liveRenderPath = getEffectivePath();
-  if (isExemptPath(liveRenderPath) || isAdmin) {
-    return null;
-  }
-
   return (
     <>
+      <audio ref={globalAudioRef} loop preload="none" />
+      {showTimer && <>
       <InterruptedSessionRecovery userId={session?.user?.id} />
       {/* Floating Mini-Timer Pill (Movable, Frosted White & Glowing Live Forest Green Design) */}
       <style>{`
@@ -2011,14 +2026,6 @@ export default function GlobalTimer() {
           50% { height: 14px; }
         }
       `}</style>
-
-      {/* Persistent Ambient Soundscape Audio Engine - Always mounted across all routes */}
-      <audio
-        ref={globalAudioRef}
-        loop
-        preload="auto"
-        src={getTrackSrc(musicState.currentTrack || 'Chill Lofi')}
-      />
 
       {showFloatingMiniTimer && (
         <div
@@ -3170,6 +3177,7 @@ export default function GlobalTimer() {
         onClose={() => setGuideModalOpen(false)}
         initialTopic={guideTopic}
       />
+      </>}
     </>
   );
 }
