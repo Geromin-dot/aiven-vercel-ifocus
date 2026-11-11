@@ -359,7 +359,6 @@ export default function CommandCenterPage() {
   const backspaceCountRef = useRef(0);
   const totalKeystrokesRef = useRef(0);
   const anomalyTriggeredRef = useRef(false);
-  const lastTelemetryAlertAtRef = useRef(0);
   const recentKeyTimestampsRef = useRef([]);
 
   // Comprehensive Frustration / Profanity / Anxiety Trigger Words (Legacy Prototype Parity)
@@ -377,7 +376,6 @@ export default function CommandCenterPage() {
 
   const dismissTelemetryToast = () => {
     setTelemetryToast(prev => ({ ...prev, show: false }));
-    anomalyTriggeredRef.current = false; // Allow re-triggering when subsequent errors happen!
   };
 
   const goToCoach = () => {
@@ -439,7 +437,6 @@ export default function CommandCenterPage() {
   };
 
   const triggerTelemetryAlert = (reason, actionPlan, dwell, flight, bsRatio, customTitle = "Coach has noticed something") => {
-    lastTelemetryAlertAtRef.current = performance.now();
     const isHesitant = reason.toLowerCase().includes('hesitation') || reason.toLowerCase().includes('fatigue');
     const stateType = isHesitant ? 'Fatigued' : 'Stressed';
     const nowIso = new Date().toISOString();
@@ -503,6 +500,7 @@ export default function CommandCenterPage() {
   };
 
   const updateTelemetryStats = () => {
+    if (anomalyTriggeredRef.current) return;
     const avgDwell = dwellTimesRef.current.length
       ? dwellTimesRef.current.reduce((a, b) => a + b, 0) / dwellTimesRef.current.length
       : 0;
@@ -569,11 +567,11 @@ export default function CommandCenterPage() {
   };
 
   const handleTelemetryKeyDown = (e) => {
+    if (anomalyTriggeredRef.current || (!isFocus && isAiRestRecovery)) return;
     const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
     if (ignoredKeys.includes(e.key)) return;
 
     const now = performance.now();
-    if (now - lastTelemetryAlertAtRef.current >= 5000) anomalyTriggeredRef.current = false;
     if (!e.repeat) keydownTimesRef.current[e.code] = now;
 
     // 1. Multiple Simultaneous Keys Down Check (Hammering / Dabog: 5 or more keys held together)
@@ -650,6 +648,7 @@ export default function CommandCenterPage() {
   };
 
   const handleTelemetryKeyUp = (e) => {
+    if (anomalyTriggeredRef.current || (!isFocus && isAiRestRecovery)) return;
     const ignoredKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
     if (ignoredKeys.includes(e.key)) return;
 
@@ -678,8 +677,12 @@ export default function CommandCenterPage() {
 
   const handleTelemetryInput = (e) => {
     const text = e.target.value.toLowerCase();
+    if (!text.trim()) {
+      resetTelemetry();
+      return;
+    }
+    if (anomalyTriggeredRef.current || (!isFocus && isAiRestRecovery)) return;
     if (generateSafetySupport(text) || stressContextFeedback(text)) return;
-    if (anomalyTriggeredRef.current) return;
 
     let triggerWord = null;
     let isProfanity = false;
@@ -727,6 +730,8 @@ export default function CommandCenterPage() {
     dwellTimesRef.current = [];
     keydownTimesRef.current = {};
     lastKeyupTimeRef.current = null;
+    recentKeyTimestampsRef.current = [];
+    dismissTelemetryToast();
   };
 
   // Ambient Audio State
@@ -1404,8 +1409,6 @@ export default function CommandCenterPage() {
     setIsAiRestRecovery(false);
     try {
       localStorage.removeItem('ifocus_ai_rest_recovery');
-      localStorage.removeItem('ifocus_recovery_completed');
-      localStorage.removeItem('ifocus_cognitive_reset');
     } catch (e) {}
     forceResetTimer();
     window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
@@ -2095,6 +2098,7 @@ export default function CommandCenterPage() {
         latestTelemetry: telemetry, activeIdleAlert: null, customTimer, aiAdjustedTimer: true, aiAdjustedDetails: savedReply,
       });
       setReflectionInput('');
+      resetTelemetry();
       if (orderChanged && !await persistTaskOrder(newOrder)) {
         setAiFeedback(current => ({ ...current, statusNote: 'Your plan is ready, but task order could not be saved. Use Retry save beside your task list when connected.' }));
       }
@@ -3211,10 +3215,7 @@ export default function CommandCenterPage() {
           <button 
             className="btn-primary" 
             aria-busy={isSubmittingReflection}
-            onClick={() => {
-              submitReflection();
-              resetTelemetry();
-            }}
+            onClick={submitReflection}
             disabled={isSubmittingReflection || !reflectionInput.trim()}
             style={{ width: '100%', height: '42px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', borderRadius: '9999px', margin: '0 0 0.75rem 0' }}
           >

@@ -218,7 +218,7 @@ export default function CoachPage() {
         }
       } catch (e) {}
 
-      let telem = latestCoachSignal(telemCandidates, {
+      let telem = restoring ? null : latestCoachSignal(telemCandidates, {
         since: Math.max(todayStart - 1, effectiveResetTime),
         lastActivity: Number(localStorage.getItem('ifocus_last_user_activity')) || 0,
       });
@@ -376,7 +376,7 @@ export default function CoachPage() {
         if (Array.isArray(stored)) events = stored;
       } catch {}
       const currentResilience = currentCoachResilience({
-        signal: telem, events, since: Math.max(todayStart - 1, effectiveResetTime),
+        signal: telem, events: restoring ? [] : events, since: Math.max(todayStart - 1, effectiveResetTime),
         isStress, isFatigued, isDistracted, isIdle,
       });
       const { totalEvents, completedEvents, skippedEvents } = currentResilience;
@@ -665,8 +665,6 @@ export default function CoachPage() {
       localStorage.setItem('ifocus_ai_adjusted_details', JSON.stringify(aiDetails));
 
       localStorage.removeItem('ifocus_ai_rest_recovery');
-      localStorage.setItem('ifocus_cognitive_reset', String(Date.now()));
-
       const now = Date.now();
       const initialSeconds = takeBreak ? 5 * 60 : wMin * 60;
       const syncPayload = {
@@ -695,13 +693,15 @@ export default function CoachPage() {
         title: takeBreak ? "5-minute break started" : cadenceTitle,
         message: `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
       }));
-      // Clear alert keys so the alert is fulfilled
-      localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
-      localStorage.removeItem('ifocus_telemetry_insight_anonymous');
-      localStorage.removeItem('ifocus_latest_telemetry');
-      localStorage.removeItem('ifocus_active_idle_alert');
-      setInsight(null);
-      window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+      // A recovery break clears the signal only when the break completes.
+      if (!takeBreak) {
+        localStorage.setItem('ifocus_cognitive_reset', String(now));
+        localStorage.removeItem(`ifocus_telemetry_insight_${userName}`);
+        localStorage.removeItem('ifocus_telemetry_insight_anonymous');
+        localStorage.removeItem('ifocus_latest_telemetry');
+        localStorage.removeItem('ifocus_active_idle_alert');
+        window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+      }
 
       // Sync strategy and timer checkpoint to cloud database for full cross-device parity
       fetch('/api/user/telemetry', {
@@ -709,9 +709,7 @@ export default function CoachPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telemetryState: {
-            latestTelemetry: null,
-            activeIdleAlert: null,
-            cognitiveReset: Date.now(),
+            ...(!takeBreak && { latestTelemetry: null, activeIdleAlert: null, cognitiveReset: now }),
             activeTimerState: syncPayload,
             customTimer: customTimer,
             aiAdjustedTimer: true,

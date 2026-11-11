@@ -211,6 +211,45 @@ test('Coach starts stress recovery directly and shows its status after navigatio
   await expect(page.getByText('Recovery Complete', { exact: true })).toBeVisible();
 });
 
+test('a dismissed typing alert stays dismissed for the current reflection draft', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context);
+  await page.goto('/dashboard');
+  const draft = page.locator('.journal-textarea');
+  const alert = page.getByText('Coach has noticed something', { exact: true });
+  await draft.fill('I am stressed about school');
+  await expect(alert).toBeVisible();
+  await page.locator('.ios-notification-toast').getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await page.clock.fastForward(10_000);
+  await draft.press('End');
+  await draft.pressSequentially(' about my school work and assignments');
+  await expect(alert).toHaveCount(0);
+  await draft.clear();
+  await draft.fill('I am stressed about school');
+  await expect(alert).toBeVisible();
+});
+
+test('exiting recovery early restores the previous Coach signal until dismissed', async ({ page, context }) => {
+  await accountFixture(context);
+  await page.goto('/dashboard');
+  const draft = page.locator('.journal-textarea');
+  await draft.focus();
+  for (const key of ['a', 's', 'd', 'f', 'g']) await page.keyboard.down(key);
+  for (const key of ['a', 's', 'd', 'f', 'g']) await page.keyboard.up(key);
+  await page.getByRole('button', { name: 'View Coach Strategy' }).click();
+  const stress = page.getByText('High Tension / Stress', { exact: true });
+  await expect(stress).toBeVisible();
+  await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
+  await expect(page).toHaveURL(/dashboard$/);
+  await page.getByRole('button', { name: /Skip Break & Start Session/ }).click();
+  await page.getByRole('button', { name: 'Exit Rest Anyway' }).click();
+  await page.getByRole('link', { name: 'AI Coach', exact: true }).click();
+  await expect(stress).toBeVisible();
+  await expect(page.getByText('Restoring', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(page.getByText('Observing', { exact: true })).toBeVisible();
+});
+
 test('Coach hides expired reflections and Analytics shows only recorded BreakGate counts', async ({ page, context }) => {
   await accountFixture(context);
   await page.addInitScript(() => {
