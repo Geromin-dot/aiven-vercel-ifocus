@@ -1,6 +1,40 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
+test('a long task list scrolls inside the dashboard panel', async ({ page, context }) => {
+  await accountFixture(context);
+  const tasks = Array.from({ length: 30 }, (_, index) => ({
+    id: String(index), text: `Study task ${index + 1}`, priority: 'medium', completed: false,
+  }));
+  let taskCount = 1;
+  await page.route('**/api/todos', route => route.fulfill({ json: tasks.slice(0, taskCount) }));
+  const list = page.locator('.dashboard-tasks-column .todo-list');
+  const panel = page.locator('.dashboard-tasks-column');
+
+  for (const width of [1440, 1024, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    taskCount = 1;
+    await page.goto('/dashboard');
+    await expect(list.locator('[data-todo-id]')).toHaveCount(1);
+    const initialHeight = (await panel.boundingBox()).height;
+
+    taskCount = tasks.length;
+    await page.reload();
+    await expect(list.locator('[data-todo-id]')).toHaveCount(tasks.length);
+    const panelHeight = (await panel.boundingBox()).height;
+    if (width >= 769) expect(panelHeight).toBeCloseTo(initialHeight, 0);
+
+    const heading = page.getByRole('heading', { name: 'Tasks List' });
+    const headingTop = (await heading.boundingBox()).y;
+    const scroll = await list.evaluate(element => {
+      element.scrollTop = element.scrollHeight;
+      return element.scrollTop;
+    });
+    expect(scroll).toBeGreaterThan(0);
+    expect((await heading.boundingBox()).y).toBeCloseTo(headingTop, 0);
+  }
+});
+
 test('presence and progress checks repeat in each focus block and completed time retries', async ({ page, context }) => {
   await page.clock.install();
   await accountFixture(context);
@@ -44,7 +78,7 @@ test('presence and progress checks repeat in each focus block and completed time
     await presence.click();
   };
 
-  for (let block = 1; block <= 2; block++) {
+  for (let block = 1; block <= 4; block++) {
     await confirmNextPresence();
     await expect(progress).toBeHidden();
     await page.clock.fastForward(301000);
@@ -64,15 +98,19 @@ test('presence and progress checks repeat in each focus block and completed time
     await confirmNextPresence();
     await confirmNextPresence();
     await page.clock.fastForward(301000);
-    const nextBlock = page.getByRole('button', { name: `Skip Break & Start Session ${block + 1}` });
-    await expect(nextBlock).toBeVisible();
-    await nextBlock.click();
+    if (block < 4) {
+      const nextBlock = page.getByRole('button', { name: `Skip Break & Start Session ${block + 1}` });
+      await expect(nextBlock).toBeVisible();
+      await nextBlock.click();
+    } else {
+      await expect(page.getByText('All Planned Sessions Finished!')).toBeVisible();
+    }
   }
 
   const pendingIds = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('ifocus_pending_study_sessions')).map(item => item.timerSessionId));
-  expect(pendingIds).toHaveLength(2);
-  expect(new Set(pendingIds).size).toBe(2);
+  expect(pendingIds).toHaveLength(4);
+  expect(new Set(pendingIds).size).toBe(4);
   failStudySave = false;
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect.poll(() => saved).toEqual(pendingIds);

@@ -4235,6 +4235,13 @@ textarea:focus {
   }
 }
 
+@media (min-width: 769px) {
+  /* Size the task list from the panel so rows cannot stretch the dashboard. */
+  .dashboard-tasks-column .todo-list {
+    contain: size;
+  }
+}
+
 /* Keep all form controls in normal flow instead of clipping or shrinking Submit. */
 #quick-reflection-card {
   height: auto !important;
