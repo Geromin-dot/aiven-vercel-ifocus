@@ -98,6 +98,7 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   expect(await page.evaluate(() => window.coachChimeNotes)).toEqual([]);
   await notice.getByRole('button', { name: 'View Coach Strategy' }).click();
   await expect(page).toHaveURL(/\/coach$/);
+  await expect(page.getByText('BreakGate Skips Detected', { exact: true })).toHaveCSS('color', 'rgb(146, 64, 14)');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).not.toBeNull();
   const apply = page.getByRole('button', { name: 'Apply Strategy to Dashboard' });
   await expect(apply).toHaveClass(/btn-primary/);

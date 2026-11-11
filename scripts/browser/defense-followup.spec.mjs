@@ -174,6 +174,8 @@ test('Coach and Feature Guide explain uncertainty and pacing applies directly', 
   ])));
   await page.goto('/coach');
   await expect(page.getByText(/You skipped one BreakGate review/)).toBeVisible();
+  await expect(page.getByText('BreakGate Skip Detected', { exact: true })).toHaveCSS('color', 'rgb(146, 64, 14)');
+  await expect(page.getByText('Review suggested', { exact: true })).toBeVisible();
   await expect(page.getByText('Recommended Rhythm', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Apply.*Strategy/ })).toHaveCount(0);
   await page.evaluate(() => {

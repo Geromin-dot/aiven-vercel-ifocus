@@ -376,6 +376,7 @@ export default function CoachPage() {
         activeBreakGate = Boolean(JSON.parse(localStorage.getItem('ifocus_active_breakgate_deck') || 'null'));
       } catch {}
       const breakGate = getBreakGateGuidance(events, now);
+      const showBreakGateActivity = !telem && !restoring && !recoveryCompleted && breakGate.skipped > 0;
       const breakGateMessage = breakGate.canTurnOff && !activeBreakGate
         ? 'BreakGate is off. You can review flashcards when you’re ready.'
         : breakGate.message;
@@ -473,6 +474,15 @@ export default function CoachPage() {
 
       setAdaptiveStrategies(dynamicStrategies);
 
+      if (showBreakGateActivity) {
+        cogState = {
+          title: breakGate.skipped === 1 ? 'BreakGate Skip Detected' : 'BreakGate Skips Detected',
+          status: breakGate.canTurnOff && !activeBreakGate ? 'BreakGate off' : 'Review suggested',
+          color: '#92400e',
+          dotColor: '#d97706',
+        };
+      }
+
       setTelemetryDiagnostics({
         cognitiveState: restoring ? {
           title: 'Restoring',
@@ -482,6 +492,7 @@ export default function CoachPage() {
           subtext: 'Your recovery break is in progress. Open the focus timer to see how much time is left.',
         } : cogState,
         recommendedRhythm: recRhythm,
+        showBreakGateActivity,
         hideRhythm: !telem && !restoring && breakGate.skipped > 0,
         canApply: !restoring && Boolean(telem),
         startsRecovery: isStress || isFatigued,
@@ -754,10 +765,10 @@ export default function CoachPage() {
             <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: telemetryDiagnostics.hideRhythm ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
               
               {/* Metric 1: Attention State */}
-              <div className="coach-metric-card coach-metric-primary" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px', overflow: 'hidden' }}>
+              <div className="coach-metric-card coach-metric-primary" style={{ background: telemetryDiagnostics.showBreakGateActivity ? '#fffbeb' : '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: `1px solid ${telemetryDiagnostics.showBreakGateActivity ? '#fde68a' : 'rgba(0,0,0,0.06)'}`, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.25rem', gap: '4px' }}>
                   <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Cognitive State
+                    {telemetryDiagnostics.showBreakGateActivity ? 'BreakGate Activity' : 'Cognitive State'}
                   </span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.62rem', color: telemetryDiagnostics.cognitiveState.color, fontWeight: 700, whiteSpace: 'nowrap', background: `${telemetryDiagnostics.cognitiveState.dotColor}18`, padding: '1.5px 6px', borderRadius: '8px', flexShrink: 0 }}>
                     <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: telemetryDiagnostics.cognitiveState.dotColor, boxShadow: `0 0 5px ${telemetryDiagnostics.cognitiveState.dotColor}` }} />
@@ -767,9 +778,11 @@ export default function CoachPage() {
                 <div style={{ fontSize: '1.02rem', fontWeight: 800, color: telemetryDiagnostics.cognitiveState.color, lineHeight: 1.25 }}>
                   {telemetryDiagnostics.cognitiveState.title}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
-                  {telemetryDiagnostics.cognitiveState.subtext}
-                </div>
+                {telemetryDiagnostics.cognitiveState.subtext && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
+                    {telemetryDiagnostics.cognitiveState.subtext}
+                  </div>
+                )}
               </div>
 
               {/* Metric 3: Pacing Strategy */}
@@ -876,8 +889,8 @@ export default function CoachPage() {
                       Review the suggestion and choose what works for you.
                     </p>
                   </div>
-                  <span style={{ fontSize: '0.72rem', background: 'rgba(95, 143, 94, 0.12)', color: '#27522d', padding: '4px 9px', borderRadius: '6px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    Active Observation
+                  <span style={{ fontSize: '0.72rem', background: telemetryDiagnostics.showBreakGateActivity ? '#fef3c7' : 'rgba(95, 143, 94, 0.12)', color: telemetryDiagnostics.showBreakGateActivity ? '#92400e' : '#27522d', padding: '4px 9px', borderRadius: '6px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {telemetryDiagnostics.showBreakGateActivity ? 'BreakGate Review' : 'Active Observation'}
                   </span>
                 </div>
 
