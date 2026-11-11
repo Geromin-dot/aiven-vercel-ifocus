@@ -7,12 +7,13 @@ import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
-import { getBreakGateGuidance } from '@/lib/coachResilience';
+import { dismissBreakGateGuidance, getBreakGateGuidance, isBreakGateGuidanceDismissed } from '@/lib/coachResilience';
 import { latestCoachSignal, formatCoachInsight } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
   const { data: session, status } = useSession();
+  const userId = session?.user?.id;
   const userName = session?.user?.name || session?.user?.username || 'anonymous';
   const router = useRouter();
 
@@ -376,16 +377,19 @@ export default function CoachPage() {
         activeBreakGate = Boolean(JSON.parse(localStorage.getItem('ifocus_active_breakgate_deck') || 'null'));
       } catch {}
       const breakGate = getBreakGateGuidance(events, now);
-      const showBreakGateActivity = !telem && !restoring && !recoveryCompleted && breakGate.skipped > 0;
-      const breakGateMessage = breakGate.canTurnOff && !activeBreakGate
-        ? 'BreakGate is off. You can review flashcards when you’re ready.'
-        : breakGate.message;
+      const showBreakGateGuidance = breakGate.skipped > 0 && !isBreakGateGuidanceDismissed(userId, breakGate);
+      const showBreakGateActivity = !telem && !restoring && !recoveryCompleted && showBreakGateGuidance;
+      const breakGateMessage = showBreakGateGuidance
+        ? breakGate.canTurnOff && !activeBreakGate
+          ? 'BreakGate is off. You can review flashcards when you’re ready.'
+          : breakGate.message
+        : '';
 
       // 4. Generate Truly Dynamic Adaptive Coaching Strategy Cards
       const dynamicStrategies = [];
 
       // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
-      if (breakGate.skipped > 0) {
+      if (showBreakGateGuidance) {
         dynamicStrategies.push({
           title: 'BreakGate Guidance',
           badge: 'Review Tip',
@@ -462,7 +466,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'Try explaining the answer aloud before flipping the flashcard. Check what you missed and revisit it later.'
         });
-      } else if (!breakGate.skipped || telem) {
+      } else if (!showBreakGateGuidance || telem) {
         dynamicStrategies.push({
           title: telem ? 'Flow State Maintenance' : 'Choose Your Next Study Goal',
           badge: telem ? 'Steady Pace' : 'Awaiting Signal',
@@ -493,17 +497,18 @@ export default function CoachPage() {
         } : cogState,
         recommendedRhythm: recRhythm,
         showBreakGateActivity,
-        hideRhythm: !telem && !restoring && breakGate.skipped > 0,
+        hideRhythm: !telem && !restoring && showBreakGateGuidance,
         canApply: !restoring && Boolean(telem),
         startsRecovery: isStress || isFatigued,
         breakGateMessage,
-        canTurnOffBreakGate: activeBreakGate && breakGate.canTurnOff,
+        breakGateDismissal: showBreakGateGuidance ? breakGate : null,
+        canTurnOffBreakGate: showBreakGateGuidance && activeBreakGate && breakGate.canTurnOff,
       });
 
     } catch (err) {
       console.error('Error loading coach diagnostics:', err);
     }
-  }, [userName]);
+  }, [userName, userId]);
 
   useEffect(() => {
     const refresh = () => setJournalEntries(readReflectionJournal(userName));
@@ -963,6 +968,9 @@ export default function CoachPage() {
               <button
                 type="button"
                 onClick={() => {
+                  if (telemetryDiagnostics.breakGateDismissal) {
+                    dismissBreakGateGuidance(userId, telemetryDiagnostics.breakGateDismissal);
+                  }
                   if (insight) {
                     setInsight(null);
                     try {
@@ -985,7 +993,7 @@ export default function CoachPage() {
                       }).catch(() => {});
                       loadDiagnostics();
                     } catch (e) {}
-                  } else {
+                  } else if (!telemetryDiagnostics.breakGateDismissal) {
                     router.push('/dashboard');
                   }
                 }}

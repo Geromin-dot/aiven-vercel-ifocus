@@ -73,6 +73,11 @@ test('the admin directory filters cards and promotes only after in-app confirmat
     expect(overflow, `student cards at ${width}px`).toBe(false);
   }
   await page.setViewportSize({ width: 1280, height: 800 });
+  await directory.getByRole('button', { name: 'Inspect', exact: true }).first().click();
+  const resetPassword = page.getByRole('button', { name: 'Reset Password', exact: true });
+  await expect(resetPassword).toHaveCSS('color', 'rgb(255, 255, 255)');
+  await expect(resetPassword).toHaveCSS('background-color', 'rgb(39, 82, 45)');
+  await page.getByRole('button', { name: 'Close Record' }).click();
   const yearFilter = directory.getByRole('combobox', { name: 'Year level' });
   for (const level of ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated']) {
     await yearFilter.selectOption(level);

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
 import CoachNotice from './CoachNotice';
 import { playNotificationChime } from '@/lib/coachNoticeSound';
+import { dismissBreakGateGuidance } from '@/lib/coachResilience';
 import FeatureGuideModal from "./FeatureGuideModal";
 import { clearAiTimerAdjustment, reconcileCloudTelemetry } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
@@ -232,7 +233,7 @@ export default function GlobalTimer() {
   const [burnoutModalMinutes, setBurnoutModalMinutes] = useState(20);
   const lastTimerCheckpointSyncRef = useRef(0);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
-  const [breakGateNotice, setBreakGateNotice] = useState('');
+  const [breakGateNotice, setBreakGateNotice] = useState(null);
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [guideTopic, setGuideTopic] = useState("pomodoro");
@@ -3159,11 +3160,14 @@ export default function GlobalTimer() {
 
       {breakGateNotice && session?.user?.id && (
         <CoachNotice
-          message={breakGateNotice}
+          message={breakGateNotice.message}
           style={{ zIndex: 99999 }}
-          onDismiss={() => setBreakGateNotice('')}
+          onDismiss={() => {
+            dismissBreakGateGuidance(session.user.id, breakGateNotice);
+            setBreakGateNotice(null);
+          }}
           onView={() => {
-            setBreakGateNotice('');
+            setBreakGateNotice(null);
             setShowCycleCompleteModal(false);
             setShowReflectionModal(false);
             router.push('/coach');

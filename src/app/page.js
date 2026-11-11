@@ -4,11 +4,11 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import IFocusLogo from "@/components/IFocusLogo";
+import { feedbackEmailLink, IFOCUS_SUPPORT_EMAIL } from "@/lib/feedbackEmail";
 
 export default function LandingPage() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState(0);
-  const [contactSubmitted, setContactSubmitted] = useState(false);
   const [contactForm, setContactForm] = useState({ name: "", email: "", topic: "General Feedback", message: "" });
   const [faqOpen, setFaqOpen] = useState(null);
   const [scrolled, setScrolled] = useState(false);
@@ -82,11 +82,8 @@ export default function LandingPage() {
 
   const handleContactSubmit = (e) => {
     e.preventDefault();
-    if (!contactForm.email || !contactForm.message) return;
-    setContactSubmitted(true);
-    setTimeout(() => {
-      setContactForm({ name: "", email: "", topic: "General Feedback", message: "" });
-    }, 2500);
+    if (!contactForm.email || !contactForm.message.trim()) return;
+    window.location.href = feedbackEmailLink(contactForm.topic, contactForm.message, contactForm);
   };
 
   // The 4 REAL pages from the iFocus system with their actual screenshots and features
@@ -1448,7 +1445,8 @@ export default function LandingPage() {
               Contact the iFocus Team
             </h2>
             <p style={{ color: '#64748b', fontSize: '1rem' }}>
-              Have feedback on the BreakGate algorithm or suggestions for new study tools? Let us know.
+              Share feedback through your email app or write to{' '}
+              <a href={`mailto:${IFOCUS_SUPPORT_EMAIL}`} style={{ color: '#27522d' }}>{IFOCUS_SUPPORT_EMAIL}</a>.
             </p>
           </div>
 
@@ -1459,34 +1457,6 @@ export default function LandingPage() {
           padding: '2.5rem',
           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)'
         }}>
-          {contactSubmitted ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '2rem 1rem',
-              color: '#166534'
-            }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: '#dcfce7',
-                color: '#15803d',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.5rem',
-                marginBottom: '1rem'
-              }}>
-                &#10003;
-              </div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>
-                Thank you for your feedback!
-              </h3>
-              <p style={{ color: '#475569', fontSize: '0.95rem', margin: 0 }}>
-                Your message has been received by the iFocus research team.
-              </p>
-            </div>
-          ) : (
             <form onSubmit={handleContactSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
@@ -1593,10 +1563,9 @@ export default function LandingPage() {
                 className="landing-btn-primary"
                 style={{ width: '100%', padding: '12px', fontSize: '1rem', marginTop: '4px' }}
               >
-                Send Message &rarr;
+                Open Email Draft &rarr;
               </button>
             </form>
-          )}
         </div>
         </div>
       </section>

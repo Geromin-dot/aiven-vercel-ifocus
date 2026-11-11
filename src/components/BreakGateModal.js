@@ -267,7 +267,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
   };
 
   const handleSkip = () => {
-    let notice = '';
+    let notice = null;
     try {
       const events = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
       const now = new Date();
@@ -282,7 +282,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
       });
       const trimmed = events.slice(-50);
       const guidance = getBreakGateGuidance(trimmed, now);
-      if (guidance.shouldNotify) notice = guidance.message;
+      if (guidance.shouldNotify) notice = guidance;
       localStorage.setItem('ifocus_breakgate_events', JSON.stringify(trimmed));
       window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
       fetch('/api/user/telemetry', {

@@ -107,6 +107,13 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   await expect(notice).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).toBeNull();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_timer_state'))).toBe(timerBefore);
+  await expect(page.getByText('BreakGate off', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(page.getByText('Observing', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Observing', { exact: true })).toBeVisible();
+  await expect(page.getByText('BreakGate Skips Detected', { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_breakgate_events')).length)).toBe(10);
 });
 
 test('custom settings open directly after a one-second focus and break cycle', async ({ page, context }) => {

@@ -2075,8 +2075,8 @@ export default function AdminPortalPage() {
                           }
                           setPasswordConfirmModal({ student: selectedStudent, newPassword: trimmed });
                         }}
-                        className="admin-btn-sync"
-                        style={{ padding: "8px 18px", fontSize: "0.82rem", whiteSpace: "nowrap", cursor: "pointer", background: "#1e3a8a", borderColor: "#1e3a8a" }}
+                        className="btn-primary"
+                        style={{ width: "auto", flexShrink: 0, margin: 0, padding: "8px 18px", fontSize: "0.82rem", whiteSpace: "nowrap" }}
                       >
                         Reset Password
                       </button>

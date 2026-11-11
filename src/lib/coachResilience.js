@@ -1,5 +1,23 @@
 export const BREAKGATE_SKIP_THRESHOLD = 5;
 
+export function isBreakGateGuidanceDismissed(userId, guidance) {
+  if (!userId) return false;
+  try {
+    const dismissed = JSON.parse(localStorage.getItem(`ifocus_breakgate_guidance_dismissed_${userId}`) || 'null');
+    return dismissed?.day === guidance.day && dismissed.skipped >= guidance.skipped;
+  } catch {
+    return false;
+  }
+}
+
+export function dismissBreakGateGuidance(userId, { day, skipped }) {
+  if (!userId || isBreakGateGuidanceDismissed(userId, { day, skipped })) return;
+  try {
+    localStorage.setItem(`ifocus_breakgate_guidance_dismissed_${userId}`, JSON.stringify({ day, skipped }));
+    window.dispatchEvent(new CustomEvent('ifocus_breakgate_updated'));
+  } catch {}
+}
+
 export function getBreakGateGuidance(events, now = new Date()) {
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const today = events.filter(event => {
@@ -19,5 +37,5 @@ export function getBreakGateGuidance(events, now = new Date()) {
       : skipped > 1
         ? `You’ve skipped ${skipped} BreakGate challenges today. Try reviewing a few flashcards later when you’re ready.`
         : '';
-  return { skipped, completed, canTurnOff, message, shouldNotify: canTurnOff && skipped % BREAKGATE_SKIP_THRESHOLD === 0 };
+  return { day: startOfDay, skipped, completed, canTurnOff, message, shouldNotify: canTurnOff && skipped % BREAKGATE_SKIP_THRESHOLD === 0 };
 }

@@ -11,6 +11,14 @@ import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 import { PwaInstallControl } from '@/components/PwaRegistrar';
 import { isTimerSessionOngoing } from '@/lib/timerState';
 import VerificationBadge from '@/components/VerificationBadge';
+import { feedbackEmailLink, IFOCUS_SUPPORT_EMAIL } from '@/lib/feedbackEmail';
+
+const feedbackCategories = [
+  { id: 'feedback', label: 'Feature Request' },
+  { id: 'bug', label: 'Bug Report' },
+  { id: 'ui', label: 'Design Suggestion' },
+  { id: 'question', label: 'General Inquiry' },
+];
 
 const accountVerification = {
   PENDING: {
@@ -235,7 +243,6 @@ export default function SettingsPage() {
   // 3. Feedback State
   const [feedbackCategory, setFeedbackCategory] = useState('feedback');
   const [feedbackText, setFeedbackText] = useState('');
-  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
 
   // Unsaved Changes Baseline State
   const [initialFocusPrefs, setInitialFocusPrefs] = useState({
@@ -857,12 +864,8 @@ export default function SettingsPage() {
       showToast('error', 'Please write a message before sending.');
       return;
     }
-    setIsSendingFeedback(true);
-    setTimeout(() => {
-      setIsSendingFeedback(false);
-      setFeedbackText('');
-      showToast('success', 'Thank you! Your feedback has been sent.');
-    }, 600);
+    const topic = feedbackCategories.find(category => category.id === feedbackCategory)?.label || 'Feedback';
+    window.location.href = feedbackEmailLink(topic, feedbackText);
   };
 
   // Play audio test chime scaled by user-selected volume (Silent if Muted 0%)
@@ -2096,15 +2099,13 @@ export default function SettingsPage() {
           {/* 4. FEEDBACK & SUPPORT PANEL */}
           {activeSection === 'feedback' && (
             <form onSubmit={handleSendFeedback} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <p className="subtitle">Send feedback through your email app to{' '}
+                <a href={`mailto:${IFOCUS_SUPPORT_EMAIL}`} style={{ color: '#27522d' }}>{IFOCUS_SUPPORT_EMAIL}</a>.
+              </p>
               <div>
                 <label className="settings-label" style={{ fontSize: '0.82rem' }}>Category</label>
                 <div className="option-chips-container" style={{ gap: '0.45rem', marginTop: '0.25rem' }}>
-                  {[
-                    { id: 'feedback', label: 'Feature Request' },
-                    { id: 'bug', label: 'Bug Report' },
-                    { id: 'ui', label: 'Design Suggestion' },
-                    { id: 'question', label: 'General Inquiry' }
-                  ].map((c) => (
+                  {feedbackCategories.map((c) => (
                     <button 
                       key={c.id} 
                       type="button" 
@@ -2135,10 +2136,9 @@ export default function SettingsPage() {
                 <button 
                   type="submit" 
                   className="btn-primary" 
-                  disabled={isSendingFeedback}
                   style={{ padding: '0.55rem 1.4rem', fontSize: '0.88rem' }}
                 >
-                  {isSendingFeedback ? 'Sending...' : 'Submit Feedback'}
+                  Open Email Draft
                 </button>
               </div>
             </form>

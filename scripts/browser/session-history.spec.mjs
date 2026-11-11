@@ -1,6 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
+test('landing contact and Settings feedback point to the iFocus team email', async ({ page, context }) => {
+  await accountFixture(context);
+  const address = 'grv_manese.student@ua.edu.ph';
+  const contact = page.getByRole('link', { name: address, exact: true });
+  await page.goto('/#contact');
+  await expect(contact).toHaveAttribute('href', `mailto:${address}`);
+  await expect(page.getByRole('button', { name: /Open Email Draft/ })).toBeVisible();
+  await page.goto('/settings');
+  await page.getByText('Feedback & Support', { exact: true }).click();
+  await expect(contact).toHaveAttribute('href', `mailto:${address}`);
+  await expect(page.getByRole('button', { name: 'Open Email Draft', exact: true })).toBeVisible();
+});
+
 test('Privacy & Security shows the current account verification status', async ({ page, context }) => {
   const account = {};
   await accountFixture(context, true, account);
