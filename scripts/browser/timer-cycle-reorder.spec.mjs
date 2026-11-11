@@ -3,6 +3,7 @@ import { accountFixture } from './account-fixture.mjs';
 
 test('BreakGate saves more than 20 questions and fits the progress bar on desktop and phone', async ({ page, context }) => {
   await page.clock.install();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await accountFixture(context);
   const deck = {
     id: 'long-deck', title: 'Long review deck', userId: 'history-student',
@@ -44,6 +45,11 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   }
   await dialog.getByRole('button', { name: /^A Definition/ }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '1');
+  const fill = progress.locator('.breakgate-progress-fill');
+  await expect(fill).toHaveCSS('transition-property', 'width');
+  await expect(fill).toHaveCSS('transition-duration', '0.32s');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(fill).toHaveCSS('transition-duration', '0s');
   await dialog.getByRole('button', { name: 'Next Question' }).click();
   await expect(dialog.getByText('Question 2 of 26')).toBeVisible();
 });

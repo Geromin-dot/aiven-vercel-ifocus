@@ -444,7 +444,7 @@ export default function BreakGateModal({ isOpen, deck: propDeck, onClose, onComp
                 <span>Question {currentIndex + 1} of {total}</span>
                 <div role="progressbar" aria-label="BreakGate progress" aria-valuemin={0} aria-valuemax={total} aria-valuenow={answered}
                   style={{ width: '100%', height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(0,0,0,0.1)' }}>
-                  <div style={{ width: `${answered / total * 100}%`, height: '100%', background: 'var(--primary-accent)' }} />
+                  <div className="breakgate-progress-fill" style={{ width: `${answered / total * 100}%` }} />
                 </div>
               </div>
             )}

@@ -31,6 +31,15 @@ body > .avatar-modal-overlay { z-index: 100010; padding: max(12px, env(safe-area
 .coach-strategy-actions > button { flex: 1 1 0 !important; min-width: 0; min-height: 48px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
 .breakgate-header { gap: 12px; flex-wrap: wrap; }
 .breakgate-header > div { flex: 1 1 240px; min-width: 0; }
+.breakgate-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-accent);
+  transition: width 320ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .breakgate-progress-fill { transition: none; }
+}
 .breakgate-deck-heading { flex-wrap: wrap; }
 .breakgate-deck-heading > span { overflow-wrap: anywhere; }
 .breakgate-header .breakgate-skip-button { flex: 0 0 auto; min-height: 40px; padding: 8px 12px; border: 1px solid #d8e2d5 !important; border-radius: 10px; background: #f6f9f3 !important; color: #3e5d41 !important; font-weight: 600 !important; text-decoration: none !important; white-space: nowrap; }
