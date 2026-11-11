@@ -1,6 +1,37 @@
 import { test, expect } from '@playwright/test';
 import { accountFixture } from './account-fixture.mjs';
 
+test('deleted username login shows the account notice above the form', async ({ page, context }) => {
+  await accountFixture(context, false);
+  await context.route('**/api/auth/callback/credentials', route => route.fulfill({
+    json: { url: 'http://127.0.0.1:3106/api/auth/error?error=ACCOUNT_DELETED' },
+  }));
+  await page.goto('/login');
+  await page.locator('#login-identifier').fill('deleted-student');
+  await page.locator('#login-password').fill('old-password');
+  await page.getByRole('button', { name: 'Sign In to Dashboard' }).click();
+  const notice = page.getByRole('alert').filter({ hasText: 'This account has been deleted. Feel free to register again.' });
+  await expect(notice).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole('button', { name: 'Register', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Register with Google' })).toBeVisible();
+});
+
+test('a deleted signed-in account is returned to login with the deletion notice', async ({ page, context }) => {
+  await accountFixture(context);
+  let deleted = false;
+  await context.route('**/api/auth/session', route => {
+    if (!deleted) return route.fallback();
+    return route.fulfill({ json: { error: 'ACCOUNT_DELETED' } });
+  });
+  await page.goto('/dashboard');
+  await expect(page.getByTestId('protected-content')).toBeVisible();
+  deleted = true;
+  await page.reload();
+  await expect(page).toHaveURL(/\/login\?error=ACCOUNT_DELETED$/);
+  await expect(page.getByRole('alert').filter({ hasText: 'This account has been deleted.' })).toBeVisible();
+});
+
 test('logout prevents Chrome Back and Forward from restoring private pages and clears cached reflections', async ({ page, context }) => {
   await accountFixture(context);
   const documentResponse = await page.goto('/dashboard');

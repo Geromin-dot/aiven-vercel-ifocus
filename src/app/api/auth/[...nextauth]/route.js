@@ -5,6 +5,22 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
+import { cookies } from "next/headers";
+import { deletedAccountDigest } from "@/lib/deletedAccount";
+
+async function wasDeleted(identifier) {
+  return Boolean(await prisma.deletedLoginIdentifier.findUnique({
+    where: { digest: deletedAccountDigest(identifier) },
+  }));
+}
+
+async function isGoogleRegistration() {
+  const store = await cookies();
+  const callback = store.get('__Secure-next-auth.callback-url')?.value || store.get('next-auth.callback-url')?.value;
+  if (!callback) return false;
+  const target = URL.parse(callback, 'http://localhost');
+  return target?.pathname === '/dashboard' && target.searchParams.get('register') === 'google';
+}
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -40,7 +56,10 @@ export const authOptions = {
           }
         });
 
-        if (!user || !user.password) {
+        if (!user && await wasDeleted(cleanIdentifier)) {
+          throw new Error("ACCOUNT_DELETED");
+        }
+        if (!user?.password) {
           throw new Error("Invalid credentials");
         }
 
@@ -78,6 +97,9 @@ export const authOptions = {
         if (dbUser && (dbUser.status === "ON_HOLD" || dbUser.status === "BANNED")) {
           const reason = encodeURIComponent(dbUser.statusReason || "Academic Integrity Review - In-person clearance with College Dean required");
           return `/login?error=ACCOUNT_ON_HOLD&reason=${reason}`;
+        }
+        if (!dbUser && await wasDeleted(user.email) && !await isGoogleRegistration()) {
+          return '/login?error=ACCOUNT_DELETED';
         }
       }
       return true;
@@ -120,7 +142,7 @@ export const authOptions = {
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
-            return null;
+            return { error: 'ACCOUNT_DELETED' };
           }
 
           // Legacy tokens receive their own identity, never another device's ID.
@@ -139,6 +161,7 @@ export const authOptions = {
       return token;
     },
     async session({ session, token }) {
+      if (token?.error === 'ACCOUNT_DELETED') return { expires: session.expires, error: token.error };
       if (!token || !token.sub) {
         return null;
       }

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { logoutAccount } from '@/lib/logoutAccount';
+import { clearPrivateCache, logoutAccount } from '@/lib/logoutAccount';
 import { useEffect, useState } from 'react';
 import IFocusLogo from './IFocusLogo';
 
@@ -44,20 +44,7 @@ export default function Sidebar() {
       try {
         const storedUserId = localStorage.getItem('ifocus_current_user_id');
         if (storedUserId && storedUserId !== session.user.id) {
-          const keys = [
-            'ifocus_active_breakgate_deck',
-            'ifocus_session_history',
-            'ifocus_focus_stats',
-            'ifocus_latest_telemetry',
-            'ifocus_pending_study_sessions',
-            'ifocus_ai_adjusted_active',
-            'ifocus_ai_adjusted_details',
-            'ifocus_applied_toast',
-            'ifocus_timer_state',
-            'ifocus_custom_timer',
-            'ifocus_prefill_reflection',
-          ];
-          keys.forEach((k) => localStorage.removeItem(k));
+          clearPrivateCache(localStorage);
           window.dispatchEvent(new CustomEvent('ifocus_breakgate_deck_changed', { detail: { active: false, deck: null } }));
         }
         localStorage.setItem('ifocus_current_user_id', session.user.id);

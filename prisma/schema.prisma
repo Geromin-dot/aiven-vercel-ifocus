@@ -110,6 +110,10 @@ model VerificationToken {
   @@id([identifier, token])
 }
 
+model DeletedLoginIdentifier {
+  digest String @id
+}
+
 // Application Models
 model Deck {
   id          String         @id @default(cuid())

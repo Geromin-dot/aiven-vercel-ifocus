@@ -4,6 +4,7 @@ import { authOptions } from "../../../auth/[...nextauth]/route";
 import { prisma } from "../../../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { STUDENT_YEAR_LEVELS, updatedYearSection } from "@/lib/studentYearLevels";
+import { deletedAccountDigest } from "@/lib/deletedAccount";
 
 export async function PATCH(req, { params }) {
   try {
@@ -170,7 +171,7 @@ export async function DELETE(req, { params }) {
 
     const targetUser = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, role: true }
+      select: { id: true, username: true, email: true, role: true }
     });
 
     if (!targetUser) {
@@ -186,6 +187,12 @@ export async function DELETE(req, { params }) {
 
     // Cascade delete user and dependencies
     await prisma.$transaction([
+      prisma.deletedLoginIdentifier.createMany({
+        data: [targetUser.username, targetUser.email].filter(Boolean).map(identifier => ({
+          digest: deletedAccountDigest(identifier),
+        })),
+        skipDuplicates: true,
+      }),
       prisma.todo.deleteMany({ where: { userId: id } }),
       prisma.studySession.deleteMany({ where: { userId: id } }),
       prisma.card.deleteMany({ where: { deck: { userId: id } } }),

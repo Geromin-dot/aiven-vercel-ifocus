@@ -19,7 +19,7 @@ export default function ProtectedSessionBoundary({ children }) {
   useEffect(() => {
     if (!logoutStarted.current && protectedPage && (status === 'unauthenticated' || (status === 'authenticated' && (!session?.user?.id || session.error)))) {
       try { clearPrivateCache(localStorage); } catch {}
-      window.location.replace('/login');
+      window.location.replace(session?.error === 'ACCOUNT_DELETED' ? '/login?error=ACCOUNT_DELETED' : '/login');
     }
   }, [protectedPage, status, session?.user?.id, session?.error]);
 
@@ -46,7 +46,7 @@ export default function ProtectedSessionBoundary({ children }) {
           if (disposed) return;
           if (!current?.user?.id || current.error) {
             try { clearPrivateCache(localStorage); } catch {}
-            window.location.replace('/login');
+            window.location.replace(current?.error === 'ACCOUNT_DELETED' ? '/login?error=ACCOUNT_DELETED' : '/login');
             return;
           }
           // A different account/login in another tab needs fresh page state.

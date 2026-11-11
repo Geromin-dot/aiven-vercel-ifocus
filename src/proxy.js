@@ -11,8 +11,11 @@ function noStore(response) {
 export async function proxy(request) {
   if (request.nextUrl.pathname.startsWith('/api/')) return noStore(NextResponse.next());
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+  if (token?.error === 'ACCOUNT_DELETED' && request.nextUrl.pathname !== '/login') {
+    return noStore(NextResponse.redirect(new URL('/login?error=ACCOUNT_DELETED', request.url)));
+  }
   if (request.nextUrl.pathname === '/login') {
-    if (token && token.status !== 'ON_HOLD' && token.status !== 'BANNED' && !request.nextUrl.searchParams.has('error')) {
+    if (token?.sub && token.status !== 'ON_HOLD' && token.status !== 'BANNED' && !request.nextUrl.searchParams.has('error')) {
       const destination = token.role === 'ADMIN' || token.username === 'adminUAnursing' ? '/admin' : '/dashboard';
       return noStore(NextResponse.redirect(new URL(destination, request.url)));
     }

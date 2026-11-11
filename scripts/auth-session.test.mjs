@@ -4,10 +4,16 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../src/app/api/auth/[...nextauth]/route.js', import.meta.url), 'utf8');
-function authWith(userQueries, jobQueries = {}) {
+function authWith(userQueries, jobQueries = {}, { deleted = [], callbackUrl } = {}) {
   let loginNumber = 0;
   const context = vm.createContext({
-    prisma: { user: userQueries, presencePushJob: jobQueries }, process: { env: {} },
+    prisma: {
+      user: userQueries, presencePushJob: jobQueries,
+      deletedLoginIdentifier: { async findUnique({ where }) { return deleted.includes(where.digest) ? where : null; } },
+    },
+    process: { env: {} }, URL,
+    deletedAccountDigest: identifier => identifier.trim().toLowerCase(),
+    cookies: async () => ({ get: name => name === 'next-auth.callback-url' ? { value: callbackUrl } : undefined }),
     console: { log() {}, error() {} }, randomUUID: () => `login-${++loginNumber}`,
     PrismaAdapter: () => ({}), GoogleProvider: options => options,
     CredentialsProvider: options => options, NextAuth: () => ({}),
@@ -52,7 +58,34 @@ test('multiple devices keep separate valid sessions without updating the user re
 
 test('deleted users remain invalid even when multiple-device login is allowed', async () => {
   const auth = authWith({ async findUnique() { return null; } });
-  assert.equal(await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'login-1' } }), null);
+  const token = await auth.callbacks.jwt({ token: { sub: 'student', sessionId: 'login-1' } });
+  assert.equal(token.error, 'ACCOUNT_DELETED');
+  assert.equal(token.sub, undefined);
+  const session = await auth.callbacks.session({ token, session: { user: { name: 'Student' } } });
+  assert.equal(session.error, 'ACCOUNT_DELETED');
+  assert.equal(session.user, undefined);
+});
+
+test('deleted email and username show the deletion error until a new account exists', async () => {
+  let user = null;
+  const auth = authWith({ findFirst: async () => user }, {}, { deleted: ['old-user', 'old@example.com'] });
+  const { authorize } = auth.providers[1];
+  await assert.rejects(authorize({ email: ' Old-User ', password: 'correct' }), /ACCOUNT_DELETED/);
+  await assert.rejects(authorize({ email: 'OLD@example.com', password: 'correct' }), /ACCOUNT_DELETED/);
+  await assert.rejects(authorize({ email: 'unknown', password: 'correct' }), /Invalid credentials/);
+  user = { id: 'new-account', password: 'hash', status: 'ACTIVE' };
+  assert.equal((await authorize({ email: 'old-user', password: 'correct' })).id, 'new-account');
+});
+
+test('deleted Google accounts receive the notice and can explicitly register again', async () => {
+  const deleted = ['old@example.com'];
+  const user = { email: 'old@example.com' };
+  const account = { provider: 'google' };
+  const queries = { findUnique: async () => null };
+  const signIn = authWith(queries, {}, { deleted }).callbacks.signIn;
+  assert.equal(await signIn({ user, account }), '/login?error=ACCOUNT_DELETED');
+  const register = authWith(queries, {}, { deleted, callbackUrl: 'https://example.com/dashboard?register=google' }).callbacks.signIn;
+  assert.equal(await register({ user, account }), true);
 });
 
 test('subsequent session reads still refresh account restrictions', async () => {
