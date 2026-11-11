@@ -1,0 +1,1 @@
+ALTER TABLE "StudySession" ALTER COLUMN "deckId" DROP NOT NULL;

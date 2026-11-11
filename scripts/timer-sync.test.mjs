@@ -121,7 +121,7 @@ test('saved or discarded sessions do not reappear from an old checkpoint', async
   assert.equal(storage.has('ifocus_interrupted_session_student-1'), false);
 });
 
-test('verified recovery save retries use one unique study-session record', async () => {
+test('verified focus without a deck saves one study-session record across retries', async () => {
   const clockSource = await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8');
   const clockUrl = `data:text/javascript;base64,${Buffer.from(clockSource).toString('base64')}`;
   const source = (await readFile(new URL('../src/lib/focusRecording.js', import.meta.url), 'utf8')).replace("'./focusClock.js'", JSON.stringify(clockUrl));
@@ -129,12 +129,13 @@ test('verified recovery save retries use one unique study-session record', async
   const records = new Map();
   let telemetryState=JSON.stringify({focusClock:{sessions:[{id:'pc-session',elapsedMs:600000,plannedMs:900000,runningSince:null}]}});
   const tx={user:{findUnique:async()=>({telemetryState}),update:async({data})=>{telemetryState=data.telemetryState;}},
-    deck:{findFirst:async()=>({id:'deck-1'})},studySession:{findFirst:async({where})=>records.get(where.id)||null,
+    studySession:{findFirst:async({where})=>records.get(where.id)||null,
       create:async({data})=>{records.set(data.id,data);return data;}}};
   const input={timerSessionId:'pc-session',recoveryId:'pc-session',duration:600};
   const first=await recordVerifiedFocus(tx,'student-1',input,1000000);
   const retry=await recordVerifiedFocus(tx,'student-1',input,1000001);
   assert.equal(first.id,retry.id);assert.equal(records.size,1);assert.equal(first.duration,600);
+  assert.equal(first.deckId,null);
 });
 
 test('a cloud discard clears an already cached phone prompt and persists the resolution', async () => {

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
-import AppDialog from '@/components/AppDialog';
 import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { reconcileCloudTelemetry } from '@/lib/telemetrySync';
@@ -68,7 +67,6 @@ export default function CoachPage() {
   };
 
   const [applyingHome, setApplyingHome] = useState(false);
-  const [chooseBreak, setChooseBreak] = useState(false);
 
   const applyCoachAiRhythm = (reply) => {
     let wMin = 25, bMin = 5;
@@ -185,6 +183,11 @@ export default function CoachPage() {
       const effectiveResetTime = Math.max(recoveryCompletedTime, cognitiveResetTime);
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      let restoring = false;
+      try {
+        const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+        restoring = timer?.isFocus === false && Boolean(timer.isAiRestRecovery);
+      } catch {}
 
       // 1. Telemetry / Cognitive State: Gather all candidates and pick newest
       const telemCandidates = [];
@@ -260,13 +263,14 @@ export default function CoachPage() {
           : isFatigued ? 'Fatigued' : isMotivated ? 'Motivated' : telem.state,
       } : null));
 
+      const recoveryCompleted = !telem && recoveryCompletedTime >= todayStart && recoveryCompletedTime >= cognitiveResetTime;
       let cogState = {
-        title: telem ? 'Steady Study Pace' : 'Observing',
-        status: telem ? 'Active' : 'Awaiting signal',
+        title: telem ? 'Steady Study Pace' : recoveryCompleted ? 'Recovery Complete' : 'Observing',
+        status: telem ? 'Active' : recoveryCompleted ? 'Ready for focus' : 'Awaiting signal',
         color: '#27522d',
         dotColor: '#16a34a',
-        subtext: telem ? 'Based on your latest interaction: a steady study pace.' : recoveryCompletedTime >= todayStart
-          ? 'Restorative break completed: cognitive baseline restored and ready for study'
+        subtext: telem ? 'Based on your latest interaction: a steady study pace.' : recoveryCompleted
+          ? 'Your recovery break ended. Start the suggested focus session when you’re ready.'
           : 'No recent interaction to assess yet'
       };
 
@@ -390,7 +394,7 @@ export default function CoachPage() {
       const dynamicStrategies = [];
 
       // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
-      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !telem) {
+      if (recoveryCompleted && skippedEvents === 0) {
         dynamicStrategies.push({
           title: 'Pacing & Recovery Rebalanced',
           badge: 'Deficit Resolved',
@@ -451,7 +455,7 @@ export default function CoachPage() {
       }
 
       // Strategy Card 2: Cognitive Telemetry & Study Protocol
-      if (recoveryCompletedTime >= todayStart && skippedEvents === 0 && !telem) {
+      if (recoveryCompleted && skippedEvents === 0) {
         dynamicStrategies.push({
           title: 'Return to Your Study Goal',
           badge: 'Recovery Completed',
@@ -512,10 +516,18 @@ export default function CoachPage() {
       setAdaptiveStrategies(dynamicStrategies);
 
       setTelemetryDiagnostics({
-        cognitiveState: cogState,
+        cognitiveState: restoring ? {
+          title: 'Restoring',
+          status: 'Recovery in progress',
+          color: '#27522d',
+          dotColor: '#16a34a',
+          subtext: 'Your recovery break is in progress. Open the focus timer to see how much time is left.',
+        } : cogState,
         recommendedRhythm: recRhythm,
         recoveryNeeded,
         pacingNeeded: resilienceDiagnostics.pacingNeeded,
+        canApply: !restoring && (Boolean(telem) || resilienceDiagnostics.pacingNeeded),
+        startsRecovery: isStress || isFatigued || recoveryNeeded,
       });
 
     } catch (err) {
@@ -547,7 +559,7 @@ export default function CoachPage() {
 
     window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
     window.addEventListener('ifocus_breakgate_updated', loadDiagnostics);
-    window.addEventListener('ifocus_timer_sync', loadDiagnostics);
+    window.addEventListener('ifocus_timer_sync', handleTelemetryEvent);
     window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
     window.addEventListener('storage', handleJournalUpdate);
     window.addEventListener('focus', handleTelemetryEvent);
@@ -555,15 +567,16 @@ export default function CoachPage() {
     return () => {
       window.removeEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
       window.removeEventListener('ifocus_breakgate_updated', loadDiagnostics);
-      window.removeEventListener('ifocus_timer_sync', loadDiagnostics);
+      window.removeEventListener('ifocus_timer_sync', handleTelemetryEvent);
       window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
       window.removeEventListener('storage', handleJournalUpdate);
       window.removeEventListener('focus', handleTelemetryEvent);
     };
   }, [status, userName, loadDiagnostics]);
 
-  const handleReturnHome = (takeBreak) => {
-    setChooseBreak(false);
+  const handleReturnHome = () => {
+    if (!telemetryDiagnostics.canApply || applyingHome) return;
+    const takeBreak = telemetryDiagnostics.startsRecovery;
     setApplyingHome(true);
 
     try {
@@ -673,7 +686,6 @@ export default function CoachPage() {
         lastPresenceRemaining: initialSeconds,
         breakGatePending: false,
         isAiRestRecovery: takeBreak,
-        optionalPreFocusBreak: takeBreak
       };
       localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
@@ -772,24 +784,6 @@ export default function CoachPage() {
           <span>Open Focus Timer</span>
         </button>
       </div>
-
-      {chooseBreak && (
-        <AppDialog titleId="coach-break-choice" onDismiss={() => setChooseBreak(false)}>
-          <h2 id="coach-break-choice">Ready to focus?</h2>
-          <p>Take a short break if you need one, or set up your focus timer now. You decide when to start focusing.</p>
-          <div className={coachStyles.breakChoices}>
-            <button type="button" className={coachStyles.breakPrimary} aria-label="Take a 5-minute break" onClick={() => handleReturnHome(true)}>
-              <strong>Take a 5-minute break</strong>
-              <span>Start the break timer now</span>
-            </button>
-            <button type="button" aria-label="Continue to focus" onClick={() => handleReturnHome(false)}>
-              <strong>Continue to focus</strong>
-              <span>Open your suggested timer</span>
-            </button>
-          </div>
-          <button type="button" className={coachStyles.breakCancel} onClick={() => setChooseBreak(false)}>Cancel</button>
-        </AppDialog>
-      )}
 
       {/* Main 2-Column Responsive Dashboard Layout (50/50 Cards) */}
       <div className="coach-main-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', flex: 1, minHeight: 0, alignItems: 'stretch' }}>
@@ -979,9 +973,9 @@ export default function CoachPage() {
           {/* Action Footer for Card 1 */}
           <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
             <div className="coach-strategy-actions" style={{ display: 'flex', gap: '0.65rem' }}>
-              <button
+              {(telemetryDiagnostics.canApply || applyingHome) && <button
                 type="button"
-                onClick={() => setChooseBreak(true)}
+                onClick={handleReturnHome}
                 disabled={applyingHome}
                 className="btn-primary"
                 style={{
@@ -1003,7 +997,7 @@ export default function CoachPage() {
                 ) : (
                   <span>Apply Strategy to Dashboard</span>
                 )}
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={() => {

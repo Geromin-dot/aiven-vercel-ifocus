@@ -129,12 +129,13 @@ test('Quick Reflection keeps the disclaimer in its header and the Study Hub open
   }
 });
 
-test('Coach and Feature Guide explain uncertainty and applying a strategy leaves focus paused', async ({ page, context }) => {
+test('Coach and Feature Guide explain uncertainty and pacing applies directly', async ({ page, context }) => {
   await accountFixture(context);
   await page.goto('/coach');
   const guidanceCard = page.locator('.coach-card-telemetry');
   const journalCard = page.locator('.coach-card-journal');
   await expect(guidanceCard).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply Strategy to Dashboard' })).toHaveCount(0);
   for (const width of [1920, 1280, 1050]) {
     await page.setViewportSize({ width, height: 964 });
     await expect.poll(async () => {
@@ -170,44 +171,44 @@ test('Coach and Feature Guide explain uncertainty and applying a strategy leaves
   await expect(page).toHaveURL(/dashboard$/);
   await page.evaluate(() => {
     localStorage.setItem('ifocus_breakgate_events', JSON.stringify(
-      [1, 2, 3].map(offset => ({ status: 'skipped', timestamp: new Date(Date.now() - offset * 1000).toISOString() }))
+      [1, 2].map(offset => ({ status: 'skipped', timestamp: new Date(Date.now() - offset * 1000).toISOString() }))
     ));
   });
   await page.goto('/coach');
-  await expect(page.getByText('Recovery Needed', { exact: true })).toBeVisible();
-  await expect(page.getByText('5m Recovery Break', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Rebuilding Study Consistency', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
-  await page.getByRole('button', { name: 'Continue to focus' }).click();
   await expect(page).toHaveURL(/dashboard$/);
   await expect.poll(() => page.evaluate(() => {
     const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
     return [timer.isRunning, timer.isFocus, timer.customWorkDuration, localStorage.getItem('ifocus_ai_rest_recovery')];
-  })).toEqual([false, true, 900, null]);
+  })).toEqual([false, true, 1200, null]);
 });
 
-test('Coach offers an optional five-minute break and leaves focus stopped at the end', async ({ page, context }) => {
+test('Coach starts stress recovery directly and shows its status after navigation', async ({ page, context }) => {
   await page.clock.install();
   await accountFixture(context);
   await page.addInitScript(() => localStorage.setItem('ifocus_timer_preferences', JSON.stringify({ autoStartFocus: true })));
   await page.goto('/coach');
-  await expect(page.getByText('Study Resilience', { exact: true })).toHaveCount(0);
+  await page.evaluate(() => {
+    localStorage.setItem('ifocus_latest_telemetry', JSON.stringify({
+      state: 'Stressed', reason: 'Key mashing', timestamp: new Date().toISOString(),
+    }));
+    window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+  });
+  await expect(page.getByText('Cognitive Friction / Frustration', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
-  const choices = page.getByRole('dialog', { name: 'Ready to focus?' });
-  const takeBreak = choices.getByRole('button', { name: 'Take a 5-minute break' });
-  const continueFocus = choices.getByRole('button', { name: 'Continue to focus' });
-  await expect(takeBreak).toBeVisible();
-  expect(Math.abs((await takeBreak.boundingBox()).y - (await continueFocus.boundingBox()).y)).toBeLessThan(2);
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect((await continueFocus.boundingBox()).y).toBeGreaterThan((await takeBreak.boundingBox()).y);
-  await takeBreak.click();
   await expect(page).toHaveURL(/dashboard$/);
   const timer = () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
     return [state.isRunning, state.isFocus, state.totalTime, state.sessionCount];
   });
   await expect.poll(timer).toEqual([true, false, 300, 1]);
+  await page.getByRole('link', { name: 'AI Coach', exact: true }).click();
+  await expect(page.getByText('Restoring', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apply Strategy to Dashboard' })).toHaveCount(0);
   await page.clock.fastForward(301_000);
-  await expect.poll(timer).toEqual([false, true, 1500, 1]);
+  await expect.poll(timer).toEqual([false, true, 900, 1]);
+  await expect(page.getByText('Recovery Complete', { exact: true })).toBeVisible();
 });
 
 test('Coach hides expired reflections and Analytics shows only recorded BreakGate counts', async ({ page, context }) => {

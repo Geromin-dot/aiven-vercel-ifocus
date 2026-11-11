@@ -2,45 +2,6 @@
 .telemetryContent { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .telemetryContent > * { flex-shrink: 0; }
 
-.breakChoices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.breakChoices button {
-  display: grid;
-  gap: 4px;
-  align-content: center;
-  padding: 12px;
-  border: 1px solid #d8e4d8;
-  border-radius: 11px;
-  background: #f6f8f5;
-  color: #263c2d;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-.breakChoices button:hover { background: #eef4ed; }
-.breakChoices strong { font-size: .86rem; }
-.breakChoices span { font-size: .73rem; line-height: 1.35; }
-.breakChoices .breakPrimary { background: #27522d; border-color: #27522d; color: #fff; }
-.breakChoices .breakPrimary:hover { background: #1e4326; }
-.breakCancel {
-  display: block;
-  margin: 8px auto 0;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #45584b;
-  font: inherit;
-  font-size: .8rem;
-  cursor: pointer;
-}
-.breakCancel:hover { background: #eef4ed; }
-.breakChoices button:focus-visible, .breakCancel:focus-visible { outline: 2px solid #27522d; outline-offset: 2px; }
-@media (max-width: 420px) { .breakChoices { grid-template-columns: 1fr; } }
-
 @media (min-width: 961px) {
   .adaptationModal {
     max-width: 720px !important;

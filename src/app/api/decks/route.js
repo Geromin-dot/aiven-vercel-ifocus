@@ -17,7 +17,16 @@ export async function GET(req) {
     }
 
     const decks = await prisma.deck.findMany({
-      where: { userId },
+      where: {
+        userId,
+        NOT: {
+          AND: [
+            { title: 'General Focus Sessions' },
+            { description: 'Recorded focus time' },
+            { cards: { none: {} } }
+          ]
+        }
+      },
       include: {
         cards: true,
         sessions: {

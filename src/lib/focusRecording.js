@@ -21,10 +21,11 @@ export async function recordVerifiedFocus(tx, userId, input, now = Date.now()) {
   // checkpoint. Save the verified portion, including for older queued blocks.
   const completed = input.completed === true || input.score === 100;
   const { duration, entry: settled } = verifiedFocusSeconds(entry, input.duration, Boolean(input.recoveryId), now, completed);
-  let deck = input.deckId ? await tx.deck.findFirst({ where: { id: input.deckId, userId } }) : null;
-  deck ||= await tx.deck.findFirst({ where: { userId } });
-  deck ||= await tx.deck.create({ data: { userId, title: 'General Focus Sessions', description: 'Recorded focus time' } });
-  const record = await tx.studySession.create({ data: { id, userId, deckId: deck.id, duration,
+  const deck = input.deckId ? await tx.deck.findFirst({
+    where: { id: input.deckId, userId, cards: { some: {} } },
+    select: { id: true },
+  }) : null;
+  const record = await tx.studySession.create({ data: { id, userId, deckId: deck?.id ?? null, duration,
     score: duration >= settled.plannedMs / 1000 - 2 ? 100 : 0, createdAt: new Date(now) } });
   telemetry.focusClock.sessions = sessions.map(item => item.id === timerId ? { ...settled, claimedId: id } : item);
   await tx.user.update({ where: { id: userId }, data: { telemetryState: JSON.stringify(telemetry) } });

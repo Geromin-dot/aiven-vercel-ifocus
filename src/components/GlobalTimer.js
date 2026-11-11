@@ -1509,8 +1509,9 @@ export default function GlobalTimer() {
 
           if (isPreSessionRest && !current.optionalPreFocusBreak) {
             try {
-              localStorage.setItem("ifocus_recovery_completed", String(Date.now()));
-              localStorage.setItem("ifocus_cognitive_reset", String(Date.now()));
+              const completedAt = Date.now();
+              localStorage.setItem("ifocus_recovery_completed", String(completedAt));
+              localStorage.setItem("ifocus_cognitive_reset", String(completedAt));
               localStorage.removeItem("ifocus_ai_rest_recovery");
               localStorage.removeItem("ifocus_latest_telemetry");
               localStorage.removeItem("ifocus_active_idle_alert");
@@ -1526,8 +1527,8 @@ export default function GlobalTimer() {
                   telemetryState: {
                     latestTelemetry: null,
                     activeIdleAlert: null,
-                    recoveryCompleted: Date.now(),
-                    cognitiveReset: Date.now(),
+                    recoveryCompleted: completedAt,
+                    cognitiveReset: completedAt,
                     updatedAt: new Date().toISOString()
                   }
                 })
