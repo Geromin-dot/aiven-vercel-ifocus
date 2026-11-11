@@ -169,13 +169,19 @@ test('Coach and Feature Guide explain uncertainty and pacing applies directly', 
 
   await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(page).toHaveURL(/dashboard$/);
-  await page.evaluate(() => {
-    localStorage.setItem('ifocus_breakgate_events', JSON.stringify(
-      [1, 2].map(offset => ({ status: 'skipped', timestamp: new Date(Date.now() - offset * 1000).toISOString() }))
-    ));
-  });
+  await page.evaluate(() => localStorage.setItem('ifocus_breakgate_events', JSON.stringify([
+    { status: 'skipped', timestamp: new Date().toISOString() },
+  ])));
   await page.goto('/coach');
-  await expect(page.getByText('Rebuilding Study Consistency', { exact: true })).toBeVisible();
+  await expect(page.getByText(/You skipped one BreakGate review/)).toBeVisible();
+  await expect(page.getByText('Recommended Rhythm', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Apply.*Strategy/ })).toHaveCount(0);
+  await page.evaluate(() => {
+    localStorage.setItem('ifocus_latest_telemetry', JSON.stringify({
+      state: 'Distracted', timestamp: new Date().toISOString(),
+    }));
+    window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
+  });
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
   await expect(page).toHaveURL(/dashboard$/);
   await expect.poll(() => page.evaluate(() => {

@@ -52,6 +52,30 @@ test('BreakGate saves more than 20 questions and fits the progress bar on deskto
   await expect(fill).toHaveCSS('transition-duration', '0s');
   await dialog.getByRole('button', { name: 'Next Question' }).click();
   await expect(dialog.getByText('Question 2 of 26')).toBeVisible();
+
+  await page.evaluate(() => {
+    const skips = Array.from({ length: 4 }, (_, index) => ({
+      status: 'skipped', timestamp: new Date(Date.now() - (index + 1) * 1000).toISOString(),
+    }));
+    localStorage.setItem('ifocus_breakgate_events', JSON.stringify(skips));
+  });
+  await dialog.getByRole('button', { name: 'Skip to Break' }).click();
+  const notice = page.getByRole('dialog', { name: 'Coach has noticed something' });
+  await expect(notice).toContainText('5 BreakGate challenges');
+  expect(await notice.evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(await notice.evaluate(element => element.clientWidth));
+  const dismiss = notice.getByRole('button', { name: 'Dismiss' });
+  const turnOff = notice.getByRole('button', { name: 'Turn off BreakGate' });
+  expect((await turnOff.boundingBox()).y).toBeGreaterThan((await dismiss.boundingBox()).y);
+  await dismiss.click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).not.toBeNull();
+  await page.goto('/coach');
+  await expect(page.getByRole('button', { name: 'Apply Strategy to Dashboard' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Apply BreakGate Strategy' }).click();
+  const timerBefore = await page.evaluate(() => localStorage.getItem('ifocus_timer_state'));
+  await turnOff.click();
+  await expect(notice).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_active_breakgate_deck'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_timer_state'))).toBe(timerBefore);
 });
 
 test('custom settings open directly after a one-second focus and break cycle', async ({ page, context }) => {

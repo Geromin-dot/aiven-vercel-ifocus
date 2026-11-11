@@ -22,3 +22,41 @@
 @media (max-width: 960px) {
   .telemetryContent { overflow: visible; }
 }
+.breakGateAdvice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f3f7f1;
+  color: #3e5741;
+  font-size: 0.85rem;
+}
+
+.breakGateNotice h2 {
+  margin-bottom: 8px;
+}
+
+.breakGateNotice p {
+  margin-bottom: 0;
+}
+
+footer.breakGateNoticeActions {
+  gap: 10px;
+}
+
+.breakGateNoticeActions button {
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 16px;
+}
+
+@media (max-width: 480px) {
+  footer.breakGateNoticeActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .breakGateNoticeActions button {
+    width: 100%;
+  }
+}

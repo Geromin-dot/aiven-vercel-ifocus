@@ -1,34 +1,20 @@
-// Apply recovery evidence after reflection and saved schedule preferences.
-export function adaptCoachToResilience({ cognitiveState, recommendedRhythm, staminaPct = 100, skippedEvents, preserveState = false }) {
-  const recoveryNeeded = staminaPct < 60 || skippedEvents >= 3;
-  const pacingNeeded = recoveryNeeded || skippedEvents > 0 || staminaPct < 80;
-  if (!pacingNeeded) return { cognitiveState, recommendedRhythm, recoveryNeeded, pacingNeeded };
+export const BREAKGATE_SKIP_THRESHOLD = 5;
 
-  const workLimit = recoveryNeeded ? 15 : skippedEvents >= 2 || staminaPct < 80 ? 20 : 25;
-  const match = recommendedRhythm.title.match(/(\d+)m Work \/ (\d+)m Gate/i);
-  const workMinutes = Math.min(Number(match?.[1]) || workLimit, workLimit);
-  const breakMinutes = 5;
-  const color = recoveryNeeded ? '#dc2626' : '#d97706';
-  const evidence = `${skippedEvents} BreakGate skip${skippedEvents === 1 ? '' : 's'} recorded today`;
-
-  return {
-    recoveryNeeded,
-    pacingNeeded,
-    cognitiveState: {
-      ...cognitiveState,
-      title: preserveState ? cognitiveState.title : recoveryNeeded ? 'Recovery Needed' : 'Rebuilding Study Consistency',
-      status: preserveState && cognitiveState.status ? cognitiveState.status : recoveryNeeded ? 'Rest Needed' : 'Pacing Advisory',
-      color: preserveState && cognitiveState.color ? cognitiveState.color : color,
-      dotColor: preserveState && cognitiveState.dotColor ? cognitiveState.dotColor : color,
-      subtext: preserveState && cognitiveState.subtext ? cognitiveState.subtext
-        : `${evidence}. ${recoveryNeeded ? 'Take a recovery break before a lighter study block.' : 'Complete your next BreakGate before increasing the pace.'}`,
-    },
-    recommendedRhythm: {
-      title: `${workMinutes}m Work / ${breakMinutes}m Gate`,
-      color,
-      subtext: preserveState && !recoveryNeeded ? recommendedRhythm.subtext : recoveryNeeded
-        ? `Take a break if you need one. When ready, try a ${workMinutes}m focus block.`
-        : `Shorter focus blocks while rebuilding study resilience; complete each BreakGate.`,
-    },
-  };
+export function getBreakGateGuidance(events, now = new Date()) {
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = events.filter(event => {
+    const time = new Date(event?.timestamp ?? event?.date ?? event?.time).getTime();
+    return time >= startOfDay && time <= now.getTime();
+  });
+  const skipped = today.filter(event => event.status === 'skipped').length;
+  const completed = today.filter(event => event.status === 'completed').length;
+  const canTurnOff = skipped >= BREAKGATE_SKIP_THRESHOLD;
+  const message = canTurnOff
+    ? `You’ve skipped ${skipped} BreakGate challenges today. Consider turning off BreakGate and reviewing flashcards when you’re ready.`
+    : skipped === 1
+      ? 'You skipped one BreakGate review. Try reviewing a few flashcards later when you’re ready.'
+      : skipped > 1
+        ? `You’ve skipped ${skipped} BreakGate challenges today. Try reviewing a few flashcards later when you’re ready.`
+        : '';
+  return { skipped, completed, canTurnOff, message };
 }

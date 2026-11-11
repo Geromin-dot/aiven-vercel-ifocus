@@ -7,8 +7,8 @@ import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { reconcileCloudTelemetry, setAiTimerAdjustment } from '@/lib/telemetrySync';
-import { adaptCoachToResilience } from '@/lib/coachResilience';
-import { latestCoachSignal, currentCoachResilience, formatCoachInsight } from '@/lib/coachSignals';
+import { getBreakGateGuidance } from '@/lib/coachResilience';
+import { latestCoachSignal, formatCoachInsight } from '@/lib/coachSignals';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
@@ -368,32 +368,31 @@ export default function CoachPage() {
         } catch (e) {}
       }
 
-      // Use the newest interaction as the current baseline, keeping prior events in history.
       let events = [];
+      let activeBreakGate = false;
       try {
         const stored = JSON.parse(localStorage.getItem('ifocus_breakgate_events') || '[]');
         if (Array.isArray(stored)) events = stored;
+        activeBreakGate = Boolean(JSON.parse(localStorage.getItem('ifocus_active_breakgate_deck') || 'null'));
       } catch {}
-      const currentResilience = currentCoachResilience({
-        signal: telem, events: restoring ? [] : events, since: Math.max(todayStart - 1, effectiveResetTime),
-        isStress, isFatigued, isDistracted, isIdle,
-      });
-      const { totalEvents, completedEvents, skippedEvents } = currentResilience;
-      const resilienceDiagnostics = adaptCoachToResilience({
-        cognitiveState: cogState,
-        recommendedRhythm: recRhythm,
-        skippedEvents,
-        preserveState: isStress || isIdle || isDistracted || isFatigued,
-      });
-      cogState = resilienceDiagnostics.cognitiveState;
-      recRhythm = resilienceDiagnostics.recommendedRhythm;
-      const recoveryNeeded = resilienceDiagnostics.recoveryNeeded;
+      const breakGate = getBreakGateGuidance(events, now);
+      const breakGateMessage = breakGate.canTurnOff && !activeBreakGate
+        ? 'BreakGate is off. You can review flashcards when you’re ready.'
+        : breakGate.message;
 
       // 4. Generate Truly Dynamic Adaptive Coaching Strategy Cards
       const dynamicStrategies = [];
 
       // Strategy Card 1: Pacing & Inactivity / BreakGate Strategy
-      if (recoveryCompleted && skippedEvents === 0) {
+      if (breakGate.skipped > 0) {
+        dynamicStrategies.push({
+          title: 'BreakGate Guidance',
+          badge: 'Review Tip',
+          badgeColor: '#27522d',
+          badgeBg: 'rgba(95, 143, 94, 0.12)',
+          text: breakGateMessage,
+        });
+      } else if (recoveryCompleted) {
         dynamicStrategies.push({
           title: 'Pacing & Recovery Rebalanced',
           badge: 'Deficit Resolved',
@@ -401,7 +400,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'You took a break. When you feel ready, pick one concept to recall from memory.'
         });
-      } else if (isIdle && !recoveryNeeded) {
+      } else if (isIdle) {
         const idleMinsMatch = reasonStr.match(/(\d+)\s*minute/i) || reasonStr.match(/(\d+)m/i);
         const idleMins = telem?.idleMinutes || (idleMinsMatch ? idleMinsMatch[1] : 5);
         dynamicStrategies.push({
@@ -411,37 +410,13 @@ export default function CoachPage() {
           badgeBg: 'rgba(217, 119, 6, 0.12)',
           text: `You have been idle for ${idleMins} minutes with no active timer. Cognitive hesitation or task friction detected. Lower the cognitive barrier: start with a gentle 15-minute focus session on an easy, low-friction task to rebuild flow.`
         });
-      } else if (isMotivated && skippedEvents >= 2) {
-        dynamicStrategies.push({
-          title: 'Protective Pacing: High Drive vs Recovery Cadence',
-          badge: 'Retention Safeguard',
-          badgeColor: '#d97706',
-          badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `You reported feeling energetic, but ${skippedEvents} BreakGate challenges were skipped today. ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
-        });
-      } else if (skippedEvents === 1) {
-        dynamicStrategies.push({
-          title: 'Pacing Lag Advisory',
-          badge: 'Pacing Advisory',
-          badgeColor: '#d97706',
-          badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: 'You skipped one BreakGate review. You can try a few flashcards later when you want to practice recalling the material.'
-        });
-      } else if (skippedEvents >= 2) {
-        dynamicStrategies.push({
-          title: 'Break Recovery Deficit Alert',
-          badge: 'Rest Needed',
-          badgeColor: '#dc2626',
-          badgeBg: 'rgba(239, 68, 68, 0.1)',
-          text: `You have skipped ${skippedEvents} BreakGate challenges today. ${recRhythm.subtext} Recommended follow-up cadence: ${recRhythm.title}.`
-        });
-      } else if (skippedEvents === 0 && totalEvents > 0) {
+      } else if (breakGate.completed > 0) {
         dynamicStrategies.push({
           title: 'Pacing & Retrieval Consistency',
           badge: 'High Compliance',
           badgeColor: '#16a34a',
           badgeBg: 'rgba(22, 163, 74, 0.12)',
-          text: `High consistency detected: You have completed ${completedEvents} of ${totalEvents} BreakGate retrieval challenges. Revisit the items you missed in a later study session.`
+          text: `You completed ${breakGate.completed} BreakGate retrieval challenges today. Revisit the items you missed in a later study session.`
         });
       } else {
         dynamicStrategies.push({
@@ -454,7 +429,7 @@ export default function CoachPage() {
       }
 
       // Strategy Card 2: Cognitive Telemetry & Study Protocol
-      if (recoveryCompleted && skippedEvents === 0) {
+      if (recoveryCompleted) {
         dynamicStrategies.push({
           title: 'Return to Your Study Goal',
           badge: 'Recovery Completed',
@@ -462,7 +437,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(95, 143, 94, 0.12)',
           text: 'If you feel ready to study, try one short review and choose a time to revisit it.'
         });
-      } else if (isIdle && !recoveryNeeded) {
+      } else if (isIdle) {
         dynamicStrategies.push({
           title: 'Low-Friction Task Priming Protocol',
           badge: 'Momentum Protocol',
@@ -478,15 +453,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(239, 68, 68, 0.1)',
           text: 'Elevated friction or rapid keystroke corrections detected. Step back from the screen for a moment, hydrate, and ease into your session with a light, simple task first.'
         });
-      } else if (recoveryNeeded) {
-        dynamicStrategies.push({
-          title: 'Restorative Pacing Protocol',
-          badge: 'Low Energy Buffer',
-          badgeColor: '#d97706',
-          badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `You skipped ${skippedEvents} BreakGate challenges. Take a break if you need one. When you feel ready, try a few flashcards and set aside another day to review them.`
-        });
-      } else if (isMotivated && skippedEvents === 0) {
+      } else if (isMotivated) {
         dynamicStrategies.push({
           title: 'High-Yield Memory Reinforcement',
           badge: 'Peak Flow',
@@ -494,15 +461,7 @@ export default function CoachPage() {
           badgeBg: 'rgba(22, 163, 74, 0.12)',
           text: 'Try explaining the answer aloud before flipping the flashcard. Check what you missed and revisit it later.'
         });
-      } else if (skippedEvents > 0) {
-        dynamicStrategies.push({
-          title: 'Rebuild Study Consistency',
-          badge: 'Pacing Advisory',
-          badgeColor: '#d97706',
-          badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `Use ${recRhythm.title} and complete your next BreakGate challenge before increasing your study pace.`,
-        });
-      } else {
+      } else if (!breakGate.skipped || telem) {
         dynamicStrategies.push({
           title: telem ? 'Flow State Maintenance' : 'Choose Your Next Study Goal',
           badge: telem ? 'Steady Pace' : 'Awaiting Signal',
@@ -523,10 +482,11 @@ export default function CoachPage() {
           subtext: 'Your recovery break is in progress. Open the focus timer to see how much time is left.',
         } : cogState,
         recommendedRhythm: recRhythm,
-        recoveryNeeded,
-        pacingNeeded: resilienceDiagnostics.pacingNeeded,
-        canApply: !restoring && (Boolean(telem) || resilienceDiagnostics.pacingNeeded),
-        startsRecovery: isStress || isFatigued || recoveryNeeded,
+        hideRhythm: !telem && !restoring && breakGate.skipped > 0,
+        canApply: !restoring && Boolean(telem),
+        startsRecovery: isStress || isFatigued,
+        breakGateMessage,
+        canTurnOffBreakGate: activeBreakGate && breakGate.canTurnOff,
       });
 
     } catch (err) {
@@ -558,6 +518,7 @@ export default function CoachPage() {
 
     window.addEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
     window.addEventListener('ifocus_breakgate_updated', loadDiagnostics);
+    window.addEventListener('ifocus_breakgate_deck_changed', handleTelemetryEvent);
     window.addEventListener('ifocus_timer_sync', handleTelemetryEvent);
     window.addEventListener('ifocus_journal_updated', handleJournalUpdate);
     window.addEventListener('storage', handleJournalUpdate);
@@ -566,6 +527,7 @@ export default function CoachPage() {
     return () => {
       window.removeEventListener('ifocus_telemetry_updated', handleTelemetryEvent);
       window.removeEventListener('ifocus_breakgate_updated', loadDiagnostics);
+      window.removeEventListener('ifocus_breakgate_deck_changed', handleTelemetryEvent);
       window.removeEventListener('ifocus_timer_sync', handleTelemetryEvent);
       window.removeEventListener('ifocus_journal_updated', handleJournalUpdate);
       window.removeEventListener('storage', handleJournalUpdate);
@@ -598,20 +560,7 @@ export default function CoachPage() {
                           (insight?.type === 'idle') ||
                           (insight?.state === 'idle');
 
-      if (telemetryDiagnostics.recoveryNeeded) {
-        wMin = 15;
-        bMin = 5;
-        targetSessions = 2;
-        cadenceTitle = 'Recovery & Gentle Focus';
-        detectedState = 'Recovery Needed';
-      } else if (telemetryDiagnostics.pacingNeeded) {
-        const match = rhythmTitle.match(/(\d+)m Work \/ (\d+)m Gate/i);
-        wMin = Number(match?.[1]) || 20;
-        bMin = Number(match?.[2]) || 5;
-        targetSessions = wMin <= 15 ? 2 : 3;
-        cadenceTitle = 'Rebuild Study Consistency';
-        detectedState = 'Pacing Advisory';
-      } else if (isIdleAlert) {
+      if (isIdleAlert) {
         wMin = 15;
         bMin = 5;
         targetSessions = 2;
@@ -801,7 +750,7 @@ export default function CoachPage() {
           <div className={coachStyles.telemetryContent} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '0.85rem' }}>
             
             {/* Top Telemetry Diagnostic Metrics Row */}
-            <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
+            <div className="coach-metrics-row" style={{ display: 'grid', gridTemplateColumns: telemetryDiagnostics.hideRhythm ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: '0.65rem', paddingBottom: '0.85rem', borderBottom: '1px solid rgba(0, 0, 0, 0.07)', flexShrink: 0 }}>
               
               {/* Metric 1: Attention State */}
               <div className="coach-metric-card coach-metric-primary" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px', overflow: 'hidden' }}>
@@ -823,7 +772,7 @@ export default function CoachPage() {
               </div>
 
               {/* Metric 3: Pacing Strategy */}
-              <div className="coach-metric-card" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px' }}>
+              {!telemetryDiagnostics.hideRhythm && <div className="coach-metric-card" style={{ background: '#f8faf8', padding: '0.75rem 0.85rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '84px' }}>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
                   Recommended Rhythm
                 </div>
@@ -833,9 +782,13 @@ export default function CoachPage() {
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.25rem', lineHeight: 1.35 }}>
                   {telemetryDiagnostics.recommendedRhythm.subtext}
                 </div>
-              </div>
+              </div>}
 
             </div>
+
+            {insight && telemetryDiagnostics.breakGateMessage && (
+              <p className={coachStyles.breakGateAdvice}>{telemetryDiagnostics.breakGateMessage}</p>
+            )}
 
             {/* Coach Section below the Metrics */}
             {insight ? (
@@ -993,6 +946,12 @@ export default function CoachPage() {
                   <span>Apply Strategy to Dashboard</span>
                 )}
               </button>}
+              {telemetryDiagnostics.canTurnOffBreakGate && (
+                <button type="button" className="btn-secondary" style={{ margin: 0 }}
+                  onClick={() => window.dispatchEvent(new CustomEvent('ifocus_breakgate_strategy', { detail: telemetryDiagnostics.breakGateMessage }))}>
+                  Apply BreakGate Strategy
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

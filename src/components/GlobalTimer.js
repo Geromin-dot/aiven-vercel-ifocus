@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import BreakGateModal from "./BreakGateModal";
+import AppDialog from './AppDialog';
+import coachStyles from './CoachLayout.module.css';
 import FeatureGuideModal from "./FeatureGuideModal";
-import { clearAiTimerAdjustment, reconcileCloudTelemetry } from "../lib/telemetrySync";
+import { clearAiTimerAdjustment, reconcileCloudTelemetry, setBreakGateDeck } from "../lib/telemetrySync";
 import { remainingTime, settlePresence, confirmPresence, toggleTimerState, getTimerDeviceId, recoveryFromCheckpoint, presenceInterval } from '../lib/timerState';
 import InterruptedSessionRecovery from './InterruptedSessionRecovery';
 import { syncTimerCheckpoint, saveVerifiedStudySession, queueStudySession } from '../lib/verifiedStudyClient';
@@ -230,6 +232,7 @@ export default function GlobalTimer() {
   const [burnoutModalMinutes, setBurnoutModalMinutes] = useState(20);
   const lastTimerCheckpointSyncRef = useRef(0);
   const [showBreakGateModal, setShowBreakGateModal] = useState(false);
+  const [breakGateNotice, setBreakGateNotice] = useState('');
   const [activeBreakGateDeck, setActiveBreakGateDeck] = useState(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [guideTopic, setGuideTopic] = useState("pomodoro");
@@ -1838,8 +1841,15 @@ export default function GlobalTimer() {
     }
   }, [timerState.breakGatePending, activeBreakGateDeck, handleBreakGateComplete]);
 
-  const handleBreakGateSkip = () => {
+  useEffect(() => {
+    const openStrategy = event => setBreakGateNotice(event.detail);
+    window.addEventListener('ifocus_breakgate_strategy', openStrategy);
+    return () => window.removeEventListener('ifocus_breakgate_strategy', openStrategy);
+  }, []);
+
+  const handleBreakGateSkip = (notice) => {
     handleBreakGateComplete();
+    if (notice) setBreakGateNotice(notice);
   };
 
   const toggleMiniTimerPlay = (e) => {
@@ -3149,6 +3159,22 @@ export default function GlobalTimer() {
         onComplete={handleBreakGateComplete}
         onSkip={handleBreakGateSkip}
       />
+
+      {breakGateNotice && session?.user?.id && (
+        <AppDialog titleId="breakgate-notice-title" onDismiss={() => setBreakGateNotice('')}>
+          <div className={coachStyles.breakGateNotice}>
+            <h2 id="breakgate-notice-title">Coach has noticed something</h2>
+            <p>{breakGateNotice}</p>
+            <footer className={coachStyles.breakGateNoticeActions}>
+              <button type="button" className="btn-secondary" onClick={() => setBreakGateNotice('')} autoFocus>Dismiss</button>
+              <button type="button" className="btn-primary" onClick={() => {
+                setBreakGateDeck(null, session.user.id);
+                setBreakGateNotice('');
+              }}>Turn off BreakGate</button>
+            </footer>
+          </div>
+        </AppDialog>
+      )}
 
       {/* Global Interactive Visual Feature Guide Modal */}
       <FeatureGuideModal
