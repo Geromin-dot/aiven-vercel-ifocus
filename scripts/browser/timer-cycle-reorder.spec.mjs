@@ -277,6 +277,37 @@ test('presence and progress checks repeat in each focus block and completed time
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ifocus_pending_study_sessions'))).toBeNull();
 });
 
+test('completing a task restarts the configured progress check interval', async ({ page, context }) => {
+  await page.clock.install();
+  await accountFixture(context, true, {
+    tasks: [{ id: 'read', text: 'Read chapter', priority: 'medium', completed: false }],
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('ifocus_timer_preferences', JSON.stringify({
+      activePresenceEnabled: false, burnoutCheckEnabled: true, burnoutCheckMinutes: 10,
+    }));
+    localStorage.setItem('ifocus_timer_state', JSON.stringify({
+      isFocus: true, isRunning: true, sessionCount: 1, timerPreset: '25/5',
+      timeLeft: 1500, totalTime: 1500, targetEndTime: Date.now() + 1500000,
+      timerSessionId: 'task-progress-block', authSessionId: 'history-login', userId: 'history-student',
+    }));
+  });
+  await page.goto('/dashboard');
+  const task = page.locator('[data-todo-id="read"] .todo-checkbox');
+  await expect(task).toBeVisible();
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
+  await page.clock.fastForward(240000);
+  await task.click();
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('ifocus_timer_state')).lastStudyTaskElapsed)).toBeGreaterThanOrEqual(240);
+
+  const progress = page.getByText('Study Progress Check', { exact: true });
+  await page.clock.fastForward(361000);
+  await expect(progress).toHaveCount(0);
+  await page.clock.fastForward(240000);
+  await expect(progress).toBeVisible();
+});
+
 test('dragging a task saves the new order and it survives reload', async ({ page, context }) => {
   const tasks = ['Read chapter', 'Write notes', 'Practice quiz'].map((text, index) => ({
     id: String(index), text, priority: 'medium', completed: false,

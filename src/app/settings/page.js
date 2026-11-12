@@ -1513,7 +1513,7 @@ export default function SettingsPage() {
               <div className="settings-toggle-row" style={{ padding: '0.65rem 0.9rem' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 700 }}>Study Progress Check</h4>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Offers a gentle check-in after the selected focus time if no task has been marked complete.</p>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Checks in after the selected amount of focus time. Completing a task restarts the interval.</p>
                 </div>
                 <label className="toggle-switch">
                   <input 

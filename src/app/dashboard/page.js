@@ -102,7 +102,7 @@ export default function CommandCenterPage() {
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [customWorkTime, setCustomWorkTime] = useState({ min: '', sec: '' });
   const [customBreakTime, setCustomBreakTime] = useState({ min: '', sec: '' });
-  const [sessionTotalTime, setSessionTotalTime] = useState(25 * 60);
+  const [sessionTotalTime, setSessionTotalTime] = useState(null);
   const [customSessions, setCustomSessions] = useState(1);
   const [customBreakGateQuestions, setCustomBreakGateQuestions] = useState(DEFAULT_BREAK_GATE_QUESTIONS);
   const [showQuitModal, setShowQuitModal] = useState(false);
@@ -1353,11 +1353,17 @@ export default function CommandCenterPage() {
 
   const confirmExitRestEarly = () => {
     setShowAiRestExitModal(false);
-    setIsAiRestRecovery(false);
+    const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+    if (!current?.isAiRestRecovery || current.isFocus) return;
     try {
       localStorage.removeItem('ifocus_ai_rest_recovery');
     } catch (e) {}
-    forceResetTimer();
+    if (current.recoveryFocusState) {
+      window.dispatchEvent(new CustomEvent('ifocus_skip_break'));
+    } else {
+      setIsAiRestRecovery(false);
+      forceResetTimer();
+    }
     window.dispatchEvent(new CustomEvent('ifocus_telemetry_updated'));
   };
 
@@ -1369,9 +1375,9 @@ export default function CommandCenterPage() {
   const handleSaveAndEndSession = async () => {
     if (sessionSavePendingRef.current) return;
     setShowQuitModal(false);
-    setIsActive(false);
     const current = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
-    if (!current) return;
+    if (!current?.isFocus || current.breakGatePending) return;
+    setIsActive(false);
     const remaining = remainingTime(current);
     const elapsed = Math.max(0, Number(current.totalTime) - remaining);
     if (elapsed < 60) { forceResetTimer(); return; }
@@ -1761,13 +1767,15 @@ export default function CommandCenterPage() {
     if (!todoToToggle) return;
     
     const newStatus = !todoToToggle.completed;
+    let completionTimer;
+    try {
+      if (newStatus) completionTimer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+    } catch {}
+    const completionElapsed = Math.max(0, (completionTimer?.totalTime || 0) - remainingTime(completionTimer));
     setTodos(todos.map(t => t.id === id ? { ...t, completed: newStatus } : t));
     
     if (newStatus) {
       playTaskCheckSound(); // Play joyful checkmark double-chime!
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent("ifocus_task_completed", { detail: { id } }));
-      }
     }
     
     try {
@@ -1777,6 +1785,12 @@ export default function CommandCenterPage() {
         body: JSON.stringify({ completed: newStatus })
       });
       if (!res.ok) throw new Error(await res.text());
+      if (completionTimer?.timerSessionId && completionTimer.isFocus && !completionTimer.breakGatePending &&
+          completionElapsed < completionTimer.totalTime && (completionTimer.isRunning || completionElapsed > 0)) {
+        window.dispatchEvent(new CustomEvent('ifocus_task_completed', {
+          detail: { timerSessionId: completionTimer.timerSessionId, elapsed: completionElapsed },
+        }));
+      }
     } catch (err) {
       console.error("Failed to toggle todo:", err);
       alert("Failed to update task.");
@@ -2064,10 +2078,7 @@ export default function CommandCenterPage() {
 
   // Calculate Progress Percent for Pomodoro Progress Bar
   const getTotalTime = () => {
-    // If AI Prescribed Rest Recovery is active, break is strictly 5 minutes (300s)
-    if (!isFocus && isAiRestRecovery) {
-      return 5 * 60;
-    }
+    if (sessionTotalTime > 0) return sessionTotalTime;
     const workMin = parseInt(customWorkTime.min) || 0;
     const workSec = parseInt(customWorkTime.sec) || 0;
     const customWorkDuration = (workMin * 60 + workSec) || 25 * 60;
@@ -2077,11 +2088,6 @@ export default function CommandCenterPage() {
 
     if (timerPreset === 'Custom') {
       return isFocus ? customWorkDuration : customBreakDuration;
-    }
-
-    if (sessionTotalTime && sessionTotalTime > 0) {
-      if (isFocus && sessionTotalTime >= 60) return sessionTotalTime;
-      if (!isFocus && sessionTotalTime >= 30) return sessionTotalTime;
     }
 
     if (isFocus) {
@@ -2832,7 +2838,7 @@ export default function CommandCenterPage() {
                 <polygon points="5 4 15 12 5 20 5 4"></polygon>
                 <line x1="19" y1="5" x2="19" y2="19"></line>
               </svg>
-              <span>Skip Break & Start Session {isAiRestRecovery ? (sessionCount || 1) : Math.min((sessionCount || 1) + 1, timerPreset === 'Custom' ? (customSessions || 1) : 4)}</span>
+              <span>{isAiRestRecovery ? 'End Break Early' : `Skip Break & Start Session ${Math.min((sessionCount || 1) + 1, timerPreset === 'Custom' ? (customSessions || 1) : 4)}`}</span>
             </button>
           </div>
         )}

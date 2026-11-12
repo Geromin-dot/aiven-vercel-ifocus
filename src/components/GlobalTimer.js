@@ -513,7 +513,9 @@ export default function GlobalTimer() {
   const commitStorageState = useCallback((nextState, dispatchSync = true) => {
     try {
       const previous = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
-      const newFocusBlock = nextState.isFocus && nextState.timeLeft === nextState.totalTime &&
+      const restoringFocus = previous?.recoveryFocusState?.timerSessionId === nextState.timerSessionId &&
+        Boolean(previous?.recoveryFocusState);
+      const newFocusBlock = !restoringFocus && nextState.isFocus && nextState.timeLeft === nextState.totalTime &&
         (!previous?.isFocus || previous.timeLeft !== nextState.timeLeft);
       const normalizedState = {
         ...nextState,
@@ -522,7 +524,7 @@ export default function GlobalTimer() {
           lastPresenceElapsed: 0,
           lastPresenceRemaining: nextState.totalTime,
           studyProgressChecked: false,
-          studyTaskCompleted: false,
+          lastStudyTaskElapsed: 0,
         } : {}),
         updatedAt: Date.now(),
         deviceId: getTimerDeviceId(),
@@ -876,11 +878,12 @@ export default function GlobalTimer() {
       }
       triggerBurnoutCheck(true, mins || 20);
     };
-    const handleTaskCompleted = () => {
+    const handleTaskCompleted = ({ detail }) => {
       const current = readStorageState();
-      if (current?.isFocus && remainingTime(current) < current.totalTime) {
-        localStorage.setItem('ifocus_timer_state', JSON.stringify({ ...current, studyTaskCompleted: true }));
-      }
+      if (!detail || !current?.isFocus || current.breakGatePending || current.timerSessionId !== detail.timerSessionId ||
+          detail.elapsed < (current.lastStudyTaskElapsed || 0)) return;
+      commitStorageState({ ...current, lastStudyTaskElapsed: detail.elapsed, studyProgressChecked: false }, false);
+      setShowBurnoutModal(false);
     };
 
     window.addEventListener("ifocus_trigger_afk_coach_test", handleTestTrigger);
@@ -892,7 +895,7 @@ export default function GlobalTimer() {
       window.removeEventListener("ifocus_trigger_burnout_check_test", handleBurnoutTest);
       window.removeEventListener("ifocus_task_completed", handleTaskCompleted);
     };
-  }, [triggerIdleCoachIntervention, triggerBurnoutCheck, readStorageState]);
+  }, [triggerIdleCoachIntervention, triggerBurnoutCheck, readStorageState, commitStorageState]);
 
   // Idle AFK Coach Inactivity Watcher (When NO timer is running)
   useEffect(() => {
@@ -993,6 +996,7 @@ export default function GlobalTimer() {
   useEffect(() => {
     const handleSync = (e) => {
       if (e?.detail) {
+        if (!e.detail.isFocus || e.detail.timerSessionId !== stateRef.current.timerSessionId) setShowBurnoutModal(false);
         const syncedState = {
           ...e.detail,
           updatedAt: Date.now(),
@@ -1126,6 +1130,10 @@ export default function GlobalTimer() {
     const handleSkipBreakEvent = () => {
       const current = readStorageState() || stateRef.current;
       if (current.isFocus || current.breakGatePending) return;
+      if (current.isAiRestRecovery && current.recoveryFocusState) {
+        commitStorageState(current.recoveryFocusState, true);
+        return;
+      }
       let maxSessions = 4;
       if (current.timerPreset === "Custom") {
         if (current.customSessions) maxSessions = Number(current.customSessions) || 1;
@@ -1262,6 +1270,7 @@ export default function GlobalTimer() {
           timeLeft: current.customWorkDuration || current.totalTime || 1500,
           totalTime: current.customWorkDuration || current.totalTime || 1500,
           targetEndTime: null, presencePaused: false, breakGatePending: false,
+          isAiRestRecovery: false, recoveryFocusState: null,
           lastPresenceCheckElapsed: 0, lastPresenceElapsed: 0,
           timerSessionId: crypto.randomUUID(), authSessionId: session.user.sessionId,
         }, false);
@@ -1278,7 +1287,7 @@ export default function GlobalTimer() {
       const current = readStorageState() || stateRef.current;
       const countingDown = current.isRunning && current.targetEndTime;
       if (!countingDown && (!current.isFocus || current.presencePaused ||
-          current.timeLeft >= current.totalTime || current.studyProgressChecked || current.studyTaskCompleted)) return;
+          current.timeLeft >= current.totalTime || current.studyProgressChecked)) return;
 
       const now = Date.now();
       const remainingSeconds = remainingTime(current, now);
@@ -1299,8 +1308,9 @@ export default function GlobalTimer() {
       }
       let studyProgressChecked = current.studyProgressChecked;
       const progressCheckMinutes = Number(preferences.burnoutCheckMinutes) || 20;
-      if (current.isFocus && remainingSeconds > 0 && !studyProgressChecked && !current.studyTaskCompleted &&
-          preferences.burnoutCheckEnabled !== false && elapsedSeconds >= progressCheckMinutes * 60) {
+      const secondsSinceTask = elapsedSeconds - (Number(current.lastStudyTaskElapsed) || 0);
+      if (current.isFocus && remainingSeconds > 0 && !studyProgressChecked &&
+          preferences.burnoutCheckEnabled !== false && secondsSinceTask >= progressCheckMinutes * 60) {
         studyProgressChecked = true;
         triggerBurnoutCheck(false, progressCheckMinutes);
       }
@@ -1552,6 +1562,11 @@ export default function GlobalTimer() {
               }).catch(() => {});
             } catch (e) {}
             window.dispatchEvent(new CustomEvent("ifocus_telemetry_updated"));
+          }
+
+          if (isPreSessionRest && current.recoveryFocusState) {
+            commitStorageState(current.recoveryFocusState, true);
+            return;
           }
 
           if (isBreakCycleFinished) {
@@ -2692,7 +2707,7 @@ export default function GlobalTimer() {
                   margin: 0,
                 }}
               >
-                Your focus timer has been active for {burnoutModalMinutes} minutes, and no task from your list has been marked complete yet. Still working on a longer task? You can keep going. If you feel stuck, try a smaller step or a brief pause.
+                No task has been marked complete in the last {burnoutModalMinutes} minutes of focus time. Still working on a longer task? You can keep going. If you feel stuck, try a smaller step or a brief pause.
               </p>
             </div>
 

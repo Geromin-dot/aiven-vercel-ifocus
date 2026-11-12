@@ -75,6 +75,7 @@ export function getTimerDeviceId() {
 }
 
 export function recoveryFromCheckpoint(checkpoint) {
+  if (checkpoint?.isAiRestRecovery && checkpoint.recoveryFocusState) checkpoint = checkpoint.recoveryFocusState;
   if (!checkpoint?.isFocus || checkpoint.breakGatePending || checkpoint.recoveryResolved) return null;
   const duration = Math.max(0, Math.floor((Number(checkpoint.totalTime) || 0) - (Number(checkpoint.timeLeft) || 0)));
   if (!Number.isFinite(duration) || duration < 60) return null;

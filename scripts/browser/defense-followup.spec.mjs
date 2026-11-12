@@ -243,8 +243,18 @@ test('a dismissed typing alert stays dismissed for the current reflection draft'
 });
 
 test('exiting recovery early restores the previous Coach signal until dismissed', async ({ page, context }) => {
+  await page.clock.install();
   await accountFixture(context);
+  await page.addInitScript(() => {
+    localStorage.setItem('ifocus_timer_preferences', JSON.stringify({ activePresenceEnabled: false }));
+    localStorage.setItem('ifocus_timer_state', JSON.stringify({
+      isFocus: true, isRunning: true, sessionCount: 1, timerPreset: '25/5',
+      timeLeft: 1500, totalTime: 1500, targetEndTime: Date.now() + 1500000,
+      timerSessionId: 'recovery-focus-block', authSessionId: 'history-login', userId: 'history-student',
+    }));
+  });
   await page.goto('/dashboard');
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Stop');
   const draft = page.locator('.journal-textarea');
   await draft.focus();
   for (const key of ['a', 's', 'd', 'f', 'g']) await page.keyboard.down(key);
@@ -254,8 +264,15 @@ test('exiting recovery early restores the previous Coach signal until dismissed'
   await expect(stress).toBeVisible();
   await page.getByRole('button', { name: 'Apply Strategy to Dashboard' }).click();
   await expect(page).toHaveURL(/dashboard$/);
-  await page.getByRole('button', { name: /Skip Break & Start Session/ }).click();
+  await page.getByRole('button', { name: 'End Break Early', exact: true }).click();
   await page.getByRole('button', { name: 'Exit Rest Anyway' }).click();
+  await expect(page.locator('#timerToggleBtn')).toHaveText('Start');
+  await expect(page.getByRole('button', { name: /Quit & Save Progress/ })).toHaveCount(0);
+  const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('ifocus_timer_state')));
+  expect(restored).toMatchObject({
+    isFocus: true, isRunning: false, totalTime: 1500, timerPreset: '25/5', timerSessionId: 'recovery-focus-block',
+  });
+  expect(restored.timeLeft).toBeGreaterThan(1440);
   await page.getByRole('link', { name: 'AI Coach', exact: true }).click();
   await expect(stress).toBeVisible();
   await expect(page.getByText('Restoring', { exact: true })).toHaveCount(0);

@@ -9,6 +9,7 @@ import CoachDisclaimer from '@/components/CoachDisclaimer';
 import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
 import { dismissBreakGateGuidance, getBreakGateGuidance, isBreakGateGuidanceDismissed } from '@/lib/coachResilience';
 import { latestCoachSignal, formatCoachInsight } from '@/lib/coachSignals';
+import { remainingTime, settlePresence } from '@/lib/timerState';
 import coachStyles from '@/components/CoachLayout.module.css';
 
 export default function CoachPage() {
@@ -616,7 +617,17 @@ export default function CoachPage() {
         customWorkDuration: wMin * 60,
         customBreakDuration: bMin * 60
       };
-      localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
+      const now = Date.now();
+      const activeTimer = JSON.parse(localStorage.getItem('ifocus_timer_state') || 'null');
+      const preferences = JSON.parse(localStorage.getItem('ifocus_timer_preferences') || '{}');
+      const focus = takeBreak && activeTimer?.isFocus && !activeTimer.breakGatePending
+        ? settlePresence(activeTimer, preferences, now)
+        : null;
+      const focusRemaining = remainingTime(focus, now);
+      const recoveryFocusState = focusRemaining > 0 && (focus.isRunning || focusRemaining < focus.totalTime)
+        ? { ...focus, timeLeft: focusRemaining, isRunning: false, targetEndTime: null,
+          timerSessionId: focus.timerSessionId || crypto.randomUUID() }
+        : null;
 
       const aiDetails = {
         title: cadenceTitle,
@@ -625,12 +636,27 @@ export default function CoachPage() {
         sessions: targetSessions,
         message: insight?.actionPlan || telemetryDiagnostics?.recommendedRhythm?.subtext || "AI Coach recommended strategy applied."
       };
-      const aiAdjustment = setAiTimerAdjustment(aiDetails);
+      const strategyUpdate = recoveryFocusState ? {} : {
+        customTimer,
+        ...setAiTimerAdjustment(aiDetails),
+      };
+      if (!recoveryFocusState) localStorage.setItem('ifocus_custom_timer', JSON.stringify(customTimer));
 
       localStorage.removeItem('ifocus_ai_rest_recovery');
-      const now = Date.now();
       const initialSeconds = takeBreak ? 5 * 60 : wMin * 60;
-      const syncPayload = {
+      const syncPayload = recoveryFocusState ? {
+        ...recoveryFocusState,
+        isRunning: true,
+        isFocus: false,
+        timeLeft: initialSeconds,
+        totalTime: initialSeconds,
+        targetEndTime: now + initialSeconds * 1000,
+        updatedAt: now,
+        timerSessionId: crypto.randomUUID(),
+        presencePaused: false,
+        isAiRestRecovery: true,
+        recoveryFocusState,
+      } : {
         isRunning: takeBreak,
         isFocus: !takeBreak,
         timeLeft: initialSeconds,
@@ -654,7 +680,8 @@ export default function CoachPage() {
       // Save notification toast for Dashboard
       localStorage.setItem('ifocus_applied_toast', JSON.stringify({
         title: takeBreak ? "5-minute break started" : cadenceTitle,
-        message: `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
+        message: recoveryFocusState ? 'Your current focus block is paused and will be ready when the break ends.'
+          : `${wMin}m Focus / ${bMin}m Rest cadence applied across ${targetSessions} sessions.`
       }));
       // A recovery break clears the signal only when the break completes.
       if (!takeBreak) {
@@ -674,13 +701,12 @@ export default function CoachPage() {
           telemetryState: {
             ...(!takeBreak && { latestTelemetry: null, activeIdleAlert: null, cognitiveReset: now }),
             activeTimerState: syncPayload,
-            customTimer: customTimer,
-            ...aiAdjustment,
+            ...strategyUpdate,
             updatedAt: new Date().toISOString()
           },
-          timerPreferences: {
+          ...(!recoveryFocusState && { timerPreferences: {
             focusDuration: wMin
-          }
+          } }),
         })
       }).catch(() => {});
     } catch (e) {
