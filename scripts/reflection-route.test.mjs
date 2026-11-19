@@ -10,7 +10,7 @@ const route = await readFile(new URL('../src/app/api/ai/coach/route.js', import.
 const flashcardRoute = await readFile(new URL('../src/app/api/ai/flashcards/route.js', import.meta.url), 'utf8');
 function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route, { env = {}, fetch } = {}) {
   const context = vm.createContext({ ...plans, ...input, ...verification, callGemini, getServerSession: async () => session, authOptions: {},
-    process: { env }, fetch, AbortSignal, console: { warn() {} },
+    process: { env }, fetch, AbortSignal, console: { warn() {}, info() {} },
     NextResponse: { json: (data, options) => ({ data, status: options?.status || 200, headers: options?.headers }) },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
@@ -41,6 +41,7 @@ test('OpenAI-configured Coach uses Luna and reports the actual service tier', as
     assert.equal(sent.body.store, false);
     assert.equal(result.headers['X-iFocus-AI-Provider'], 'openai');
     assert.equal(result.headers['X-iFocus-AI-Service-Tier'], tier);
+    assert.match(result.headers['Server-Timing'], /^auth;dur=\d+, ai;dur=\d+, total;dur=\d+$/);
     assert.match(result.data.actionPlan, /three key terms/);
   }
 });
