@@ -8,6 +8,36 @@ import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
 
 export const maxDuration = 60;
 
+async function callOpenAICoach(prompt, apiKey) {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-6-luna',
+      input: prompt,
+      service_tier: process.env.OPENAI_COACH_SERVICE_TIER === 'fast' ? 'fast' : 'default',
+      reasoning: { effort: 'low' },
+      text: { format: { type: 'json_object' } },
+      store: false,
+    }),
+    signal: AbortSignal.timeout(18000),
+  });
+  if (!response.ok) throw new Error(`OpenAI returned HTTP ${response.status}`);
+
+  const result = await response.json();
+  if (result.status !== 'completed') throw new Error('OpenAI response did not complete');
+  const outputText = result.output
+    .filter(item => item.type === 'message')
+    .flatMap(item => item.content)
+    .filter(part => part.type === 'output_text')
+    .map(part => part.text)
+    .join('');
+  return { parsed: JSON.parse(outputText), serviceTier: result.service_tier };
+}
+
 export async function POST(request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.error) return NextResponse.json({ error: 'Please sign in to use the AI Coach.' }, { status: 401 });
@@ -30,6 +60,8 @@ export async function POST(request) {
   const inputError = reflectionInputError(userText);
   if (inputError) return NextResponse.json({ error: inputError }, { status: 422 });
 
+  const openAIKey = process.env.OPENAI_API_KEY?.trim();
+  const provider = openAIKey ? 'openai' : 'gemini';
   try {
     const taskListStr = tasks && tasks.length > 0 
       ? tasks.map(t => `${t.id}: ${t.text} (Priority: ${t.priority || 'Normal'})`).join('\n')
@@ -60,33 +92,37 @@ Default rhythm: Stressed 15/5 minutes, 2 sessions; Distracted 20/5, 3 sessions; 
 Write one warm, useful paragraph of 3-4 sentences, roughly 60-90 words. Acknowledge the student's specific situation, explain the first task priority, give one concrete study step, and briefly explain the recommended rhythm. Do not list or explain every remaining task, repeat the same encouragement, or add a second paragraph. Refer to actual task names when tasks exist; avoid claiming to reorder tasks when none were supplied. Do not diagnose conditions or invent facts about the student. Mention flashcards only when relevant to the student's actual request or tasks. When useful, suggest retrieval practice (answer from memory, then check the answer) or spaced practice (revisit the material on another day). Offer these as options and avoid claims about guaranteed improvement or an optimal timer duration.`;
 
 
-    const parsed = await callGemini({
-      parts: [{ text: prompt }],
-      preferredModel: 'gemini-2.5-flash',
-      timeoutMs: 18000,
-      totalTimeoutMs: 45000,
-      maxRetries: 0,
-      cache: false,
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json"
-      }
-    });
+    const headers = { 'X-iFocus-AI-Provider': provider };
+    let parsed;
+    if (openAIKey) {
+      const result = await callOpenAICoach(prompt, openAIKey);
+      parsed = result.parsed;
+      if (result.serviceTier) headers['X-iFocus-AI-Service-Tier'] = result.serviceTier;
+    } else {
+      parsed = await callGemini({
+        parts: [{ text: prompt }],
+        preferredModel: 'gemini-2.5-flash',
+        timeoutMs: 18000,
+        totalTimeoutMs: 45000,
+        maxRetries: 0,
+        cache: false,
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      });
+    }
 
     if (parsed?.needsContext === true) {
-      return NextResponse.json({ error: 'Please describe how you feel or what you want to study so the coach has enough context.' }, { status: 422 });
+      return NextResponse.json({ error: 'Please describe how you feel or what you want to study so the coach has enough context.' }, { status: 422, headers });
     }
     if (parsed && typeof parsed === 'object' && (parsed.actionPlan || parsed.stressContext === 'personal' || parsed.stressContext === 'clarify' || parsed.supportOnly === true || parsed.healthSupport === true || (typeof parsed.safetyConcern === 'string' && parsed.safetyConcern.trim()))) {
-      return NextResponse.json(normalizeReflectionPlan(parsed, userText, tasks));
+      return NextResponse.json(normalizeReflectionPlan(parsed, userText, tasks), { headers });
     }
-
-    // If Gemini parsed output wasn't complete, fall back gracefully
-    const fallback = generateCognitiveFallback(userText, tasks);
-    return NextResponse.json(fallback);
-
   } catch (error) {
-    console.warn("AI Coach Gemini call failed, using cognitive fallback:", error.message);
-    const fallback = generateCognitiveFallback(userText, tasks);
-    return NextResponse.json(fallback);
+    console.warn(`AI Coach ${provider} call failed; using cognitive fallback:`, error.message);
   }
+  return NextResponse.json(generateCognitiveFallback(userText, tasks), {
+    headers: { 'X-iFocus-AI-Provider': 'fallback' },
+  });
 }

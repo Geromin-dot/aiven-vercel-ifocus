@@ -313,14 +313,14 @@ export default function FlashcardsPage() {
 
   const toastTimeoutRef = useRef(null);
 
-  const showToast = (message) => {
+  const showToast = (message, type = 'success') => {
     try {
       playToastSound();
     } catch (e) {}
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
-    setToastMessage(message);
+    setToastMessage({ message, type });
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
     }, 3200);
@@ -365,7 +365,7 @@ export default function FlashcardsPage() {
   const handlePdfUpload = (file) => {
     if (!file) return;
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      showToast("Please upload a valid PDF document.");
+      showToast("Please upload a valid PDF document.", 'error');
       return;
     }
 
@@ -396,21 +396,21 @@ export default function FlashcardsPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // 3. Handle Flashcards Generation via Gemini AI
+  // 3. Generate flashcards from the selected study material.
   const handleGenerate = async () => {
     if (!aiAvailable) {
-      showToast(AI_VERIFICATION_MESSAGE);
+      showToast(AI_VERIFICATION_MESSAGE, 'error');
       return;
     }
     const isPdf = activeTab === 'pdf';
     
     if (isPdf && !pdfBase64) {
-      showToast("Please select or drop a PDF file first.");
+      showToast("Please select or drop a PDF file first.", 'error');
       return;
     }
 
     if (!isPdf && !notesText.trim()) {
-      showToast("Please paste your lecture notes or study material first.");
+      showToast("Please paste your lecture notes or study material first.", 'error');
       return;
     }
 
@@ -471,7 +471,7 @@ export default function FlashcardsPage() {
 
     } catch (err) {
       clearInterval(interval);
-      showToast(err.message || "Failed to generate flashcards. Please try again.");
+      showToast(err.message || "Failed to generate flashcards. Please try again.", 'error');
       setView('create');
     }
   };
@@ -501,7 +501,7 @@ export default function FlashcardsPage() {
       showToast('Deck saved to your collections.');
       fetchDecks(); // Refresh collections
     } catch (err) {
-      showToast("Error saving deck: " + err.message);
+      showToast("Error saving deck: " + err.message, 'error');
     } finally {
       setIsSavingDeck(false);
     }
@@ -522,10 +522,10 @@ export default function FlashcardsPage() {
         showToast('Deck deleted successfully.');
         setDeckToDelete(null);
       } else {
-        showToast('Failed to delete deck. Please try again.');
+        showToast('Failed to delete deck. Please try again.', 'error');
       }
     } catch (err) {
-      showToast('Error deleting deck: ' + err.message);
+      showToast('Error deleting deck: ' + err.message, 'error');
     } finally {
       setIsDeletingDeck(false);
     }
@@ -921,15 +921,15 @@ export default function FlashcardsPage() {
       {toastMessage && (
         <div
           className={`flashcard-toast-pill ${
-            typeof toastMessage === 'string' && (toastMessage.toLowerCase().includes('fail') || toastMessage.toLowerCase().includes('error'))
+            toastMessage.type === 'error'
               ? 'is-error'
               : ''
           }`}
-          role="status"
-          aria-live="polite"
+          role={toastMessage.type === 'error' ? 'alert' : 'status'}
+          aria-live={toastMessage.type === 'error' ? 'assertive' : 'polite'}
         >
           <div className="toast-icon-badge">
-            {typeof toastMessage === 'string' && (toastMessage.toLowerCase().includes('fail') || toastMessage.toLowerCase().includes('error')) ? (
+            {toastMessage.type === 'error' ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
@@ -941,7 +941,7 @@ export default function FlashcardsPage() {
               </svg>
             )}
           </div>
-          <span className="toast-text">{toastMessage}</span>
+          <span className="toast-text">{toastMessage.message}</span>
         </div>
       )}
 

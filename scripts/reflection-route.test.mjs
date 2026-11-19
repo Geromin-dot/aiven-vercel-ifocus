@@ -8,14 +8,53 @@ const input = await import(moduleUrl(await readFile(new URL('../src/lib/reflecti
 const verification = await import(moduleUrl(await readFile(new URL('../src/lib/aiVerification.js', import.meta.url), 'utf8')));
 const route = await readFile(new URL('../src/app/api/ai/coach/route.js', import.meta.url), 'utf8');
 const flashcardRoute = await readFile(new URL('../src/app/api/ai/flashcards/route.js', import.meta.url), 'utf8');
-function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route) {
+function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route, { env = {}, fetch } = {}) {
   const context = vm.createContext({ ...plans, ...input, ...verification, callGemini, getServerSession: async () => session, authOptions: {},
-    console: { warn() {} }, NextResponse: { json: (data, options) => ({ data, status: options?.status || 200 }) },
+    process: { env }, fetch, AbortSignal, console: { warn() {} },
+    NextResponse: { json: (data, options) => ({ data, status: options?.status || 200, headers: options?.headers }) },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
   return body => context.post({ text: async () => JSON.stringify(body), json: async () => body });
 }
 const tasks = [{ id: 'a', text: 'Review anatomy', priority: 'Low' }, { id: 'b', text: 'Solve physiology', priority: 'High' }];
+
+test('OpenAI-configured Coach uses Luna and reports the actual service tier', async () => {
+  for (const tier of ['default', 'fast']) {
+    let sent;
+    const post = endpoint(async () => assert.fail('Gemini should not be called'), undefined, route, {
+      env: { OPENAI_API_KEY: 'test-key', OPENAI_COACH_SERVICE_TIER: tier === 'fast' ? 'fast' : undefined },
+      fetch: async (url, options) => {
+        sent = { url, headers: options.headers, body: JSON.parse(options.body) };
+        return Response.json({ status: 'completed', service_tier: tier, output: [
+          { type: 'reasoning' },
+          { type: 'message', content: [{ type: 'output_text', text: JSON.stringify({
+            state: 'Engaged', orderedIds: ['a', 'b'], actionPlan: 'Start with Review anatomy and recall three key terms.',
+          }) }] },
+        ] });
+      },
+    });
+    const result = await post({ text: 'Help me review anatomy for my quiz tomorrow.', tasks });
+    assert.equal(sent.url, 'https://api.openai.com/v1/responses');
+    assert.equal(sent.headers.Authorization, 'Bearer test-key');
+    assert.equal(sent.body.model, 'gpt-6-luna');
+    assert.equal(sent.body.service_tier, tier);
+    assert.equal(sent.body.store, false);
+    assert.equal(result.headers['X-iFocus-AI-Provider'], 'openai');
+    assert.equal(result.headers['X-iFocus-AI-Service-Tier'], tier);
+    assert.match(result.data.actionPlan, /three key terms/);
+  }
+});
+
+test('an OpenAI API error marks the existing local fallback for benchmarking', async () => {
+  const post = endpoint(async () => assert.fail('Gemini should not be called'), undefined, route, {
+    env: { OPENAI_API_KEY: 'test-key' },
+    fetch: async () => new Response(null, { status: 429 }),
+  });
+  const result = await post({ text: 'Help me review anatomy for my quiz tomorrow.', tasks });
+  assert.equal(result.status, 200);
+  assert.equal(result.headers['X-iFocus-AI-Provider'], 'fallback');
+  assert.ok(result.data.actionPlan);
+});
 
 test('safety disclosures return professional support immediately without calling the provider', async () => {
   const post = endpoint(async () => assert.fail('explicit safety language must not wait for the provider'));
