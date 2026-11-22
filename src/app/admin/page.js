@@ -591,22 +591,18 @@ export default function AdminPortalPage() {
         @keyframes adminBackdropFade {
           from {
             opacity: 0;
-            backdrop-filter: blur(0px);
           }
           to {
             opacity: 1;
-            backdrop-filter: blur(16px);
           }
         }
 
         @keyframes adminFadeIn {
           from {
             opacity: 0;
-            transform: translateY(8px);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
           }
         }
 
@@ -614,49 +610,27 @@ export default function AdminPortalPage() {
           position: relative;
           min-height: 100vh;
           width: 100%;
-          background: 
-            radial-gradient(1200px 600px at 50% -30px, rgba(39, 82, 45, 0.08) 0%, rgba(187, 247, 208, 0.15) 35%, rgba(240, 253, 244, 0.05) 65%, transparent 85%),
-            radial-gradient(800px 450px at 10% 120px, rgba(95, 143, 94, 0.05) 0%, transparent 60%),
-            radial-gradient(800px 450px at 90% 150px, rgba(39, 82, 45, 0.05) 0%, transparent 60%),
-            #ffffff;
+          background: #f7faf6;
           box-sizing: border-box;
           overflow-x: hidden;
           animation: adminFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        /* Hero Dot-Grid Mesh Background (matches landing page & user theme) */
-        .admin-grid-mesh {
-          position: absolute;
-          inset: 0;
-          background-image: radial-gradient(rgba(100, 116, 139, 0.16) 1.1px, transparent 1.1px);
-          background-size: 26px 26px;
-          mask-image: radial-gradient(ellipse 85% 75% at 50% 15%, #000000 35%, transparent 85%);
-          -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 15%, #000000 35%, transparent 85%);
-          pointer-events: none;
-          z-index: 0;
-        }
+        /* Keep the long scrolling surface free of masked decorative layers. */
+        .admin-grid-mesh { display: none; }
 
-        /* Metric Cards: Tactile Elevation & Smooth Spring Hover */
+        /* Flat, opaque surfaces keep scrolling inexpensive on integrated graphics. */
+        .app-container:has(.admin-portal-root) .modern-sidebar { box-shadow: none; }
         .admin-metric-card {
           background: #ffffff;
           padding: 24px;
           border-radius: 22px;
           border: 1px solid rgba(0, 0, 0, 0.06);
-          box-shadow: 
-            0 2px 4px rgba(0, 0, 0, 0.02),
-            0 10px 24px -4px rgba(0, 0, 0, 0.04),
-            0 0 0 1px rgba(255, 255, 255, 0.8) inset;
-          transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 1px 5px rgba(0, 0, 0, 0.035);
+          transition: border-color 0.15s ease;
           cursor: default;
         }
-        .admin-metric-card:hover {
-          transform: translateY(-3px);
-          border-color: rgba(39, 82, 45, 0.16);
-          box-shadow: 
-            0 4px 8px rgba(0, 0, 0, 0.02),
-            0 16px 36px -6px rgba(39, 82, 45, 0.1),
-            0 0 0 1px rgba(39, 82, 45, 0.1);
-        }
+        .admin-metric-card:hover { border-color: rgba(39, 82, 45, 0.16); }
 
         /* Directory Section Panel: Luxurious Glass Card */
         .admin-directory-panel {
@@ -664,10 +638,7 @@ export default function AdminPortalPage() {
           border-radius: 26px;
           border: 1px solid rgba(0, 0, 0, 0.06);
           padding: 30px;
-          box-shadow: 
-            0 2px 4px rgba(0, 0, 0, 0.02),
-            0 12px 36px -6px rgba(0, 0, 0, 0.05),
-            0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.035);
         }
 
         .admin-filter-select {
@@ -818,8 +789,8 @@ export default function AdminPortalPage() {
           position: fixed;
           inset: 0;
           background: rgba(15, 23, 42, 0.5);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -928,6 +899,13 @@ export default function AdminPortalPage() {
         }
         .admin-modal-btn-primary:active {
           transform: scale(0.95);
+        }
+
+        /* Preserve interaction colors without animating shadows or moving list controls. */
+        .admin-directory-panel :is(.admin-btn-inspect, .admin-btn-hold, .admin-btn-reactivate, .admin-btn-delete) {
+          transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+          box-shadow: none;
+          transform: none;
         }
 
         /* Responsive Mobile Styles */
