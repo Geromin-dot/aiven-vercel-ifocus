@@ -3,11 +3,12 @@ import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { studentYearLevel } from '@/lib/studentYearLevels';
+import { isStudyDevice } from '@/lib/studyDevice';
 
 export async function GET(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session?.user?.id || session.error) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -25,7 +26,8 @@ export async function GET(req) {
         createdAt: true,
         verificationStatus: true,
         yearLevel: true,
-        genderIdentity: true,
+        sex: true,
+        studyDevice: true,
         yearSection: true,
         _count: {
           select: {
@@ -66,7 +68,8 @@ export async function GET(req) {
         createdAt: user.createdAt,
         verificationStatus: user.verificationStatus ?? 'PENDING',
         yearLevel: studentYearLevel(user),
-        genderIdentity: user.genderIdentity,
+        sex: user.sex,
+        studyDevice: user.studyDevice,
       },
       stats: {
         totalSessions: user._count.studySessions || 0,
@@ -85,13 +88,16 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session?.user?.id || session.error) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = session.user.id;
     const body = await req.json();
-    const { name, username, image } = body;
+    const { name, username, image, studyDevice } = body;
+    if (studyDevice !== undefined && !isStudyDevice(studyDevice)) {
+      return NextResponse.json({ error: 'Choose Mobile, PC/Desktop, or Both.' }, { status: 400 });
+    }
 
     // Validate username if provided and changed
     if (username) {
@@ -117,7 +123,8 @@ export async function PUT(req) {
       data: {
         ...(isAdmin && name !== undefined && { name: name.trim() }),
         ...(username !== undefined && { username: username.trim() }),
-        ...(image !== undefined && { image: image })
+        ...(image !== undefined && { image: image }),
+        ...(studyDevice !== undefined && { studyDevice })
       },
       select: {
         id: true,
@@ -125,6 +132,7 @@ export async function PUT(req) {
         username: true,
         email: true,
         image: true,
+        studyDevice: true,
         createdAt: true
       }
     });

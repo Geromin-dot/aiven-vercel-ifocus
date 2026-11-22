@@ -1,4 +1,5 @@
 "use client";
+import { studyDeviceLabel } from '@/lib/studyDevice';
 
 // High-clarity synthesized institutional audio chime
 const playAdminSuccessChime = () => {
@@ -1288,6 +1289,7 @@ export default function AdminPortalPage() {
                     </div>
                     <div className={directory.badges}>
                       <span>{year}</span>
+                      <span title="Self-reported device preference">Device: {studyDeviceLabel(student.studyDevice)}</span>
                       <span data-status={statusLabel}>{statusLabel}</span>
                     </div>
                     <dl className={directory.stats}>
@@ -1828,6 +1830,7 @@ export default function AdminPortalPage() {
                     </span>
                   </div>
 
+                  <p className="admin-student-device"><strong>Uses iFocus on:</strong> {studyDeviceLabel(selectedStudent.studyDevice)} · <strong>Sex:</strong> {selectedStudent.sex || 'Not selected'}</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <div>
                       <label style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 600, display: "block" }}>Full Name (Official Academic Record)</label>

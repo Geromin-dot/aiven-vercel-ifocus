@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { logoutAccount } from '@/lib/logoutAccount';
 import { ENROLLMENT_YEAR_LEVELS } from '@/lib/studentYearLevels';
-import GenderIdentityField from '@/components/GenderIdentityField';
+import SexField from '@/components/SexField';
 
 export default function CompleteProfilePage() {
   const { data: session } = useSession();
@@ -50,7 +50,7 @@ export default function CompleteProfilePage() {
       <p style={{ fontSize: '0.85rem', overflowWrap: 'anywhere' }}>{user.email}</p>
 
       <form onSubmit={completeProfile} style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem' }}>
-        <GenderIdentityField id="setup-gender" />
+        <SexField id="setup-sex" />
         <div className="settings-input-group">
           <label className="settings-label" htmlFor="setup-name">Full name</label>
           <input id="setup-name" name="name" className="settings-input" defaultValue={user.name ?? ''} autoComplete="name" maxLength={120} required />

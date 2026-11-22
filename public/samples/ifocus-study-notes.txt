@@ -1,0 +1,12 @@
+COMPUTER BASICS
+
+CPU: The central processing unit executes program instructions.
+
+RAM: Random access memory temporarily holds data used by running programs. Its contents are lost when power is turned off.
+
+Storage: An SSD stores files and programs even when power is turned off.
+
+Examples of input devices:
+1. Keyboard
+2. Mouse
+3. Microphone

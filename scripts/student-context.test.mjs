@@ -4,28 +4,14 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const load = async path => import(`data:text/javascript;base64,${Buffer.from(await read(path)).toString('base64')}`);
-const { detectDeviceType, summarizeDevices } = await load('src/lib/deviceContext.js');
 const { reflectionRhythm, normalizeReflectionPlan, generateSafetySupport } = await load('src/lib/reflectionPlan.js');
-const { advanceFocusClock } = await load('src/lib/focusClock.js');
+const { isStudyDevice, studyDeviceLabel } = await load('src/lib/studyDevice.js');
 
-test('a focus session retains its starting device when another device resumes it', () => {
-  const state = { timerSessionId: 'device-test-session', isRunning: true, isFocus: true, deviceType: 'mobile', totalTime: 1500, timeLeft: 1500, updatedAt: 1000 };
-  const started = advanceFocusClock({}, state, {}, 'login', 1000);
-  assert.equal(started.sessions[0].deviceType, 'mobile');
-  const resumed = advanceFocusClock(started, { ...state, deviceType: 'pc', updatedAt: 2000 }, {}, 'login', 2000);
-  assert.equal(resumed.sessions[0].deviceType, 'mobile');
-});
-
-test('device categories include tablet desktop mode and retain unknown historical sessions', () => {
-  assert.equal(detectDeviceType('Windows NT 10.0'), 'pc');
-  assert.equal(detectDeviceType('Macintosh'), 'pc');
-  assert.equal(detectDeviceType('Android'), 'mobile');
-  assert.equal(detectDeviceType('Macintosh', '', 5), 'mobile');
-  assert.equal(detectDeviceType('', '?1'), 'mobile');
-  assert.equal(detectDeviceType(), 'unknown');
-  const summary = summarizeDevices([{ deviceType: 'pc', durationSeconds: 90 }, { deviceType: 'mobile', duration: 3 },
-    { durationSeconds: 60 }, { verification: 'pending', duration: 50 }]);
-  assert.deepEqual(summary, { pc: { count: 1, minutes: 1.5 }, mobile: { count: 1, minutes: 3 }, unknown: { count: 1, minutes: 1 } });
+test('device preferences allow Mobile, PC/Desktop or Both and do not infer a missing value', () => {
+  for (const value of ['mobile', 'pc', 'both']) assert.equal(isStudyDevice(value), true);
+  assert.equal(isStudyDevice('tablet'), false);
+  assert.equal(studyDeviceLabel('pc'), 'PC/Desktop');
+  assert.equal(studyDeviceLabel(null), 'Not selected');
 });
 
 test('all four pacing outcomes preserve student cycles and reject conflicting model timers', () => {
@@ -49,28 +35,28 @@ test('equal effort remains stable even if model silently reverses all High tasks
   assert.doesNotMatch(plan.actionPlan, /Start with Biology/);
 });
 
-test('gender endpoint requires authentication, validates choices, and refuses replacing a saved choice', async () => {
-  const source = await read('src/app/api/user/gender/route.js');
-  const identities = await load('src/lib/genderIdentity.js');
+test('sex endpoint requires authentication, validates choices, and refuses replacing a saved choice', async () => {
+  const source = await read('src/app/api/user/sex/route.js');
+  const identities = await load('src/lib/sex.js');
   let saved = null;
   let session = { user: { id: 'test-student' } };
   const context = vm.createContext({ ...identities, authOptions: {}, getServerSession: async () => session,
     NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) },
     prisma: { user: { updateMany: async ({ where, data }) => {
-      assert.deepEqual(JSON.parse(JSON.stringify(where)), { id: 'test-student', genderIdentity: null });
+      assert.deepEqual(JSON.parse(JSON.stringify(where)), { id: 'test-student', sex: null });
       if (saved) return { count: 0 };
-      saved = data.genderIdentity; return { count: 1 };
+      saved = data.sex; return { count: 1 };
     } } },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
-  const post = genderIdentity => context.post({ json: async () => ({ genderIdentity }) });
+  const post = sex => context.post({ json: async () => ({ sex }) });
   assert.equal((await post('invalid')).status, 400);
-  const results = await Promise.all([post('Woman'), post('Man')]);
+  const results = await Promise.all([post('Male'), post('Female')]);
   assert.deepEqual(results.map(result => result.status), [200, 409]);
-  assert.equal(saved, 'Woman');
-  assert.equal((await post('Prefer not to say')).status, 409);
+  assert.equal(saved, 'Male');
+  assert.equal((await post('Female')).status, 409);
   session = null;
-  assert.equal((await post('Woman')).status, 401);
+  assert.equal((await post('Male')).status, 401);
 });
 
 test('daily allowance changes day at Philippine midnight and uses conditional atomic upsert', async () => {

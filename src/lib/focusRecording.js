@@ -26,9 +26,7 @@ export async function recordVerifiedFocus(tx, userId, input, now = Date.now()) {
     select: { id: true },
   }) : null;
   const record = await tx.studySession.create({ data: { id, userId, deckId: deck?.id ?? null, duration,
-    score: duration >= settled.plannedMs / 1000 - 2 ? 100 : 0,
-    deviceType: ['pc', 'mobile'].includes(settled.deviceType) ? settled.deviceType : null,
-    createdAt: new Date(now) } });
+    score: duration >= settled.plannedMs / 1000 - 2 ? 100 : 0, createdAt: new Date(now) } });
   telemetry.focusClock.sessions = sessions.map(item => item.id === timerId ? { ...settled, claimedId: id } : item);
   await tx.user.update({ where: { id: userId }, data: { telemetryState: JSON.stringify(telemetry) } });
   return record;

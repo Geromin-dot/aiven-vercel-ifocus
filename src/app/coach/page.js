@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal, mergeReflections } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
+import StudyCycleButtons from '@/components/StudyCycleButtons';
 import LocalSupportOptions from '@/components/LocalSupportOptions';
 import { STUDY_PACING } from '@/lib/reflectionPlan';
 import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
@@ -856,12 +857,7 @@ export default function CoachPage() {
                   </span>
                 </div>
 
-                <div className="reflection-cycle-selection">
-                  <label htmlFor="coach-cycles">Study cycles</label>
-                  <select id="coach-cycles" value={coachCycles} onChange={event => setCoachCycles(Number(event.target.value))}>
-                    {[1, 2, 3, 4, 5].map(count => <option key={count} value={count}>{count} cycles</option>)}
-                  </select>
-                </div>
+                {telemetryDiagnostics.canApply && <StudyCycleButtons value={coachCycles} onChange={setCoachCycles} />}
                 {/* Dynamically Generated Adaptive Coaching Protocols based on BreakGate & Telemetry */}
                 {adaptiveStrategies.map((strat, idx) => (
                   <div 

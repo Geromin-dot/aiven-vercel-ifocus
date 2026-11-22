@@ -118,7 +118,7 @@ export const authOptions = {
         token.status = user.status || "ACTIVE";
         token.statusReason = user.statusReason || null;
         token.verificationStatus = user.verificationStatus ?? 'PENDING';
-        token.genderIdentity = user.genderIdentity ?? null;
+        token.sex = user.sex ?? null;
         token.needsProfileSetup = account?.provider === 'google' && token.role === 'STUDENT' && !user.password;
 
         // Each device keeps its own signed login identity. A new login does not
@@ -141,7 +141,7 @@ export const authOptions = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { id: true, name: true, username: true, password: true, status: true, statusReason: true, role: true, verificationStatus: true, genderIdentity: true }
+            select: { id: true, name: true, username: true, password: true, status: true, statusReason: true, role: true, verificationStatus: true, sex: true }
           });
           if (!dbUser) {
             // User account was permanently purged by Admin! Invalidate JWT token immediately.
@@ -158,7 +158,7 @@ export const authOptions = {
           token.username = dbUser.username;
           token.needsProfileSetup = dbUser.role === 'STUDENT' && dbUser.password === null;
           token.verificationStatus = dbUser.verificationStatus ?? 'PENDING';
-          token.genderIdentity = dbUser.genderIdentity ?? null;
+          token.sex = dbUser.sex ?? null;
           // A previously observed conflict must not stick after live verification succeeds.
           delete token.error;
         } catch (e) {
@@ -186,7 +186,7 @@ export const authOptions = {
         session.user.status = token.status || "ACTIVE";
         session.user.statusReason = token.statusReason || null;
         session.user.verificationStatus = token.verificationStatus ?? null;
-        session.user.genderIdentity = token.genderIdentity ?? null;
+        session.user.sex = token.sex ?? null;
         session.user.needsProfileSetup = token.needsProfileSetup === true;
       }
       return session;

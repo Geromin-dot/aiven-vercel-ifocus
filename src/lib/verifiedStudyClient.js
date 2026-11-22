@@ -1,5 +1,3 @@
-import { browserDeviceType } from './deviceContext';
-
 let checkpointRequest = Promise.resolve();
 
 export function syncTimerCheckpoint(checkpoint) {
@@ -9,7 +7,7 @@ export function syncTimerCheckpoint(checkpoint) {
         const response = await fetch('/api/user/telemetry', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
           signal: AbortSignal.timeout(5000),
-          body: JSON.stringify({ telemetryState: { activeTimerState: { ...checkpoint, deviceType: browserDeviceType() } } }),
+          body: JSON.stringify({ telemetryState: { activeTimerState: checkpoint } }),
         });
         if (response.ok) return;
         if (!(response.status >= 500) || attempt === 1) break;
@@ -52,8 +50,7 @@ export async function saveVerifiedStudySession(payload) {
   const remaining = history.filter(item => item.timerSessionId !== payload.timerSessionId && item.id !== record.id &&
     !(payload.recoveryId && item.recoveryId === payload.recoveryId));
   remaining.push({ id: record.id, timerSessionId: payload.timerSessionId, recoveryId: payload.recoveryId,
-    date: record.createdAt, duration: record.duration / 60, durationSeconds: record.duration, deviceType: record.deviceType,
-    type: 'pomodoro', synced: true });
+    date: record.createdAt, duration: record.duration / 60, durationSeconds: record.duration, type: 'pomodoro', synced: true });
   localStorage.setItem('ifocus_session_history', JSON.stringify(remaining.slice(-200)));
   const historyForStats = remaining.filter(item => item.verification !== 'pending');
   const today = new Date().toDateString();

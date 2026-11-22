@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import IFocusLogo from "@/components/IFocusLogo";
-import GenderIdentityField from '@/components/GenderIdentityField';
+import SexField from '@/components/SexField';
 import { credentialsLogin } from '@/lib/credentialsLogin';
 import { announceAuthChange, clearPrivateCache } from '@/lib/logoutAccount';
 
@@ -32,7 +32,7 @@ function LoginContent() {
   const [regName, setRegName] = useState("");
   const [regUsername, setRegUsername] = useState("");
   const [regYearLevel, setRegYearLevel] = useState("1st Year");
-  const [regGenderIdentity, setRegGenderIdentity] = useState('');
+  const [regSex, setRegSex] = useState('');
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
@@ -67,7 +67,7 @@ function LoginContent() {
     setIsYearDropdownOpen(false);
     if (tab === "register") {
       setRegName("");
-      setRegGenderIdentity('');
+      setRegSex('');
       setRegUsername("");
       setRegYearLevel("1st Year");
       setRegEmail("");
@@ -194,7 +194,7 @@ function LoginContent() {
           yearLevel: cleanYearLevel,
           section: "",
           yearSection: cleanYearLevel,
-          genderIdentity: regGenderIdentity,
+          sex: regSex,
         }),
       });
 
@@ -350,6 +350,7 @@ function LoginContent() {
         .card-ambient-glow {
           position: absolute;
           width: 520px;
+          max-width: 100%;
           height: 520px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(39, 82, 45, 0.09) 0%, rgba(187, 247, 208, 0.14) 40%, transparent 70%);
@@ -917,7 +918,7 @@ function LoginContent() {
                 </div>
               </div>
 
-              <GenderIdentityField id="register-gender" value={regGenderIdentity} onChange={event => setRegGenderIdentity(event.target.value)} />
+              <SexField id="register-sex" value={regSex} onChange={event => setRegSex(event.target.value)} />
 
               {/* Username Field */}
               <div className="form-group">

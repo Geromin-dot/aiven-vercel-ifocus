@@ -19,8 +19,7 @@ export default function AIUsageNotice({ feature }) {
     return () => { active = false; window.removeEventListener('ifocus_ai_usage_updated', load); };
   }, [feature]);
   const limit = feature === 'reflection' ? 10 : 3;
-  return <p className="ai-usage-notice" role="status">
-    {usage ? `${usage.remaining} of ${usage.limit} AI requests remaining today.` : `Daily allowance: ${limit} AI requests.`}
-    {' '}Resets at midnight, Philippine time. Submitted AI requests count toward the allowance.
-  </p>;
+  const label = `${usage?.remaining ?? '–'}/${usage?.limit ?? limit}`;
+  return <span className="ai-usage-notice" role="status" aria-label={`${label} AI requests remaining today`}
+    title="Daily AI requests remaining · resets at midnight, Philippine time">{label}</span>;
 }

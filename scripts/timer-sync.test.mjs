@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const deviceUrl = `data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/deviceContext.js', import.meta.url), 'utf8')).toString('base64')}`;
 const timerSource = await readFile(new URL('../src/lib/timerState.js', import.meta.url), 'utf8');
 const timerUrl = `data:text/javascript;base64,${Buffer.from(timerSource).toString('base64')}`;
 const recoverySource = await readFile(new URL('../src/lib/recoveryState.js', import.meta.url), 'utf8');
@@ -17,7 +16,7 @@ const syncSource = (await readFile(new URL('../src/lib/telemetrySync.js', import
 let moduleNumber = 0;
 
 test('saving waits for timer checkpoints and stops if the checkpoint failed', async () => {
-  const source = (await readFile(new URL('../src/lib/verifiedStudyClient.js', import.meta.url), 'utf8')).replace("'./deviceContext'", JSON.stringify(deviceUrl));
+  const source = await readFile(new URL('../src/lib/verifiedStudyClient.js', import.meta.url), 'utf8');
   const { syncTimerCheckpoint, saveVerifiedStudySession } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const requests = [];
   let finishCheckpoint;
@@ -198,7 +197,6 @@ test('telemetry sync retries a conflict and preserves newer timer decisions over
     .replace(/import \{ prisma \}[^;]+;/, 'const prisma=globalThis.__recoveryTestDb;')
     .replace("'../../../../lib/recoveryState'", JSON.stringify(recoveryUrl))
     .replace("'../../../../lib/reflectionJournal'", JSON.stringify(reflectionJournalUrl))
-    .replace("'@/lib/deviceContext'", JSON.stringify(deviceUrl))
     .replace("'../../../../lib/focusClock'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(await readFile(new URL('../src/lib/focusClock.js', import.meta.url), 'utf8')).toString('base64')}`));
   const {POST}=await import(`data:text/javascript;base64,${Buffer.from(route).toString('base64')}`);
   for(const resolvedTimerSessions of [null, [], ['phone-save']]) {

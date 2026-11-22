@@ -98,6 +98,8 @@ export async function GET(req) {
           yearLevel: true,
           section: true,
           yearSection: true,
+          studyDevice: true,
+          sex: true,
           createdAt: true,
           _count: {
             select: {
@@ -185,6 +187,8 @@ export async function GET(req) {
         statusUpdatedAt: student.statusUpdatedAt || null,
         verificationStatus: student.verificationStatus || "PENDING",
         yearLevel: student.yearLevel || null,
+        studyDevice: student.studyDevice || null,
+        sex: student.sex || null,
         section: student.section || null,
         yearSection: student.yearSection || (student.yearLevel && student.section ? `${student.yearLevel} - ${student.section}` : student.yearLevel || student.section || null),
         createdAt: student.createdAt,

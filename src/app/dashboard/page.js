@@ -3,10 +3,10 @@
 // BreakGateModal is managed globally in GlobalTimer
 
 import AppDialog from '@/components/AppDialog';
-import LocalSupportOptions from '@/components/LocalSupportOptions';
+import CoachSupportDialog from '@/components/CoachSupportDialog';
+import StudyCycleButtons from '@/components/StudyCycleButtons';
 import { TaskEffortGuide } from '@/components/StudyGuides';
 import AIUsageNotice from '@/components/AIUsageNotice';
-import { browserDeviceType } from '@/lib/deviceContext';
 import { TIMER_PRESETS, STUDY_PACING } from '@/lib/reflectionPlan';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import CoachNotice from '@/components/CoachNotice';
@@ -171,7 +171,10 @@ export default function CommandCenterPage() {
         customWorkDuration: wMin * 60,
         customBreakDuration: bMin * 60
       }));
+      const previousTimer = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
       const syncPayload = {
+        updatedAt: Math.max(Date.now(), Number(previousTimer.updatedAt || 0) + 1),
+        targetEndTime: null,
         isRunning: false,
         isFocus: true,
         timeLeft: wMin * 60,
@@ -190,6 +193,24 @@ export default function CommandCenterPage() {
       localStorage.setItem('ifocus_timer_state', JSON.stringify(syncPayload));
       window.dispatchEvent(new CustomEvent('ifocus_timer_sync', { detail: syncPayload }));
     } catch (e) {}
+  };
+
+  const changeSuggestedCycles = count => {
+    if (!aiFeedback || aiFeedback.supportOnly) return;
+    const next = { ...aiFeedback, sessions: count };
+    setReflectionCycles(count);
+    setAiFeedback(next);
+    applyEntryAiRhythm(next);
+    const { reflectionText, ...savedReply } = next;
+    const history = pastEntries.map(entry => entry.aiReply?.planId === next.planId
+      ? { ...entry, aiReply: savedReply } : entry);
+    try {
+      saveHistory(history, {
+        activeTimerState: JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}'),
+        customTimer: JSON.parse(localStorage.getItem('ifocus_custom_timer') || '{}'),
+        ...setAiTimerAdjustment(savedReply),
+      });
+    } catch { /* Timer remains usable when storage is unavailable. */ }
   };
 
   // Dynamic Focus Quotes
@@ -1311,7 +1332,7 @@ export default function CommandCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         telemetryState: {
-          activeTimerState: { ...nextState, deviceType: browserDeviceType() },
+          activeTimerState: nextState,
           updatedAt: new Date().toISOString()
         }
       })
@@ -1416,7 +1437,7 @@ export default function CommandCenterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telemetryState: {
-            activeTimerState: { ...nextState, deviceType: browserDeviceType() },
+            activeTimerState: nextState,
             updatedAt: new Date().toISOString()
           },
           timerPreferences: {
@@ -1515,7 +1536,7 @@ export default function CommandCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         telemetryState: {
-          activeTimerState: { ...nextState, deviceType: browserDeviceType() },
+          activeTimerState: nextState,
           customTimer: {
             customWorkTime,
             customBreakTime,
@@ -1995,7 +2016,7 @@ export default function CommandCenterPage() {
       const timerLabel = state === 'Stressed' ? 'Gentle Focus (Stressed)'
         : state === 'Distracted' ? 'Strict Pomodoro (Distracted)'
         : state === 'Motivated' ? 'Flow State (Motivated)' : 'Balanced Cadence (Engaged)';
-      const aiReply = { title: timerLabel, message: data.actionPlan, state,
+      const aiReply = { planId: crypto.randomUUID(), title: timerLabel, message: data.actionPlan, state,
         rhythm: `${workMinutes}m Focus / ${breakMinutes}m Rest`, sessions: targetSessions,
         reorderedCount: orderChanged ? activeTasks.length : 0, responseSource: data.responseSource, reflectionText: text,
         statusNote: data.responseSource === 'fallback' ? data.fallbackReason === 'invalid_plan'
@@ -2017,7 +2038,10 @@ export default function CommandCenterPage() {
       const timestamp = new Date().toISOString();
       const customTimer = { customWorkTime: { min: workMinutes, sec: 0 }, customBreakTime: { min: breakMinutes, sec: 0 },
         customSessions: targetSessions, customWorkDuration: workMinutes * 60, customBreakDuration: breakMinutes * 60 };
-      const timer = { isRunning: false, isFocus: true, timeLeft: workMinutes * 60, totalTime: workMinutes * 60,
+      let previousTimerVersion = 0;
+      try { previousTimerVersion = Number(JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}').updatedAt || 0); } catch {}
+      const timer = { updatedAt: Math.max(Date.now(), previousTimerVersion + 1), targetEndTime: null,
+        isRunning: false, isFocus: true, timeLeft: workMinutes * 60, totalTime: workMinutes * 60,
         timerPreset: 'Custom', customWorkDuration: workMinutes * 60, customBreakDuration: breakMinutes * 60,
         customSessions: targetSessions, sessionCount: 1, presencePaused: false, lastPresenceElapsed: 0,
         lastPresenceRemaining: workMinutes * 60, lastPresenceCheckElapsed: 0, breakGatePending: false };
@@ -3085,9 +3109,8 @@ export default function CommandCenterPage() {
               <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Quick Reflection</h2>
               <HelpButton topic="reflection" title="Quick Reflection & AI Coach Tutorial" />
             </div>
-            <CoachDisclaimer />
+            <div className="reflection-header-actions"><AIUsageNotice feature="reflection" /><CoachDisclaimer /></div>
           </div>
-          <AIUsageNotice feature="reflection" />
           <p className={aiAvailable ? 'subtitle' : 'account-verification-warning'} style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>
             {aiAvailable ? 'Clear your mind. AI coach will adapt your plan.' : AI_VERIFICATION_MESSAGE}
           </p>
@@ -3151,14 +3174,6 @@ export default function CommandCenterPage() {
             }}
           ></textarea>
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
-          <div className="reflection-cycle-selection">
-            <label htmlFor="reflection-cycles">Study cycles</label>
-            <select id="reflection-cycles" value={reflectionCycles} onChange={event => setReflectionCycles(Number(event.target.value))} disabled={isSubmittingReflection}>
-              {[1, 2, 3, 4, 5].map(count => <option key={count} value={count}>{count} {count === 1 ? 'cycle' : 'cycles'}</option>)}
-            </select>
-            <small>Choose what fits your time. You can adjust the suggested timer.</small>
-          </div>
-          
           {/* Submit Button */}
           <button 
             className="btn-primary" 
@@ -3334,23 +3349,7 @@ export default function CommandCenterPage() {
       )}
 
       {/* AI Coach Adaptive Adjustment Modal (Modern Cognitive Design) */}
-      {aiFeedback?.supportOnly && (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(15, 23, 42, 0.72)' }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="safety-support-title" style={{ background: '#fff', borderRadius: '20px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto' }}>
-            <h2 id="safety-support-title" style={{ fontSize: '1.3rem', marginBottom: '1rem' }}>{aiFeedback.title}</h2>
-            <LocalSupportOptions />
-            <p style={{ lineHeight: 1.65 }}>{aiFeedback.message}</p>
-            {aiFeedback.contacts?.length > 0 && (
-              <div role="group" aria-label="Philippines support contacts" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
-                {aiFeedback.contacts.map(contact => (
-                  <a key={contact.href} className="btn-secondary" href={contact.href} style={{ whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.5 }}>{contact.label}</a>
-                ))}
-              </div>
-            )}
-            <button type="button" className="btn-secondary" onClick={() => setAiFeedback(null)} style={{ marginTop: '1rem' }}>Close</button>
-          </div>
-        </div>
-      )}
+      {aiFeedback?.supportOnly && <CoachSupportDialog feedback={aiFeedback} onClose={() => setAiFeedback(null)} />}
       {aiFeedback && !aiFeedback.supportOnly && (
         <div 
           className="modal-overlay" 
@@ -3493,6 +3492,7 @@ export default function CommandCenterPage() {
               </div>
             </div>
 
+            <StudyCycleButtons value={aiFeedback.sessions || 2} onChange={changeSuggestedCycles} />
             {/* Coach Action Plan Box */}
             <div className={coachStyles.adaptationGuidance} style={{
               background: '#fafcfa',

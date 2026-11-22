@@ -22,7 +22,6 @@ export function advanceFocusClock(clock = {}, state, prefs = {}, loginId, now = 
     const total = Number(state.totalTime);
     if (!Number.isInteger(total) || total <= 0 || total > 43200) return { version, sessions };
     entry = { id: state.timerSessionId, loginId, plannedMs: total * 1000, elapsedMs: 0,
-      deviceType: ['pc', 'mobile'].includes(state.deviceType) ? state.deviceType : 'unknown',
       intervalMs: prefs.activePresenceEnabled === false ? 0 : Math.max(60, Math.min(43200, Number(prefs.activePresenceInterval) * 60 || 300)) * 1000,
       presenceBaseMs: 0, runningSince: null };
     sessions.push(entry);

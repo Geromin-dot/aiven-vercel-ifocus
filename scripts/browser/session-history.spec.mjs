@@ -98,7 +98,7 @@ test('Google students must complete their existing account before opening the da
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/complete-profile$/);
   await page.getByLabel('Full name').fill('History Student');
-  await page.getByLabel('Gender identity', { exact: true }).selectOption('Prefer not to say');
+  await page.getByRole('radio', { name: 'Male', exact: true }).check();
   await expect(page.getByLabel('Year level').locator('option')).toHaveText([
     'Select your year level', '1st Year', '2nd Year', '3rd Year', '4th Year',
   ]);
@@ -116,7 +116,7 @@ test('Google students must complete their existing account before opening the da
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Tasks List' })).toBeVisible();
   expect(submitted).toEqual({
-    name: 'History Student', yearLevel: '2nd Year', username: 'history-student', password: 'chosen-password', genderIdentity: 'Prefer not to say',
+    name: 'History Student', yearLevel: '2nd Year', username: 'history-student', password: 'chosen-password', sex: 'Male',
   });
 });
 

@@ -1,3 +1,6 @@
+.adaptationModal { clip-path: inset(0 round 20px); scrollbar-gutter: stable; }
+.adaptationModal > * { flex-shrink: 0; }
+.adaptationGuidance { max-height: none !important; overflow: visible !important; }
 .telemetryCard { min-width: 0; }
 .telemetryContent { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .telemetryContent > * { flex-shrink: 0; }

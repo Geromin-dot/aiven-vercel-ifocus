@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { logoutAccount } from '@/lib/logoutAccount';
 import { useRouter } from 'next/navigation';
+import { STUDY_DEVICES, isStudyDevice } from '@/lib/studyDevice';
 import HelpButton from '@/components/HelpButton';
 import TimerNotificationSettings from '@/components/TimerNotificationSettings';
 import { PwaInstallControl } from '@/components/PwaRegistrar';
@@ -131,6 +132,10 @@ export default function SettingsPage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [yearLevel, setYearLevel] = useState('');
+  const [studyDevice, setStudyDevice] = useState('');
+  const [savedStudyDevice, setSavedStudyDevice] = useState('');
+  const [savingStudyDevice, setSavingStudyDevice] = useState(false);
+  const [deviceMessage, setDeviceMessage] = useState('');
   const [verificationStatus, setVerificationStatus] = useState(null);
   const verification = accountVerification[verificationStatus];
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -323,6 +328,8 @@ export default function SettingsPage() {
             setUsername(data.user.username || '');
             setEmail(data.user.email || '');
             setYearLevel(data.user.yearLevel || '');
+            setStudyDevice(data.user.studyDevice || '');
+            setSavedStudyDevice(data.user.studyDevice || '');
             setVerificationStatus(data.user.verificationStatus ?? 'PENDING');
             setInitialProfile({ name: data.user.name || '', username: data.user.username || '' });
             setCreatedAt(data.user.createdAt);
@@ -547,7 +554,7 @@ export default function SettingsPage() {
     Boolean(initialProfile.name && name.trim() !== initialProfile.name.trim()) ||
     Boolean(initialProfile.username && username.trim() !== initialProfile.username.trim());
 
-  const hasUnsavedChanges = hasFocusChanges || hasSoundChanges || hasProfileChanges;
+  const hasUnsavedChanges = hasFocusChanges || hasSoundChanges || hasProfileChanges || studyDevice !== savedStudyDevice;
 
   // Intercept Navigation Attempts & Browser Unload
   useEffect(() => {
@@ -707,6 +714,23 @@ export default function SettingsPage() {
 
     setTempAvatarUrl(getDicebearUrl(chosenStyle, chosenSeed, chosenBg));
   };
+
+  async function saveStudyDevice(event) {
+    event.preventDefault();
+    if (savingStudyDevice || !isStudyDevice(studyDevice)) return;
+    setSavingStudyDevice(true);
+    setDeviceMessage('');
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyDevice }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not save your device preference.');
+      setSavedStudyDevice(studyDevice);
+      setDeviceMessage('Device preference saved.');
+    } catch (error) { setDeviceMessage(error.message); }
+    finally { setSavingStudyDevice(false); }
+  }
 
   // Unified Master Save Preferences Handler (Saves All Preferences Across Tabs)
   const handleSavePreferences = async (e) => {
@@ -1978,10 +2002,28 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              <form className="study-device-setting" onSubmit={saveStudyDevice}>
+                <fieldset>
+                  <legend>What do you use for iFocus?</legend>
+                  <div className="profile-choice-options">
+                    {STUDY_DEVICES.map(option => <label key={option.value}>
+                      <input type="radio" name="studyDevice" value={option.value} checked={studyDevice === option.value}
+                        onChange={event => { setStudyDevice(event.target.value); setDeviceMessage(''); }} required />
+                      <span>{option.label}</span>
+                    </label>)}
+                  </div>
+                </fieldset>
+                <div className="study-device-setting-footer"><small>You can change this anytime.</small>
+                  <button className="btn-secondary small" type="submit" disabled={savingStudyDevice || !studyDevice || studyDevice === savedStudyDevice}>
+                    {savingStudyDevice ? 'Saving…' : 'Save device'}
+                  </button>
+                </div>
+                {deviceMessage && <p role="status">{deviceMessage}</p>}
+              </form>
               {/* Account Details */}
               <div className="settings-input-group" style={{ marginBottom: '0.75rem' }}>
-                <label htmlFor="profile-gender-identity" className="settings-label">Gender identity</label>
-                <input id="profile-gender-identity" className="settings-input" value={session?.user?.genderIdentity || 'Not selected yet'} readOnly />
+                <label htmlFor="profile-sex" className="settings-label">Sex</label>
+                <input id="profile-sex" className="settings-input" value={session?.user?.sex || 'Not selected yet'} readOnly />
                 <small style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Saved once during profile completion and cannot be changed.</small>
               </div>
               <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
