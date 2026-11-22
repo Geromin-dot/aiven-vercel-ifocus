@@ -99,6 +99,35 @@ test('the admin directory filters cards and promotes only after in-app confirmat
   expect(mobileCards[1]).toBeGreaterThan(mobileCards[0]);
 });
 
+test('college support moves into the wide disclaimer with expandable research details', async ({ page, context }, testInfo) => {
+  test.setTimeout(60_000);
+  await accountFixture(context);
+  for (const [width, height] of [[1440, 900], [1280, 800], [390, 844], [320, 640]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/coach');
+    await expect(page.getByRole('heading', { name: 'Your AI Study Coach' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Support at your college' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Disclaimer for AI Coach' }).click();
+    const disclaimer = page.getByRole('dialog', { name: 'About AI Coach' });
+    await expect(disclaimer.getByText('Guidance Counselor', { exact: true })).toBeVisible();
+    await expect(disclaimer.getByText('College Dean', { exact: true })).toBeVisible();
+    await expect(disclaimer).toHaveCSS('border-radius', '22px');
+    const content = disclaimer.locator('.coach-disclaimer-content');
+    expect(await content.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    if (width >= 1280) {
+      expect((await disclaimer.boundingBox()).width).toBeCloseTo(860, 0);
+      expect(await content.evaluate(element => element.scrollHeight <= element.clientHeight + 2)).toBe(true);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`disclaimer-${width}.png`) });
+    await disclaimer.getByRole('button', { name: 'See more', exact: true }).click();
+    await expect(disclaimer.getByRole('link', { name: 'Agarwal et al. (2021)' })).toBeVisible();
+    await expect(disclaimer.getByRole('button', { name: 'See less', exact: true })).toHaveAttribute('aria-expanded', 'true');
+    await page.screenshot({ path: testInfo.outputPath(`research-${width}.png`) });
+    await disclaimer.getByRole('button', { name: 'Got it' }).click();
+    await expect(disclaimer).toHaveCount(0);
+  }
+});
+
 test('the Coach disclaimer opens as a dialog and preserves the draft reflection', async ({ page, context }) => {
   await accountFixture(context);
   await page.goto('/dashboard');
@@ -157,6 +186,8 @@ test('Coach and Feature Guide explain uncertainty and pacing applies directly', 
   const disclaimer = page.getByRole('dialog', { name: 'About AI Coach' });
   await expect(disclaimer).toContainText('dismiss it if it does not fit your needs');
   const habits = disclaimer.getByRole('region', { name: 'Research-backed study habits' });
+  await expect(habits.getByRole('link', { name: 'Agarwal et al. (2021)' })).toBeHidden();
+  await habits.getByRole('button', { name: 'See more', exact: true }).click();
   await expect(habits.getByRole('link', { name: 'Agarwal et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-021-09595-9');
   await expect(habits.getByRole('link', { name: 'Latimier et al. (2021)' })).toHaveAttribute('href', 'https://doi.org/10.1007/s10648-020-09572-8');
   await expect(habits.getByRole('link', { name: 'Ginns et al. (2023)' })).toHaveAttribute('href', 'https://doi.org/10.1080/20590776.2023.2225700');

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import styles from './AppDialog.module.css';
 
-export default function AppDialog({ titleId, onDismiss, children }) {
+export default function AppDialog({ titleId, onDismiss, children, className = '' }) {
   const dialogRef = useRef(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -18,7 +18,7 @@ export default function AppDialog({ titleId, onDismiss, children }) {
   }, []);
 
   return (
-    <dialog ref={dialogRef} className={styles.dialog} aria-labelledby={titleId}
+    <dialog ref={dialogRef} className={`${styles.dialog} ${className}`} aria-labelledby={titleId}
       onCancel={event => { event.preventDefault(); event.stopPropagation(); onDismiss(); }}>
       {children}
     </dialog>

@@ -7,7 +7,6 @@ import HelpButton from '@/components/HelpButton';
 import { readReflectionJournal, mergeReflections } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import StudyCycleButtons from '@/components/StudyCycleButtons';
-import LocalSupportOptions from '@/components/LocalSupportOptions';
 import { STUDY_PACING } from '@/lib/reflectionPlan';
 import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
 import { dismissBreakGateGuidance, getBreakGateGuidance, isBreakGateGuidanceDismissed } from '@/lib/coachResilience';
@@ -1188,7 +1187,6 @@ export default function CoachPage() {
         </div>
 
       </div>
-      <LocalSupportOptions />
 
     </div>
   );

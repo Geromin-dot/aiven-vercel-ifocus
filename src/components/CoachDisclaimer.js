@@ -2,31 +2,44 @@
 
 import { useId, useState } from 'react';
 import AppDialog from './AppDialog';
+import LocalSupportOptions from './LocalSupportOptions';
 
 export default function CoachDisclaimer() {
   const [open, setOpen] = useState(false);
+  const [showHabits, setShowHabits] = useState(false);
   const titleId = useId();
   const habitsId = useId();
+  const habitsContentId = useId();
   return (
     <>
-      <button type="button" className="coach-disclaimer-button" aria-label="Disclaimer for AI Coach" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <button type="button" className="coach-disclaimer-button" aria-label="Disclaimer for AI Coach" aria-haspopup="dialog" onClick={() => { setShowHabits(false); setOpen(true); }}>
         Disclaimer
       </button>
       {open && (
-        <AppDialog titleId={titleId} onDismiss={() => setOpen(false)}>
+        <AppDialog titleId={titleId} onDismiss={() => setOpen(false)} className="coach-disclaimer-dialog">
+          <div className="coach-disclaimer-content">
           <h2 id={titleId}>About AI Coach</h2>
           <p><strong>Your AI study buddy.</strong> AI Coach can help you plan a study session, break down school tasks, and try techniques such as self-testing and spaced review.</p>
           <p>AI estimates and suggestions can be incomplete or mistaken. Review each suggestion and dismiss it if it does not fit your needs. You decide which strategies to apply.</p>
           <p><strong>For health and well-being.</strong> Rely on qualified healthcare or mental health professionals for advice, diagnosis, treatment, and ongoing care. If you need urgent help, contact your local emergency services.</p>
+          <LocalSupportOptions />
           <section className="coach-disclaimer-habits" aria-labelledby={habitsId}>
-            <h3 id={habitsId}>Research-backed study habits</h3>
-            <ul>
+            <div className="coach-disclaimer-habits-heading">
+              <h3 id={habitsId}>Research-backed study habits</h3>
+              <button type="button" aria-expanded={showHabits} aria-controls={habitsContentId} onClick={() => setShowHabits(value => !value)}>
+                {showHabits ? 'See less' : 'See more'}
+              </button>
+            </div>
+            <div id={habitsContentId} hidden={!showHabits}>
+              <ul>
               <li><strong>Practice retrieval.</strong> Answer a flashcard or practice question from memory, then check your answer. <a href="https://doi.org/10.1007/s10648-021-09595-9" target="_blank" rel="noopener noreferrer">Agarwal et al. (2021)</a></li>
               <li><strong>Space your review.</strong> Revisit the material on different days and spend extra time on items you missed. <a href="https://doi.org/10.1007/s10648-020-09572-8" target="_blank" rel="noopener noreferrer">Latimier et al. (2021)</a></li>
               <li><strong>Take a short break before focusing.</strong> A study tested a five-minute break after a demanding task and before a lesson. Try this option when you need a pause. <a href="https://doi.org/10.1080/20590776.2023.2225700" target="_blank" rel="noopener noreferrer">Ginns et al. (2023)</a></li>
-            </ul>
+              </ul>
+            </div>
           </section>
           <footer><button type="button" className="btn-primary" onClick={() => setOpen(false)}>Got it</button></footer>
+          </div>
         </AppDialog>
       )}
     </>
