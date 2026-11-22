@@ -235,7 +235,7 @@ function reflectionStudyGoal(text, tasks) {
 export function stressContextFeedback(rawText, modelContext, taskPreference) {
   const text = normalize(rawText);
   const personal = /\b(?:personal (?:issues?|problems?|stress)|stress(?:ed)? (?:ako )?(?:at|sa) (?:home|bahay|work|trabaho)|non academic|not (?:about|because of|related to) (?:school|studying|academics)|(?:problem|problema|issues?|conflict|fight) (?:at|with|sa) (?:home|bahay|pamilya|family|work|trabaho)|(?:because of|due to|dahil sa) (?:my |our )?(?:family|pamilya|trabaho|work|relationship|money|pera))\b/.test(text);
-  const study = /\b(?:school|acad(?:emic|emics|s)?|exam(?:s)?|quiz(?:zes)?|assignment(?:s)?|coursework|homework|study|studying|review|magreview|mag aral|tasks?|test(?:s)?)\b/.test(text);
+  const study = /\b(?:school|schoolworks?|acad(?:emic|emics|s)?|exam(?:s)?|quiz(?:zes)?|assignment(?:s)?|coursework|homeworks?|takdang aralin|araling bahay|paaralan|esku?wela|study|studying|review|magreview|mag aral|tasks?|test(?:s)?)\b/.test(text);
   const reportsStress = /\bstress(?:ed)?\b/.test(text);
   if ((reportsStress && personal) || modelContext === 'personal') return { stressContext: 'personal',
     message: 'That sounds hard. It’s okay to step away from studying for now. If it would help, take a break or reach out to someone you trust.' };

@@ -12,6 +12,24 @@ const coachResponse = { state: 'Engaged', orderedIds: ['Science', 'Fil', 'IT Mod
 const expected = ['Science', 'Fil', 'IT Module 10', 'Archi', 'Medtech'];
 const anatomyReflection = 'My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.';
 
+test('reported homeworks reflection receives a Stressed plan without asking for school context again', async ({ page, context }) => {
+  await accountFixture(context, true, { tasks: [
+    { id: 'math', text: 'Math Calculations', priority: 'high' },
+    { id: 'science', text: 'Science Project about Plants', priority: 'medium' },
+    { id: 'filipino', text: 'Filipino Language Learning', priority: 'low' },
+  ], coachResponse: { state: 'Stressed', workMinutes: 12, breakMinutes: 3, targetSessions: 2,
+    orderedIds: ['filipino', 'science', 'math'],
+    actionPlan: 'Start with Filipino Language Learning and finish one manageable part of your homework.' } });
+  await page.goto('/dashboard');
+  await page.locator('.journal-textarea').fill('I am stressed due to my homeworks');
+  await page.getByRole('button', { name: 'Submit & Analyze', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'AI Coach adaptation' });
+  await expect(dialog).toContainText('Gentle Focus (Stressed)');
+  await expect(dialog).toContainText('12m Focus / 3m Rest');
+  await expect(page.getByRole('dialog', { name: 'AI Coach check-in' })).toHaveCount(0);
+  await expect(page.locator('.todo-text')).toHaveText(['Filipino Language Learning', 'Science Project about Plants', 'Math Calculations']);
+});
+
 test('nervous easier-first anatomy reflection keeps personalized AI advice and the real task order', async ({ page, context }) => {
   const anatomyTasks = [{ id: 'practice', text: 'Answer cardiovascular practice questions', priority: 'high' },
     { id: 'terms', text: 'Review anatomy terminology', priority: 'low' },

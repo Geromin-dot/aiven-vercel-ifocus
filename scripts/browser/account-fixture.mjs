@@ -1,6 +1,11 @@
 import { encode } from 'next-auth/jwt';
 
 export async function accountFixture(context, initiallySignedIn = true, options = {}) {
+  if (!options.devicePrompt) await context.addInitScript(() => {
+    if (location.pathname !== '/login') {
+      localStorage.setItem('ifocus_device_prompt_session_history-student', 'history-login');
+    }
+  });
   let authenticated = initiallySignedIn;
   let heldSession = null;
   let tasks = structuredClone(options.tasks || []);
@@ -17,7 +22,7 @@ export async function accountFixture(context, initiallySignedIn = true, options 
     let data = {};
     if (path === '/api/auth/session') {
       if (heldSession) await heldSession;
-      data = authenticated ? { user: { id: 'history-student', sessionId: 'history-login', name: 'History Student', role: 'STUDENT', status: 'ACTIVE', sex: options.missingSex ? null : 'Male', verificationStatus: options.verificationStatus ?? 'VERIFIED', needsProfileSetup: options.needsProfileSetup === true }, expires: '2099-01-01T00:00:00Z' } : null;
+      data = authenticated ? { user: { id: 'history-student', sessionId: options.loginId || 'history-login', name: 'History Student', role: 'STUDENT', status: 'ACTIVE', sex: options.missingSex ? null : 'Male', verificationStatus: options.verificationStatus ?? 'VERIFIED', needsProfileSetup: options.needsProfileSetup === true }, expires: '2099-01-01T00:00:00Z' } : null;
     } else if (path === '/api/auth/csrf') data = { csrfToken: 'test-csrf' };
     else if (path === '/api/auth/signout') {
       authenticated = false;

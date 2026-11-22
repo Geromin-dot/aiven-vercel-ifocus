@@ -2,6 +2,48 @@ import { test, expect } from '@playwright/test';
 import { encode } from 'next-auth/jwt';
 import { accountFixture } from './account-fixture.mjs';
 
+test('device selection is saved once per login, retries failures, and returns for the next login', async ({ page, context }, testInfo) => {
+  const options = { devicePrompt: true };
+  await accountFixture(context, true, options);
+  let failSave = true;
+  let selected = null;
+  await context.route('**/api/user/profile', route => {
+    if (route.request().method() === 'PUT') {
+      if (failSave) return route.fulfill({ status: 503, json: { error: 'Could not save your device. Please try again.' } });
+      selected = route.request().postDataJSON().studyDevice;
+    }
+    return route.fulfill({ json: { user: { name: 'History Student', username: 'history', studyDevice: selected }, stats: {} } });
+  });
+  await page.goto('/dashboard');
+  const dialog = page.getByRole('dialog', { name: 'What device are you using right now?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('radio')).toHaveCount(2);
+  await dialog.getByRole('radio', { name: 'Mobile', exact: true }).check();
+  await page.setViewportSize({ width: 390, height: 740 });
+  await page.screenshot({ path: testInfo.outputPath('device-selection-phone.png') });
+  await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Could not save');
+  expect(await page.evaluate(() => localStorage.getItem('ifocus_device_prompt_session_history-student'))).toBe(null);
+  failSave = false;
+  await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(selected).toBe('mobile');
+  await page.reload();
+  await expect(page.locator('.journal-textarea')).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await page.goto('/settings');
+  await page.getByText('Privacy & Security', { exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Mobile', exact: true })).toBeChecked();
+  await expect(dialog).toHaveCount(0);
+  options.loginId = 'history-next-login';
+  await page.goto('/dashboard');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('radio', { name: 'PC/Desktop', exact: true }).check();
+  await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(selected).toBe('pc');
+});
+
 test('existing student selects Male or Female once and sees Sex in Settings', async ({ page, context }) => {
   const options = { missingSex: true };
   await accountFixture(context, true, options);
@@ -132,9 +174,9 @@ test('admin directory displays the student device preference', async ({ page, co
     return route.fulfill({ json: {} });
   });
   await page.goto('/admin');
-  await expect(page.getByText('Device: Both', { exact: true })).toBeVisible();
+  await expect(page.getByText('Used iFocus recently on: Both', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Inspect', exact: true }).click();
-  await expect(page.getByText('Uses iFocus on:', { exact: true })).toBeVisible();
+  await expect(page.getByText('Used iFocus recently on:', { exact: true })).toBeVisible();
 });
 
 test('corrected controls fit desktop tablet and phone screens', async ({ page, context }, testInfo) => {

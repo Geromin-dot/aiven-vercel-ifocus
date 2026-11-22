@@ -15,13 +15,14 @@ test('logout clears cached profiles, reflections, and study data while retaining
   const { clearPrivateCache } = await load();
   const storage = storageWith({ ifocus_user_name: 'Private Name', ifocus_journal_history_Student: 'private reflection',
     ifocus_telemetry_insight_Student: 'private insight', ifocus_session_history: 'private history',
-    ifocus_timer_state: 'private session', ifocus_timer_preferences: 'preferences', unrelated: 'keep' });
+    ifocus_timer_state: 'private session', ifocus_device_prompt_session_student: 'login-id', ifocus_timer_preferences: 'preferences', unrelated: 'keep' });
   clearPrivateCache(storage);
   assert.equal(storage.getItem('ifocus_user_name'), null);
   assert.equal(storage.getItem('ifocus_journal_history_Student'), null);
   assert.equal(storage.getItem('ifocus_telemetry_insight_Student'), null);
   assert.equal(storage.getItem('ifocus_session_history'), null);
   assert.equal(storage.getItem('ifocus_timer_state'), null);
+  assert.equal(storage.getItem('ifocus_device_prompt_session_student'), null);
   assert.equal(storage.getItem('ifocus_timer_preferences'), 'preferences');
   assert.equal(storage.getItem('unrelated'), 'keep');
 });

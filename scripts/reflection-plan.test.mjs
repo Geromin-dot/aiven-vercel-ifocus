@@ -9,6 +9,23 @@ const tasks = [
   { id: 'medium', text: 'Read biology notes', priority: 'Medium' },
 ];
 
+test('homeworks and equivalent schoolwork descriptions receive academic stress guidance, not repeated clarification', () => {
+  for (const text of ['I am stressed due to my homeworks', 'I am stressed about my homework',
+    'I am stressed because of my schoolworks', 'Stressed ako sa takdang aralin',
+    'Stressed ako sa araling bahay', 'Stressed ako sa mga gawain sa paaralan']) {
+    const fallback = generateCognitiveFallback(text, tasks);
+    assert.equal(fallback.stressContext, undefined, text);
+    assert.equal(fallback.state, 'Stressed', text);
+    assert.equal(fallback.workMinutes, 12, text);
+    const normalized = normalizeReflectionPlan({ state: 'Stressed', orderedIds: ['easy', 'medium', 'hard'],
+      workMinutes: 12, breakMinutes: 3, targetSessions: 2,
+      actionPlan: 'Start with Review anatomy terms and choose one small step for your homework.' }, text, tasks);
+    assert.equal(normalized.responseSource, 'ai', text);
+    assert.equal(normalized.stressContext, undefined, text);
+    assert.equal(normalizeReflectionPlan({ stressContext: 'clarify' }, text, tasks).state, 'Stressed', text);
+  }
+});
+
 const anatomyReflection = 'My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.';
 const anatomyTasks = [
   { id: 'practice', text: 'Answer cardiovascular practice questions', priority: 'High' },

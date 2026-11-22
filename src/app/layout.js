@@ -14,6 +14,7 @@ import PwaRegistrar from "@/components/PwaRegistrar";
 import BackgroundPushSync from "@/components/BackgroundPushSync";
 import ProtectedSessionBoundary from '@/components/ProtectedSessionBoundary';
 import SexNotice from '@/components/SexNotice';
+import StudentDevicePrompt from '@/components/StudentDevicePrompt';
 
 export const metadata = {
   title: "iFocus | Smart Flash Cards",
@@ -68,6 +69,7 @@ export default function RootLayout({ children }) {
               </main>
             </div>
             <GlobalTimer />
+            <StudentDevicePrompt />
             <BackgroundPushSync />
             <PwaRegistrar />
           </ProtectedSessionBoundary>

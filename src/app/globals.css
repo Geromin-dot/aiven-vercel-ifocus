@@ -99,6 +99,10 @@ dialog.coach-disclaimer-dialog { width: min(860px, calc(100% - 32px)); max-width
 .coach-disclaimer-habits-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .coach-disclaimer-habits-heading button { flex-shrink: 0; border: 1px solid #d6e2d1; border-radius: 8px; background: #fff; color: #27522d; min-height: 36px; padding: 6px 12px; font: inherit; font-size: 0.78rem; cursor: pointer; }
 .coach-disclaimer-habits li + li { margin-top: 0.6rem; }
+dialog.student-device-dialog { width: min(480px, calc(100% - 32px)); border-radius: 22px; }
+.student-device-dialog fieldset { border: 0; min-width: 0; margin: 0; padding: 0; }
+.student-device-dialog > p { font-size: 0.85rem; color: #607462; }
+.student-device-dialog footer button { margin: 0; min-height: 42px; padding: 0.6rem 1.25rem; font-size: 0.85rem; }
 @media (max-width: 600px) {
   .coach-disclaimer-content { padding: 16px; }
   .coach-disclaimer-habits-heading h3 { font-size: 0.85rem; }

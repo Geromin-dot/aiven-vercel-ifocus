@@ -18,6 +18,18 @@ function endpoint(callGemini, session = { user: { id: 'student', verificationSta
 }
 const tasks = [{ id: 'a', text: 'Review anatomy', priority: 'Low' }, { id: 'b', text: 'Solve physiology', priority: 'High' }];
 
+test('homeworks is treated as academic context through the Coach route and its offline fallback', async () => {
+  const text = 'I am stressed due to my homeworks';
+  const post = endpoint(async () => ({ state: 'Stressed', orderedIds: ['a', 'b'], workMinutes: 12, breakMinutes: 3,
+    targetSessions: 2, actionPlan: 'Start with Review anatomy and choose one manageable homework question.' }));
+  const result = await post({ text, tasks });
+  assert.equal(result.data.state, 'Stressed');
+  assert.equal(result.data.stressContext, undefined);
+  assert.equal(result.data.responseSource, 'ai');
+  const offline = endpoint(async () => { throw new Error('Synthetic provider outage'); });
+  assert.equal((await offline({ text, tasks })).data.state, 'Stressed');
+});
+
 test('exhausted daily reflection allowance blocks both providers with an actionable 429', async () => {
   const post = endpoint(() => assert.fail('must not call Gemini'), undefined, route, {
     env: { OPENAI_API_KEY: 'test-key' }, fetch: () => assert.fail('must not call OpenAI'),
