@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import bcrypt from "bcryptjs";
+import { isGenderIdentity } from '@/lib/genderIdentity';
 
 export async function POST(req) {
   try {
-    const { name, username, email, password, yearLevel, section, yearSection } = await req.json();
+    const { name, username, email, password, yearLevel, section, yearSection, genderIdentity } = await req.json();
+
+    if (!isGenderIdentity(genderIdentity)) {
+      return NextResponse.json({ message: 'Please select your gender identity.' }, { status: 400 });
+    }
 
     if (!email || !password || !username) {
       return NextResponse.json(
@@ -85,6 +90,7 @@ export async function POST(req) {
         yearLevel: cleanYearLevel,
         section: cleanSection,
         yearSection: cleanYearSection,
+        genderIdentity,
       },
     });
 

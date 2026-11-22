@@ -7,8 +7,8 @@ const tasks = [
   { id: 'medtech', text: 'Medtech', priority: 'low' },
 ];
 const coachResponse = { state: 'Engaged', orderedIds: ['Science', 'Fil', 'IT Module 10', 'Archi', 'Medtech'],
-  targetSessions: 4, workMinutes: 25, breakMinutes: 5, responseSource: 'ai',
-  actionPlan: 'Start with Science and Fil because you asked for medium tasks first. Use a concrete study goal before tackling the higher-priority tasks. Try 25-minute blocks with 5-minute breaks.' };
+  targetSessions: 2, workMinutes: 35, breakMinutes: 10, responseSource: 'ai',
+  actionPlan: 'Start with Science and Fil because you asked for medium tasks first. Use a concrete study goal before tackling the higher-priority tasks. Try 35-minute blocks with 10-minute breaks.' };
 const expected = ['Science', 'Fil', 'IT Module 10', 'Archi', 'Medtech'];
 const anatomyReflection = 'My anatomy quiz is tomorrow. I struggle most with the cardiovascular system, while the terminology review feels easier. I feel nervous and would like to start with the easier task before tackling practice questions.';
 
@@ -18,7 +18,7 @@ test('nervous easier-first anatomy reflection keeps personalized AI advice and t
     { id: 'cardio', text: 'Review the cardiovascular system', priority: 'medium' }];
   const actionPlan = 'You are anxious about your anatomy quiz tomorrow. Start with Review anatomy terminology, then tackle cardiovascular practice questions when ready.';
   const account = await accountFixture(context, true, { tasks: anatomyTasks, coachResponse: {
-    state: 'Stressed', workMinutes: 15, breakMinutes: 5, targetSessions: 2,
+    state: 'Stressed', workMinutes: 12, breakMinutes: 3, targetSessions: 2,
     orderedIds: ['terms', 'cardio', 'practice'], actionPlan,
     taskPreference: { evidence: 'start with the easier task', priorityOrder: ['low'] },
   } });
@@ -28,7 +28,7 @@ test('nervous easier-first anatomy reflection keeps personalized AI advice and t
   const dialog = page.getByRole('dialog', { name: 'AI Coach adaptation' });
   await expect(dialog).toContainText(actionPlan);
   await expect(dialog).not.toContainText('The coach response could not be used');
-  await expect(dialog).toContainText('15m Focus / 5m Rest');
+  await expect(dialog).toContainText('12m Focus / 3m Rest');
   await expect(page.locator('.todo-text')).toHaveText(['Review anatomy terminology', 'Review the cardiovascular system', 'Answer cardiovascular practice questions']);
   await expect.poll(() => account.savedOrder()).toEqual(['terms', 'cardio', 'practice']);
 });
@@ -78,10 +78,10 @@ test('failed task-order saves are visible and retry persists the current order',
 
 test('a stressed student preferring medium tasks gets both medium tasks before other priorities', async ({ page, context }) => {
   const account = await accountFixture(context, true, { tasks, coachResponse: {
-    state: 'Stressed', workMinutes: 15, breakMinutes: 5, targetSessions: 2,
+    state: 'Stressed', workMinutes: 12, breakMinutes: 3, targetSessions: 2,
     orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'], actionPlan: 'Start with Science to keep things comfortable.' } });
   await submit(page, 'I am stressed but I want to work on medium tasks');
-  await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toContainText('15m Focus / 5m Rest');
+  await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toContainText('12m Focus / 3m Rest');
   await expect(page.locator('.todo-text')).toHaveText(['Science', 'Fil', 'Medtech', 'IT Module 10', 'Archi']);
   await expect.poll(() => account.savedOrder()).toEqual(['science', 'fil', 'medtech', 'it', 'archi']);
   await page.reload();
@@ -90,7 +90,7 @@ test('a stressed student preferring medium tasks gets both medium tasks before o
 
 test('academic stress reflection corrects the reported partial order and persists low-medium-high groups', async ({ page, context }) => {
   const account = await accountFixture(context, true, { tasks, coachResponse: {
-    state: 'Stressed', workMinutes: 15, breakMinutes: 5, targetSessions: 2,
+    state: 'Stressed', workMinutes: 12, breakMinutes: 3, targetSessions: 2,
     orderedIds: ['science', 'it', 'archi', 'fil', 'medtech'], actionPlan: 'Start with Science to keep things comfortable.' } });
   await submit(page, 'I feel stressed about my exam');
   await expect(page.getByRole('dialog', { name: 'AI Coach adaptation' })).toContainText('Start with “Medtech”');

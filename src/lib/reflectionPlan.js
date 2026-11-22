@@ -1,4 +1,27 @@
 const states = ['Stressed', 'Distracted', 'Motivated', 'Engaged'];
+export const STUDY_PACING = {
+  Stressed: { workMinutes: 12, breakMinutes: 3 },
+  Distracted: { workMinutes: 25, breakMinutes: 5 },
+  Engaged: { workMinutes: 35, breakMinutes: 10 },
+  Motivated: { workMinutes: 50, breakMinutes: 10 },
+};
+export const TIMER_PRESETS = ['12/3', '25/5', '35/10', '50/10'];
+
+export function reflectionRhythm(text, state = 'Engaged', selectedCycles = 2) {
+  const pacing = STUDY_PACING[state] || STUDY_PACING.Engaged;
+  const source = String(text || '');
+  const breakMatch = source.match(/(\d+)\s*[- ]?\s*(?:minutes?|mins?|m\b)\s*(?:break|rest)/i)
+    || source.match(/(?:break|rest)\s*(?:for|of)?\s*(\d+)\s*(?:minutes?|mins?|m\b)/i);
+  const workText = breakMatch ? source.replace(breakMatch[0], '') : source;
+  const workMatch = workText.match(/(\d+)\s*[- ]?\s*(?:minutes?|mins?|m\b)/i);
+  const cycleMatch = source.match(/(\d+)\s*(?:sessions?|rounds?|cycles?)/i);
+  const within = (value, min, max, fallback) => Number.isInteger(Number(value)) && Number(value) >= min && Number(value) <= max ? Number(value) : fallback;
+  return {
+    workMinutes: within(workMatch?.[1], 5, 120, pacing.workMinutes),
+    breakMinutes: within(breakMatch?.[1], 1, 60, pacing.breakMinutes),
+    targetSessions: within(cycleMatch?.[1], 1, 5, within(selectedCycles, 1, 5, 2)),
+  };
+}
 const priority = task => ({ low: 1, medium: 2, normal: 2, high: 3 }[String(task.priority || '').toLowerCase()] || 2);
 const normalize = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const ignoredWords = new Set(['a', 'an', 'the', 'of', 'and', 'for', 'to', 'my', 'review', 'study', 'read', 'task', 'ang', 'ng', 'sa', 'ko']);
@@ -222,7 +245,7 @@ export function stressContextFeedback(rawText, modelContext, taskPreference) {
   return null;
 }
 
-export function generateCognitiveFallback(rawText, tasks = [], forcedState, taskPreference = null) {
+export function generateCognitiveFallback(rawText, tasks = [], forcedState, taskPreference = null, selectedCycles = 2) {
   const safety = generateSafetySupport(rawText);
   if (safety) return safety;
   const stress = stressContextFeedback(rawText, null, taskPreference);
@@ -235,13 +258,7 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState, task
   else if (/motivat|ready|energ|excite|let.s go|masigla|gaganahan/.test(text)) state = 'Motivated';
   const neutralRequest = isNeutralOrderRequest(text);
   if (states.includes(forcedState) && !neutralRequest && state !== 'Stressed') state = forcedState;
-  let targetSessions = state === 'Stressed' ? 2 : state === 'Distracted' ? 3 : 4;
-  let workMinutes = state === 'Stressed' ? 15 : state === 'Distracted' ? 20 : state === 'Motivated' ? 50 : 25;
-  const sessionMatch = text.match(/(\d+)\s*(?:sessions?|rounds?|cycles?)/i);
-  if (sessionMatch) targetSessions = Math.min(5, Math.max(1, Number(sessionMatch[1])));
-  const minuteMatch = text.match(/(\d+)\s*(?:mins?|minutes?|m\b)/i);
-  if (minuteMatch && Number(minuteMatch[1]) >= 5 && Number(minuteMatch[1]) <= 120) workMinutes = Number(minuteMatch[1]);
-  const breakMinutes = workMinutes >= 50 ? 10 : 5;
+  const { targetSessions, workMinutes, breakMinutes } = reflectionRhythm(text, state, selectedCycles);
   const studyGoal = reflectionStudyGoal(text, activeTasks);
   const unmatchedGoal = studyGoal?.unmatched;
   const ordered = unmatchedGoal ? activeTasks : orderReflectionTasks(activeTasks, state, text, taskPreference);
@@ -259,11 +276,11 @@ export function generateCognitiveFallback(rawText, tasks = [], forcedState, task
     : state === 'Motivated' ? 'Work through a practice problem or explain a concept without your notes, then check your understanding before moving on.'
     : 'Set a clear outcome for this block and test what you remember before deciding what needs another pass.';
   return { state, orderedIds: ordered.map(task => task.id), targetSessions, workMinutes, breakMinutes,
-    actionPlan: `${emotion ? `${emotion} ` : ''}${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block.`,
+    actionPlan: `${emotion ? `${emotion} ` : ''}${first} ${advice} ${strategy} Try ${targetSessions} sessions of ${workMinutes} minutes with ${breakMinutes}-minute breaks, and reassess your pace after the first block. One manageable step is progress; you can adjust the plan to fit your day.`,
     responseSource: 'fallback', ...(taskPreference ? { taskPreference } : {}) };
 }
 
-export function normalizeReflectionPlan(parsed, text, tasks = []) {
+export function normalizeReflectionPlan(parsed, text, tasks = [], selectedCycles = 2) {
   const concern = safetyConcerns.includes(parsed?.safetyConcern) ? parsed.safetyConcern
     : safetyConcerns.includes(parsed?.supportKind) ? parsed.supportKind : null;
   const healthSupport = parsed?.healthSupport === true || parsed?.supportKind === 'health';
@@ -279,7 +296,7 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   const stress = stressContextFeedback(text, parsed?.stressContext, taskPreference);
   if (stress) return stress;
   const unmatchedGoal = reflectionStudyGoal(text, activeTasks)?.unmatched;
-  const fallback = generateCognitiveFallback(text, tasks, parsed?.state, taskPreference);
+  const fallback = generateCognitiveFallback(text, tasks, parsed?.state, taskPreference, selectedCycles);
   const byId = new Map(activeTasks.map(task => [String(task.id), task]));
   const resolve = value => {
     const identifier = String(value?.id ?? value?.text ?? value ?? '').trim();
@@ -293,25 +310,25 @@ export function normalizeReflectionPlan(parsed, text, tasks = []) {
   // Enforce the requested first/last groups; let the coach choose unspecified
   // follow-up tasks. Mood defaults apply when the student gave no order.
   const hasOrderPreference = taskPreference || requestedPriorityOrder(text).length > 0;
+  const taskPositions = new Map(activeTasks.map((task, index) => [String(task.id), index]));
+  const compareTasks = preferenceComparator(text, taskPreference, hasOrderPreference ? null : fallback.state);
   const orderedIds = unmatchedGoal ? activeTasks.map(task => String(task.id))
-    : candidates.sort(preferenceComparator(text, taskPreference, hasOrderPreference ? null : fallback.state)).map(task => String(task.id));
+    : candidates.sort((a, b) => compareTasks(a, b) || (priority(a) === priority(b)
+      ? taskPositions.get(String(a.id)) - taskPositions.get(String(b.id)) : 0)).map(task => String(task.id));
   const correctedState = isNeutralOrderRequest(text) && parsed?.state && parsed.state !== 'Engaged';
   const invalidOrder = !unmatchedGoal && activeTasks.length > 0 && ids.length === 0;
   const contradictedPreference = !unmatchedGoal && orderedIds.some((id, index) => id !== originalOrder[index]);
   const clinicalLanguage = unsupportedHealthClaim(parsed?.actionPlan, text);
   const unrelatedAdvice = unmatchedGoal && activeTasks.some(task => new RegExp(`\\b(?:start|begin|focus on|work on)\\s+(?:(?:with|your|the|task)\\s+)*${normalize(task.text).replace(/ /g, '\\s+')}\\b`).test(normalize(parsed?.actionPlan)));
+  const expectedRhythm = reflectionRhythm(text, fallback.state, selectedCycles);
+  const timerConflict = ['workMinutes', 'breakMinutes', 'targetSessions'].some(key => parsed?.[key] !== undefined && Number(parsed[key]) !== expectedRhythm[key]);
   const validationIssues = [correctedState && 'state_contradicts_reflection', invalidOrder && 'missing_task_ids',
     contradictedPreference && 'task_order_conflict', clinicalLanguage && 'unsupported_health_advice', unrelatedAdvice && 'unrelated_task_advice',
+    timerConflict && 'timer_rule_conflict',
     !parsed?.actionPlan?.trim?.() && 'missing_advice'].filter(Boolean);
   if (validationIssues.length) return { ...fallback, fallbackReason: 'invalid_plan', validationIssues };
-  const bounded = (value, min, max, defaultValue) => {
-    const number = Number(value);
-    return Number.isInteger(number) && number >= min && number <= max ? number : defaultValue;
-  };
   return { ...fallback, orderedIds,
-    targetSessions: bounded(parsed?.targetSessions, 1, 5, fallback.targetSessions),
-    workMinutes: bounded(parsed?.workMinutes, 5, 120, fallback.workMinutes),
-    breakMinutes: bounded(parsed?.breakMinutes, 1, 60, fallback.breakMinutes),
+    ...reflectionRhythm(text, fallback.state, selectedCycles),
     actionPlan: parsed.actionPlan.trim(),
     responseSource: 'ai',
   };

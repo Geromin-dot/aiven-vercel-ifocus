@@ -51,10 +51,12 @@ model User {
   yearLevel     String?
   section       String?
   yearSection   String?
+  genderIdentity String?
   currentSessionId String?
   telemetryState   String?   @db.Text
   timerPreferences String?   @db.Text
   pushSubscriptions PushSubscription[]
+  aiDailyUsage AiDailyUsage[]
   
   accounts      Account[]
   sessions      Session[]
@@ -147,6 +149,7 @@ model StudySession {
   deck      Deck?    @relation(fields: [deckId], references: [id], onDelete: Cascade)
   score     Int      @default(0)
   duration  Int      @default(0)
+  deviceType String?
   createdAt DateTime @default(now())
 }
 
@@ -160,4 +163,14 @@ model Todo {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AiDailyUsage {
+  userId String
+  feature String
+  day String
+  count Int @default(0)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, feature, day])
 }

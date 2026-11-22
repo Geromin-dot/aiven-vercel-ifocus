@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { callGemini } from '@/lib/gemini';
 import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
+import { reserveDailyAIRequest } from '@/lib/aiDailyUsage';
 
 export const maxDuration = 60;
 
-async function callOpenAIFlashcards(instructions, content, apiKey) {
+async function callOpenAIFlashcards(instructions, content, apiKey, onResponse) {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -40,6 +41,7 @@ async function callOpenAIFlashcards(instructions, content, apiKey) {
     throw new Error('AI flashcard generation is unavailable. Please try again shortly.');
   }
   const result = await response.json();
+  onResponse?.({ model: result.model || 'gpt-6-luna' });
   if (result.status !== 'completed') throw new Error('AI could not finish generating flashcards. Please try again with a shorter document.');
   const outputText = (result.output || [])
     .filter(item => item.type === 'message')
@@ -51,6 +53,10 @@ async function callOpenAIFlashcards(instructions, content, apiKey) {
 }
 
 export async function POST(request) {
+  const startedAt = Date.now();
+  let aiStartedAt;
+  let provider;
+  let actualModel;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || session.error) {
@@ -70,6 +76,12 @@ export async function POST(request) {
 
     if (type === 'text' && (typeof text !== 'string' || !text.trim())) {
       return NextResponse.json({ error: "Please provide notes or text to generate flashcards." }, { status: 400 });
+    }
+    if (type === 'text' && text.length > 35000) {
+      return NextResponse.json({ error: 'Please paste up to 35,000 characters. Split longer notes into sections.' }, { status: 413 });
+    }
+    if (type === 'pdf' && pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim().length > 4 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Please choose a PDF up to 3 MB. Split or compress a larger document.' }, { status: 413 });
     }
 
     const isAutoCount = !cardCount || cardCount === 0 || cardCount === 'auto';
@@ -130,20 +142,25 @@ Return the output STRICTLY as a valid JSON object with a cards array using this 
       });
     }
 
+    const allowance = await reserveDailyAIRequest(session.user.id, 'flashcards');
+    if (!allowance.allowed) return NextResponse.json({ error: 'You have used your 3 flashcard generations today. Try again after midnight, Philippine time.' }, { status: 429 });
     const openAIKey = process.env.OPENAI_API_KEY?.trim();
-    const provider = openAIKey ? 'openai' : 'gemini';
+    provider = openAIKey ? 'openai' : 'gemini';
+    let responseProvider = provider;
     let flashcards = null;
+    aiStartedAt = Date.now();
     try {
       if (openAIKey) {
         const content = type === 'pdf'
           ? [{ type: 'input_file', filename: 'study-material.pdf',
               file_data: `data:application/pdf;base64,${pdfBase64.replace(/^data:application\/pdf;base64,/, '').trim()}` }]
           : [{ type: 'input_text', text: text.substring(0, 35000) }];
-        flashcards = await callOpenAIFlashcards(systemInstructions, content, openAIKey);
+        flashcards = await callOpenAIFlashcards(systemInstructions, content, openAIKey, metadata => { actualModel = metadata.model; });
       } else {
         flashcards = await callGemini({
           parts,
           preferredModel: 'gemini-2.5-flash',
+          onResponse: metadata => { actualModel = metadata.model; },
           timeoutMs: 30000,
           generationConfig: {
             temperature: 0.2,
@@ -177,6 +194,7 @@ Return the output STRICTLY as a valid JSON object with a cards array using this 
       && typeof card.back === 'string' && card.back.trim());
 
     if (!openAIKey && cardList.length === 0 && text && text.trim()) {
+      responseProvider = 'fallback';
       // Heuristic fallback to extract definitions if AI response structure was irregular
       const lines = text.split(/\n+/).map(l => l.trim()).filter(l => l.length > 10);
       for (const line of lines) {
@@ -199,6 +217,10 @@ Return the output STRICTLY as a valid JSON object with a cards array using this 
       return NextResponse.json({ error: "Could not extract flashcards from this material. Please provide more detailed text or definitions." }, { status: 400 });
     }
 
+    const totalMs = Date.now() - startedAt;
+    const aiMs = Date.now() - aiStartedAt;
+    const model = actualModel;
+    console.info('AI Flashcards timing', { provider, model, responseProvider, totalMs, aiMs, cardCount: cardList.length });
     return NextResponse.json({
       cards: cardList.map((c, index) => ({
         id: `gen-${Date.now()}-${index}`,
@@ -207,9 +229,12 @@ Return the output STRICTLY as a valid JSON object with a cards array using this 
         keyword: c.keyword || (c.front ? c.front.split(' ').slice(0, 3).join(' ') : 'Key Concept'),
         back: c.back || 'Definition'
       }))
-    }, { headers: { 'X-iFocus-AI-Provider': provider } });
+    }, { headers: { 'X-iFocus-AI-Provider': responseProvider, ...(model ? { 'X-iFocus-AI-Model': model } : {}),
+      'X-iFocus-AI-Remaining': String(allowance.limit - allowance.used),
+      'Server-Timing': `ai;dur=${aiMs}, total;dur=${totalMs}` } });
 
   } catch (error) {
+    console.info('AI Flashcards timing', { provider, responseProvider: 'error', totalMs: Date.now() - startedAt, aiMs: aiStartedAt ? Date.now() - aiStartedAt : 0 });
     console.error("AI Flashcard Generation Error:", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }

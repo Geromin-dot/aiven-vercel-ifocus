@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import HelpButton from '@/components/HelpButton';
+import { FlashcardUploadGuide } from '@/components/StudyGuides';
+import AIUsageNotice from '@/components/AIUsageNotice';
 import emptyStateImg from '../../img/empty_flashcard_state.png';
 import { reconcileCloudTelemetry, setBreakGateDeck } from '@/lib/telemetrySync';
 import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
@@ -364,6 +366,10 @@ export default function FlashcardsPage() {
   // 2. Handle PDF File Selection & Base64 Conversion
   const handlePdfUpload = (file) => {
     if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      showToast('Please choose a PDF up to 3 MB. Split or compress a larger document.', 'error');
+      return;
+    }
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
       showToast("Please upload a valid PDF document.", 'error');
       return;
@@ -413,6 +419,10 @@ export default function FlashcardsPage() {
       showToast("Please paste your lecture notes or study material first.", 'error');
       return;
     }
+    if (!isPdf && notesText.length > 35000) {
+      showToast('Please paste up to 35,000 characters. Split longer notes into sections.', 'error');
+      return;
+    }
 
     const finalDeckTitle = deckName.trim() || (isPdf ? pdfFileName.replace(/\.pdf$/i, '') : 'Study Deck');
 
@@ -444,6 +454,7 @@ export default function FlashcardsPage() {
         body: JSON.stringify(payload)
       });
 
+      window.dispatchEvent(new Event('ifocus_ai_usage_updated'));
       clearInterval(interval);
 
       if (!res.ok) {
@@ -1144,7 +1155,7 @@ export default function FlashcardsPage() {
       {/* ================= 2. CREATE DECK VIEW ================= */}
       {view === 'create' && (
         <div className="glass-panel" style={{ minHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', gap: '1rem' }}>
+          <div className="flashcard-create-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', gap: '1rem' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
                 <h2 style={{ fontSize: '1.6rem', color: 'var(--text-primary)', margin: 0 }}>Create Auto-Deck</h2>
@@ -1163,7 +1174,7 @@ export default function FlashcardsPage() {
             {!aiAvailable && <p className="account-verification-warning">{AI_VERIFICATION_MESSAGE}</p>}
             
             {/* Deck Name and Target Cards Count */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '1rem' }}>
+            <div className="flashcard-create-fields" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 140px', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Deck Name</label>
                 <input 
@@ -1193,6 +1204,9 @@ export default function FlashcardsPage() {
                 </select>
               </div>
             </div>
+
+            <FlashcardUploadGuide />
+            <AIUsageNotice feature="flashcards" />
 
             {/* Input Mode Tabs */}
             <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.5rem' }}>

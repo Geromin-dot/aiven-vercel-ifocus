@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef, Suspense } from "react";
 import Link from "next/link";
 import IFocusLogo from "@/components/IFocusLogo";
+import GenderIdentityField from '@/components/GenderIdentityField';
 import { credentialsLogin } from '@/lib/credentialsLogin';
 import { announceAuthChange, clearPrivateCache } from '@/lib/logoutAccount';
 
@@ -31,6 +32,7 @@ function LoginContent() {
   const [regName, setRegName] = useState("");
   const [regUsername, setRegUsername] = useState("");
   const [regYearLevel, setRegYearLevel] = useState("1st Year");
+  const [regGenderIdentity, setRegGenderIdentity] = useState('');
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
@@ -65,6 +67,7 @@ function LoginContent() {
     setIsYearDropdownOpen(false);
     if (tab === "register") {
       setRegName("");
+      setRegGenderIdentity('');
       setRegUsername("");
       setRegYearLevel("1st Year");
       setRegEmail("");
@@ -191,6 +194,7 @@ function LoginContent() {
           yearLevel: cleanYearLevel,
           section: "",
           yearSection: cleanYearLevel,
+          genderIdentity: regGenderIdentity,
         }),
       });
 
@@ -912,6 +916,8 @@ function LoginContent() {
                   />
                 </div>
               </div>
+
+              <GenderIdentityField id="register-gender" value={regGenderIdentity} onChange={event => setRegGenderIdentity(event.target.value)} />
 
               {/* Username Field */}
               <div className="form-group">

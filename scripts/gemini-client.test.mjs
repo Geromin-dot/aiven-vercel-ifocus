@@ -15,9 +15,14 @@ test('Quick Reflection can request a fresh response without the duplicate-prompt
   try {
     const { callGemini } = await load();
     const request = { parts: [{ text: 'I am ready to study' }], generationConfig: { responseMimeType: 'application/json' } };
+    const metadata = [];
+    request.onResponse = value => metadata.push(value);
     await callGemini(request);
     await callGemini(request);
     assert.equal(calls, 1);
+    assert.equal(typeof metadata[0].model, 'string');
+    assert.equal(metadata[0].cacheHit, false);
+    assert.equal(metadata[1].cacheHit, true);
     assert.equal((await callGemini({ ...request, cache: false })).actionPlan, 'Advice 2');
     assert.equal((await callGemini({ ...request, cache: false })).actionPlan, 'Advice 3');
   } finally {

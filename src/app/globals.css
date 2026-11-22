@@ -1,5 +1,52 @@
 @import "tailwindcss";
 
+.gender-identity-field { display: grid; gap: 0.4rem; min-width: 0; }
+.gender-identity-field label { font-size: 0.85rem; font-weight: 600; }
+.gender-identity-field select, .reflection-cycle-selection select {
+  width: 100%; min-width: 0; min-height: 44px; padding: 0.65rem 0.75rem; border-radius: 10px;
+  border: 1px solid var(--glass-border, #d8e2d7); background: var(--bg-surface, #fff);
+  color: var(--text-primary, #173721); font: inherit; box-sizing: border-box;
+}
+.gender-identity-field small, .reflection-cycle-selection small { font-size: 0.75rem; line-height: 1.5; color: var(--text-secondary, #536353); }
+.profile-completion-notice {
+  border: 1px solid #bdd3b9; border-radius: 14px; padding: 1rem; margin-bottom: 1rem;
+  background: var(--bg-surface, #fff); width: 100%; box-sizing: border-box; min-width: 0;
+}
+.profile-completion-notice h2 { margin: 0; font-size: 1rem; }
+.profile-completion-notice p { font-size: 0.85rem; margin: 0.3rem 0 0.8rem; }
+.profile-completion-notice form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0.8rem; }
+.profile-completion-notice button { margin-top: 1.55rem; white-space: normal; min-height: 44px; }
+.study-input-guide { border: 1px solid var(--glass-border, #d8e2d7); border-radius: 10px; padding: 0.65rem 0.8rem; margin: 0.5rem 0; min-width: 0; flex-shrink: 0; }
+.study-input-guide summary { font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.study-input-guide p { font-size: 0.8rem; line-height: 1.55; margin: 0.6rem 0 0; }
+.reflection-cycle-selection { display: grid; grid-template-columns: auto minmax(90px, 130px); align-items: center; gap: 0.35rem 0.7rem; margin: 0 0 0.75rem; flex-shrink: 0; }
+.reflection-cycle-selection label { font-size: 0.82rem; font-weight: 600; }
+.reflection-cycle-selection small { grid-column: 1 / -1; }
+.ai-usage-notice { font-size: 0.73rem; color: var(--text-secondary, #536353); line-height: 1.45; margin: 0.4rem 0 0.65rem; flex-shrink: 0; }
+.local-support-options { border: 1px solid #cdddca; padding: 1rem; margin: 0.75rem 0 1rem; border-radius: 12px; background: #f4f8f3; color: #193522; flex-shrink: 0; min-width: 0; }
+.local-support-options h3 { font-size: 1rem; margin: 0; }
+.local-support-options p { font-size: 0.82rem; line-height: 1.5; margin: 0.4rem 0 0.75rem; }
+.local-support-grid, .device-analytics-grid { display: grid; gap: 0.7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.local-support-grid > div, .device-analytics-grid > div { display: grid; gap: 0.3rem; min-width: 0; border: 1px solid #dce7d9; border-radius: 10px; padding: 0.75rem; }
+.local-support-grid strong, .device-analytics-grid strong { font-size: 0.82rem; }
+.local-support-grid span, .device-analytics-grid span { font-size: 0.8rem; line-height: 1.45; }
+.local-support-grid small, .device-analytics-grid small { font-size: 0.73rem; line-height: 1.45; }
+.device-analytics { flex-shrink: 0; padding: 0.8rem; border: 1px solid var(--glass-border, #d8e2d7); border-radius: 12px; margin: 0.6rem 0; background: var(--bg-surface, #fff); }
+.device-analytics h3 { margin: 0; font-size: 0.95rem; }
+.device-analytics > p { font-size: 0.75rem; line-height: 1.45; margin: 0.35rem 0 0.6rem; color: var(--text-secondary, #536353); }
+.device-analytics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 600px) {
+  .flashcard-create-header { flex-direction: column; }
+  .flashcard-create-header > div { min-width: 0; width: 100%; }
+  .flashcard-create-fields { grid-template-columns: minmax(0, 1fr) !important; }
+  .profile-completion-notice form { grid-template-columns: minmax(0, 1fr); }
+  .profile-completion-notice button { margin-top: 0; width: 100%; }
+  .local-support-grid { grid-template-columns: minmax(0, 1fr); }
+  .device-analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .device-analytics-grid > div { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .device-analytics-grid small { grid-column: 1 / -1; }
+}
+
 /* Dialogs must fit the visible phone viewport and sit above the app navigation. */
 body > .avatar-modal-overlay { z-index: 100010; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
 .avatar-modal-overlay .avatar-modal-card { display: flex; flex-direction: column; padding: 0; width: min(100%, 520px); max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow: hidden; }
@@ -4020,7 +4067,7 @@ textarea:focus {
 @media (min-width: 1281px) and (min-aspect-ratio: 1.15/1) {
   .app-container:has(.analytics-page-root) main,
   .app-container:has(.coach-page-root) main {
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
     padding: 1rem 1.85rem !important;
     height: 100vh !important;
     box-sizing: border-box !important;

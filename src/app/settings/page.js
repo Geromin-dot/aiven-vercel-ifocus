@@ -1979,6 +1979,11 @@ export default function SettingsPage() {
               )}
 
               {/* Account Details */}
+              <div className="settings-input-group" style={{ marginBottom: '0.75rem' }}>
+                <label htmlFor="profile-gender-identity" className="settings-label">Gender identity</label>
+                <input id="profile-gender-identity" className="settings-input" value={session?.user?.genderIdentity || 'Not selected yet'} readOnly />
+                <small style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>Saved once during profile completion and cannot be changed.</small>
+              </div>
               <form onSubmit={handleSaveProfileDetails} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="settings-form-grid" style={{ gap: '0.75rem' }}>
                   <div className="settings-input-group">

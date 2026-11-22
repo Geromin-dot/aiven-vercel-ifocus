@@ -194,7 +194,7 @@ test('Coach and Feature Guide explain uncertainty and pacing applies directly', 
   await expect.poll(() => page.evaluate(() => {
     const timer = JSON.parse(localStorage.getItem('ifocus_timer_state') || '{}');
     return [timer.isRunning, timer.isFocus, timer.customWorkDuration, localStorage.getItem('ifocus_ai_rest_recovery')];
-  })).toEqual([false, true, 1200, null]);
+  })).toEqual([false, true, 1500, null]);
 });
 
 test('Coach starts stress recovery directly and shows its status after navigation', async ({ page, context }) => {
@@ -220,7 +220,7 @@ test('Coach starts stress recovery directly and shows its status after navigatio
   await expect(page.getByText('Restoring', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply Strategy to Dashboard' })).toHaveCount(0);
   await page.clock.fastForward(301_000);
-  await expect.poll(timer).toEqual([false, true, 900, 1]);
+  await expect.poll(timer).toEqual([false, true, 720, 1]);
   await expect(page.getByText('Recovery Complete', { exact: true })).toBeVisible();
 });
 

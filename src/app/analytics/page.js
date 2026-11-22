@@ -1,4 +1,5 @@
 "use client";
+import { summarizeDevices } from '@/lib/deviceContext';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
@@ -64,6 +65,7 @@ export default function AnalyticsPage() {
   });
 
   const [totalFlashcards, setTotalFlashcards] = useState(0);
+  const [deviceStats, setDeviceStats] = useState(() => summarizeDevices([]));
   const [masteredCount, setMasteredCount] = useState(0);
   const [scaleMode, setScaleMode] = useState('10mins'); // '10mins' or 'hours'
 
@@ -119,6 +121,7 @@ export default function AnalyticsPage() {
     try {
       const stored = localStorage.getItem('ifocus_session_history');
       const sessionHistory = stored ? JSON.parse(stored) : [];
+      setDeviceStats(summarizeDevices(sessionHistory));
 
       const focusStatsRaw = localStorage.getItem('ifocus_stats');
       const focusStats = focusStatsRaw ? JSON.parse(focusStatsRaw) : {};
@@ -194,6 +197,7 @@ export default function AnalyticsPage() {
             id: s.id,
             duration: mins,
             durationSeconds: rawSec,
+            deviceType: s.deviceType,
             date: s.createdAt,
             deckName: s.deck?.title || 'General Focus',
             type: 'pomodoro',
@@ -490,6 +494,16 @@ export default function AnalyticsPage() {
           Your real-time Pomodoro focus metrics, BreakGate compliance, and retention health.
         </p>
       </div>
+
+      <section className="device-analytics" aria-labelledby="device-analytics-title">
+        <h3 id="device-analytics-title">Devices used for study</h3>
+        <p>Recorded per focus session. Phones and tablets are grouped as mobile. Older sessions may have no device information.</p>
+        <div className="device-analytics-grid">
+          {[['pc', 'Personal computer'], ['mobile', 'Mobile device'], ['unknown', 'Not recorded']].map(([key, label]) => (
+            <div key={key}><strong>{label}</strong><span>{deviceStats[key].count} sessions</span><small>{Math.round(deviceStats[key].minutes)} focus minutes</small></div>
+          ))}
+        </div>
+      </section>
 
       {/* Offline Notice (Unauthenticated) */}
       {status === 'unauthenticated' && (

@@ -8,15 +8,33 @@ const input = await import(moduleUrl(await readFile(new URL('../src/lib/reflecti
 const verification = await import(moduleUrl(await readFile(new URL('../src/lib/aiVerification.js', import.meta.url), 'utf8')));
 const route = await readFile(new URL('../src/app/api/ai/coach/route.js', import.meta.url), 'utf8');
 const flashcardRoute = await readFile(new URL('../src/app/api/ai/flashcards/route.js', import.meta.url), 'utf8');
-function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route, { env = {}, fetch } = {}) {
+function endpoint(callGemini, session = { user: { id: 'student', verificationStatus: 'VERIFIED' } }, source = route, { env = {}, fetch, reserveDailyAIRequest = async () => ({ allowed: true, limit: 10, used: 1 }) } = {}) {
   const context = vm.createContext({ ...plans, ...input, ...verification, callGemini, getServerSession: async () => session, authOptions: {},
-    process: { env }, fetch, AbortSignal, console: { warn() {}, info() {} },
+    process: { env }, fetch, AbortSignal, reserveDailyAIRequest, console: { warn() {}, info() {} },
     NextResponse: { json: (data, options) => ({ data, status: options?.status || 200, headers: options?.headers }) },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace('export const maxDuration', 'const maxDuration').replace('export async function POST', 'async function POST') + '\nglobalThis.post = POST;', context);
   return body => context.post({ text: async () => JSON.stringify(body), json: async () => body });
 }
 const tasks = [{ id: 'a', text: 'Review anatomy', priority: 'Low' }, { id: 'b', text: 'Solve physiology', priority: 'High' }];
+
+test('exhausted daily reflection allowance blocks both providers with an actionable 429', async () => {
+  const post = endpoint(() => assert.fail('must not call Gemini'), undefined, route, {
+    env: { OPENAI_API_KEY: 'test-key' }, fetch: () => assert.fail('must not call OpenAI'),
+    reserveDailyAIRequest: async () => ({ allowed: false, limit: 10, used: 10 }),
+  });
+  const result = await post({ text: 'Help me study anatomy for my exam.', tasks });
+  assert.equal(result.status, 429);
+  assert.match(result.data.error, /10.*midnight/);
+});
+
+test('invalid reflections and safety support do not consume AI allowance', async () => {
+  const post = endpoint(() => assert.fail('must not call provider'), undefined, route, {
+    reserveDailyAIRequest: () => assert.fail('must not consume AI allowance'),
+  });
+  assert.equal((await post({ text: 'hello' })).status, 422);
+  assert.equal((await post({ text: 'I am exhausted and need to rest' })).data.supportOnly, true);
+});
 
 test('OpenAI-configured Coach uses Luna and reports the actual service tier', async () => {
   for (const tier of ['default', 'fast']) {
@@ -182,7 +200,7 @@ test('unclear and personal stress hold study planning even when the provider is 
   }
   const academic = await post({ text: 'Stressed ako sa exam bukas', tasks });
   assert.equal(academic.data.state, 'Stressed');
-  assert.equal(academic.data.workMinutes, 15);
+  assert.equal(academic.data.workMinutes, 12);
 });
 
 test('a model-detected safety concern takes precedence over clarification', async () => {

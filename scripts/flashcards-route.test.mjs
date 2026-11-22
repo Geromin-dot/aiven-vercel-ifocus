@@ -6,9 +6,9 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../src/app/api/ai/flashcards/route.js', import.meta.url), 'utf8');
 const card = { tag: 'Definition', front: 'Mitosis', keyword: 'Cell division', back: 'Division into two daughter cells.' };
 
-function endpoint({ env = { OPENAI_API_KEY: 'test-secret' }, fetch, callGemini = () => assert.fail('Unexpected Gemini request') } = {}) {
+function endpoint({ env = { OPENAI_API_KEY: 'test-secret' }, fetch, reserveDailyAIRequest = async () => ({ allowed: true, limit: 3, used: 1 }), callGemini = () => assert.fail('Unexpected Gemini request') } = {}) {
   const context = vm.createContext({
-    process: { env }, fetch, AbortSignal, console: { warn() {}, error() {} }, callGemini,
+    process: { env }, fetch, AbortSignal, console: { warn() {}, error() {}, info() {} }, callGemini, reserveDailyAIRequest,
     getServerSession: async () => ({ user: { id: 'student' } }), authOptions: {},
     canUseStudyAI: () => true, AI_VERIFICATION_MESSAGE: '',
     NextResponse: { json: (data, options = {}) => ({ data, status: options.status || 200, headers: options.headers }) },
@@ -24,6 +24,15 @@ function completed(cards) {
     { type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ cards }) }] },
   ] });
 }
+
+test('daily flashcard cap blocks expensive work and malformed uploads consume no allowance', async () => {
+  const post = endpoint({ fetch: () => assert.fail('must not call OpenAI'),
+    reserveDailyAIRequest: async () => ({ allowed: false, limit: 3, used: 3 }) });
+  assert.equal((await post({ type: 'text', text: 'Mitosis is cell division.' })).status, 429);
+  const invalid = endpoint({ reserveDailyAIRequest: () => assert.fail('invalid input must not consume allowance') });
+  assert.equal((await invalid({ type: 'text', text: 'a'.repeat(35001) })).status, 413);
+  assert.equal((await invalid({ type: 'pdf', pdfBase64: 'a'.repeat(4 * 1024 * 1024 + 1) })).status, 413);
+});
 
 test('PDF uploads use OpenAI file input with one base64 prefix and preserve the card contract', async () => {
   for (const pdfBase64 of ['JVBERi0xLjQ=', 'data:application/pdf;base64,JVBERi0xLjQ=']) {
@@ -54,7 +63,7 @@ test('pasted notes use OpenAI text input and retain the existing input length bo
     assert.equal(payload.input[0].content[0].text.length, 35000);
     return completed([card]);
   } });
-  assert.equal((await post({ type: 'text', text: 'a'.repeat(36000), cardCount: 'auto' })).status, 200);
+  assert.equal((await post({ type: 'text', text: 'a'.repeat(35000), cardCount: 'auto' })).status, 200);
 });
 
 test('Gemini remains available when the OpenAI key is absent', async () => {

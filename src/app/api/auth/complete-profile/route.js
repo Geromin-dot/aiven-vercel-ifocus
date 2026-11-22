@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { authOptions } from '../[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { ENROLLMENT_YEAR_LEVELS, updatedYearSection } from '@/lib/studentYearLevels';
+import { isGenderIdentity } from '@/lib/genderIdentity';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -14,7 +15,10 @@ export async function POST(request) {
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : '';
-  const { password, yearLevel } = body ?? {};
+  const { password, yearLevel, genderIdentity } = body ?? {};
+  if (!isGenderIdentity(genderIdentity)) {
+    return NextResponse.json({ error: 'Please select your gender identity.' }, { status: 400 });
+  }
 
   if (!name || name.length > 120) {
     return NextResponse.json({ error: 'Enter your full name using up to 120 characters.' }, { status: 400 });
@@ -39,7 +43,7 @@ export async function POST(request) {
   const ineligible = () => NextResponse.json({ error: 'This account is no longer eligible for setup. Refresh to continue.' }, { status: 409 });
   const usernameTaken = () => NextResponse.json({ error: 'This username is already taken.' }, { status: 409 });
   try {
-    const user = await prisma.user.findFirst({ where: eligibleAccount, select: { section: true, yearSection: true } });
+    const user = await prisma.user.findFirst({ where: eligibleAccount, select: { section: true, yearSection: true, genderIdentity: true } });
     if (!user) return ineligible();
 
     const existing = await prisma.user.findFirst({
@@ -50,8 +54,9 @@ export async function POST(request) {
 
     const hash = await bcrypt.hash(password, 10);
     const updated = await prisma.user.updateMany({
-      where: eligibleAccount,
-      data: { name, username, password: hash, yearLevel, yearSection: updatedYearSection(user, yearLevel) },
+      where: { ...eligibleAccount, genderIdentity: user.genderIdentity },
+      data: { name, username, password: hash, yearLevel, yearSection: updatedYearSection(user, yearLevel),
+        genderIdentity: user.genderIdentity || genderIdentity },
     });
     if (updated.count === 0) return ineligible();
     return NextResponse.json({ success: true });

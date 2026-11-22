@@ -1151,7 +1151,7 @@ export default function GlobalTimer() {
       const isPreSessionRest = Boolean(current.isAiRestRecovery);
       const nextCount = isPreSessionRest ? currentCount : currentCount + 1;
 
-      let focusDuration = 25 * 60;
+      let focusDuration = (parseInt(current.timerPreset?.split('/')[0]) || 25) * 60;
       if (current.timerPreset === "50/10") focusDuration = 50 * 60;
       else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
       else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
@@ -1168,7 +1168,7 @@ export default function GlobalTimer() {
         }
       }
 
-      let breakDuration = 5 * 60;
+      let breakDuration = (parseInt(current.timerPreset?.split('/')[1]) || 5) * 60;
       if (current.timerPreset === "50/10") breakDuration = 10 * 60;
       else if (current.timerPreset === "15/3") breakDuration = 3 * 60;
       else if (current.timerPreset === "90/20") breakDuration = 20 * 60;
@@ -1341,7 +1341,7 @@ export default function GlobalTimer() {
         } catch (e) {}
 
         // Calculate focus duration with Custom timer support
-        let focusDuration = 25 * 60;
+        let focusDuration = (parseInt(current.timerPreset?.split('/')[0]) || 25) * 60;
         if (current.timerPreset === "50/10") focusDuration = 50 * 60;
         else if (current.timerPreset === "15/3") focusDuration = 15 * 60;
         else if (current.timerPreset === "90/20") focusDuration = 90 * 60;
@@ -1359,7 +1359,7 @@ export default function GlobalTimer() {
         }
 
         // Calculate break duration with Custom timer support
-        let breakDuration = 5 * 60;
+        let breakDuration = (parseInt(current.timerPreset?.split('/')[1]) || 5) * 60;
         if (current.timerPreset === "50/10") {
           breakDuration = 10 * 60;
         } else if (current.timerPreset === "15/3") {
@@ -1758,8 +1758,8 @@ export default function GlobalTimer() {
     if (!current.breakGatePending) return;
 
     let maxSessions = 4;
-    let focusDuration = 25 * 60;
-    let breakDuration = 5 * 60;
+    let focusDuration = (parseInt(current.timerPreset?.split('/')[0]) || 25) * 60;
+    let breakDuration = (parseInt(current.timerPreset?.split('/')[1]) || 5) * 60;
 
     if (current.timerPreset === "50/10") {
       focusDuration = 50 * 60;

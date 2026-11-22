@@ -30,7 +30,7 @@ test('nervousness and easier-first wording retain a safe personalized anatomy re
 test('offline nervous easier-first reflection gets a gentler plan with the actual easier task', () => {
   const result = generateCognitiveFallback(anatomyReflection, anatomyTasks);
   assert.equal(result.state, 'Stressed');
-  assert.equal(result.workMinutes, 15);
+  assert.equal(result.workMinutes, 12);
   assert.equal(result.orderedIds[0], 'terms');
   assert.match(result.actionPlan, /feeling nervous/);
 });
@@ -126,7 +126,7 @@ test('fallback adapts English and Tagalog reflections with task-specific advice'
     assert.equal(result.state, 'Stressed');
     assert.deepEqual(result.orderedIds, ['easy', 'medium', 'hard']);
     assert.match(result.actionPlan, /Review anatomy terms/);
-    assert.equal(result.workMinutes, 15);
+    assert.equal(result.workMinutes, 12);
     assert.equal(result.responseSource, 'fallback');
   }
   const motivated = generateCognitiveFallback('I am energetic and ready to study', [...tasks].reverse());
@@ -147,8 +147,8 @@ test('missing or malformed model order cannot drop tasks or introduce unknown ID
   const invalid = normalizeReflectionPlan({ state: 'Distracted', orderedIds: ['medium', 'medium', 'unknown'],
     workMinutes: -20, targetSessions: 99 }, 'I feel distracted', tasks);
   assert.deepEqual(invalid.orderedIds, ['easy', 'medium', 'hard']);
-  assert.equal(invalid.workMinutes, 20);
-  assert.equal(invalid.targetSessions, 3);
+  assert.equal(invalid.workMinutes, 25);
+  assert.equal(invalid.targetSessions, 2);
 });
 
 test('applying task order keeps every task once and completed tasks at the end', () => {
@@ -170,8 +170,8 @@ test('the reported medium-first request overrides default high-first order and d
     workMinutes: 50, breakMinutes: 10, actionPlan: 'You are full of positive energy.' }, preference, screenshotTasks);
   assert.deepEqual(result.orderedIds, ['science', 'fil', 'it', 'archi', 'medtech']);
   assert.equal(result.state, 'Engaged');
-  assert.equal(result.workMinutes, 25);
-  assert.equal(result.breakMinutes, 5);
+  assert.equal(result.workMinutes, 35);
+  assert.equal(result.breakMinutes, 10);
   assert.doesNotMatch(result.actionPlan, /positive energy/);
 });
 
@@ -205,7 +205,7 @@ test('medium task preferences need not use the literal words start or first', ()
       actionPlan: 'Start with Science.' }, text, screenshotTasks);
     assert.deepEqual(result.orderedIds.slice(0, 2), ['science', 'fil'], text);
     assert.equal(result.state, 'Stressed');
-    assert.equal(result.workMinutes, 15);
+    assert.equal(result.workMinutes, 12);
   }
 });
 

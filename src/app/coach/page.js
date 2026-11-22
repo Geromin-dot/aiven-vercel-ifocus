@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import HelpButton from '@/components/HelpButton';
-import { readReflectionJournal } from '@/lib/reflectionJournal';
+import { readReflectionJournal, mergeReflections } from '@/lib/reflectionJournal';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
+import LocalSupportOptions from '@/components/LocalSupportOptions';
+import { STUDY_PACING } from '@/lib/reflectionPlan';
 import { reconcileCloudTelemetry, setAiTimerAdjustment, setBreakGateDeck } from '@/lib/telemetrySync';
 import { dismissBreakGateGuidance, getBreakGateGuidance, isBreakGateGuidanceDismissed } from '@/lib/coachResilience';
 import { latestCoachSignal, formatCoachInsight } from '@/lib/coachSignals';
@@ -27,59 +29,27 @@ export default function CoachPage() {
 
   const getEntryAiReply = (entry) => {
     if (entry?.aiReply) return entry.aiReply;
-    const s = String(entry?.state || entry?.sentiment || 'Engaged');
-    const isStressed = s.toLowerCase().includes('stress');
-    const isDistracted = s.toLowerCase().includes('distract');
-    const isMotivated = s.toLowerCase().includes('motivat') || s.toLowerCase().includes('energetic');
-
-    if (isStressed) {
-      return {
-        title: "Gentle Focus (Stressed)",
-        state: "Stressed",
-        rhythm: "15m Focus / 5m Rest",
-        sessions: 2,
-        message: "Coach recommended a calming 15-minute gentle focus interval across 2 short cycles with lighter tasks first to ease mental tension."
-      };
-    }
-    if (isDistracted) {
-      return {
-        title: "Strict Pomodoro (Distracted)",
-        state: "Distracted",
-        rhythm: "20m Focus / 5m Rest",
-        sessions: 3,
-        message: "Coach recommended 20-minute structured single-task intervals across 3 paced sessions to eliminate task-switching."
-      };
-    }
-    if (isMotivated) {
-      return {
-        title: "Flow State (Motivated)",
-        state: "Motivated",
-        rhythm: "50m Focus / 10m Rest",
-        sessions: 4,
-        message: "Coach recommended tackling high-impact priority tasks across 4 deep work cycles to capitalize on peak alertness."
-      };
-    }
+    const state = Object.keys(STUDY_PACING).find(value => String(entry?.state || entry?.sentiment).toLowerCase().includes(value.toLowerCase())) || 'Engaged';
+    const pacing = STUDY_PACING[state];
     return {
-      title: "Balanced Cadence (Engaged)",
-      state: "Engaged",
-      rhythm: "25m Focus / 5m Rest",
-      sessions: 4,
-      message: "Coach recommended steady 25-minute Pomodoro intervals across 4 cycles with active BreakGate pacing."
+      title: 'Suggested Study Pace', state,
+      rhythm: `${pacing.workMinutes}m Focus / ${pacing.breakMinutes}m Rest`,
+      sessions: 2,
+      message: 'Choose one manageable goal. You can adjust this suggested pace and cycle count before studying.',
     };
   };
 
   const [applyingHome, setApplyingHome] = useState(false);
+  const [coachCycles, setCoachCycles] = useState(2);
 
   const applyCoachAiRhythm = (reply) => {
-    let wMin = 25, bMin = 5;
-    if (reply?.rhythm?.includes('15m')) { wMin = 15; bMin = 5; }
-    else if (reply?.rhythm?.includes('20m')) { wMin = 20; bMin = 5; }
-    else if (reply?.rhythm?.includes('50m')) { wMin = 50; bMin = 10; }
-    else if (reply?.rhythm?.includes('60m')) { wMin = 60; bMin = 10; }
-
-    const targetSess = Math.min(5, Math.max(1, reply?.sessions || (reply?.state === 'Stressed' ? 2 : 4)));
-    const stateName = reply?.state || (wMin === 15 ? 'Stressed' : wMin === 20 ? 'Distracted' : wMin >= 50 ? 'Motivated' : 'Engaged');
-    const title = reply?.title || (wMin === 15 ? 'Gentle Focus (Stressed)' : wMin === 20 ? 'Strict Pomodoro (Distracted)' : wMin >= 50 ? 'Flow State (Motivated)' : 'Balanced Cadence (Engaged)');
+    const cadence = String(reply?.rhythm || '').match(/(\d+)m Focus \/ (\d+)m Rest/i);
+    const pacing = STUDY_PACING[reply?.state] || STUDY_PACING.Engaged;
+    const wMin = cadence ? Number(cadence[1]) : pacing.workMinutes;
+    const bMin = cadence ? Number(cadence[2]) : pacing.breakMinutes;
+    const targetSess = Math.min(5, Math.max(1, reply?.sessions || coachCycles));
+    const stateName = reply?.state || 'Engaged';
+    const title = reply?.title || 'Suggested Study Pace';
 
     try {
       localStorage.setItem('ifocus_custom_timer', JSON.stringify({
@@ -133,7 +103,7 @@ export default function CoachPage() {
       subtext: 'No recent interaction to assess yet'
     },
     recommendedRhythm: {
-      title: '25m Work / 5m Gate',
+      title: '35m Work / 10m Gate',
       color: '#059669',
       subtext: 'Supports a steady study pace with regular breaks'
     }
@@ -165,7 +135,7 @@ export default function CoachPage() {
       } catch (err) {}
 
       if (reconciled?.mergedJournal && Array.isArray(reconciled.mergedJournal)) {
-        setJournalEntries(reconciled.mergedJournal);
+        setJournalEntries(mergeReflections(readReflectionJournal(userName), reconciled.mergedJournal));
       }
 
       // Check Recovery Completed and Cognitive Reset timestamps
@@ -276,7 +246,7 @@ export default function CoachPage() {
       };
 
       let recRhythm = {
-        title: '25m Work / 5m Gate',
+        title: '35m Work / 10m Gate',
         color: '#059669',
         subtext: 'Supports a steady study pace with regular breaks'
       };
@@ -292,9 +262,9 @@ export default function CoachPage() {
           subtext: `Inactivity detected: idle for ${idleMins}m with no focus timer running`
         };
         recRhythm = {
-          title: '15m Work / 5m Gate',
+          title: '12m Work / 3m Gate',
           color: '#d97706',
-          subtext: 'Short 15m focus kickstart to break task inertia and rebuild momentum'
+          subtext: 'Short 12m focus kickstart to break task inertia and rebuild momentum'
         };
       } else if (isStress) {
         const isSmash = reasonStr.includes('simultaneous') || reasonStr.includes('mashing') || reasonStr.includes('holding') || reasonStr.includes('friction');
@@ -306,9 +276,9 @@ export default function CoachPage() {
           subtext: isSmash ? 'Signs of input friction. Take a short reset before continuing.' : 'Stress noted in your reflection. Try a gentler focus pace.'
         };
         recRhythm = {
-          title: '15m Work / 5m Gate',
+          title: '12m Work / 3m Gate',
           color: '#d97706',
-          subtext: 'Short 15m focus sprints to mitigate cognitive overload'
+          subtext: 'Short 12m focus sprints to mitigate cognitive overload'
         };
       } else if (isDistracted) {
         cogState = {
@@ -319,7 +289,7 @@ export default function CoachPage() {
           subtext: 'Attention fragmentation & corrections detected'
         };
         recRhythm = {
-          title: '20m Work / 5m Gate',
+          title: '25m Work / 5m Gate',
           color: '#d97706',
           subtext: 'Structured intervals to eliminate task-switching'
         };
@@ -332,7 +302,7 @@ export default function CoachPage() {
           subtext: 'Energy depletion & hesitation logged'
         };
         recRhythm = {
-          title: '15m Work / 5m Gate',
+          title: '12m Work / 3m Gate',
           color: '#d97706',
           subtext: 'Lighter intervals with frequent restorative breaks'
         };
@@ -414,7 +384,7 @@ export default function CoachPage() {
           badge: 'Inactivity Alert',
           badgeColor: '#d97706',
           badgeBg: 'rgba(217, 119, 6, 0.12)',
-          text: `You have been idle for ${idleMins} minutes with no active timer. Cognitive hesitation or task friction detected. Lower the cognitive barrier: start with a gentle 15-minute focus session on an easy, low-friction task to rebuild flow.`
+          text: `You have been idle for ${idleMins} minutes with no active timer. Cognitive hesitation or task friction detected. Lower the cognitive barrier: start with a short 12-minute focus session on an easy, low-friction task to rebuild flow.`
         });
       } else if (breakGate.completed > 0) {
         dynamicStrategies.push({
@@ -488,7 +458,12 @@ export default function CoachPage() {
         };
       }
 
+      const studyState = isIdle || isStress || isFatigued ? 'Stressed' : isDistracted ? 'Distracted' : isMotivated ? 'Motivated' : 'Engaged';
+      const pacing = STUDY_PACING[studyState];
+      recRhythm = { ...recRhythm, title: `${pacing.workMinutes}m Work / ${pacing.breakMinutes}m Gate`,
+        subtext: 'An adjustable study suggestion. Choose a pace that fits your needs.' };
       setTelemetryDiagnostics({
+        studyState,
         cognitiveState: restoring ? {
           title: 'Restoring',
           status: 'Recovery in progress',
@@ -558,56 +533,12 @@ export default function CoachPage() {
     setApplyingHome(true);
 
     try {
-      // 1. Determine recommended work, break, and sessions from diagnostics & alert text
-      let wMin = 25;
-      let bMin = 5;
-      let targetSessions = 4;
-      let cadenceTitle = "Balanced Cadence (Engaged)";
-      let detectedState = "Engaged";
-
-      const rhythmTitle = String(telemetryDiagnostics?.recommendedRhythm?.title || '');
-      const cogTitle = String(telemetryDiagnostics?.cognitiveState?.title || '');
-      const combined = `${rhythmTitle} ${cogTitle}`.toLowerCase();
-
-      // Idle / Inactivity checks: When user is idle, they need to START a focus session (not take a rest break!)
-      const isIdleAlert = combined.includes('inactivity detected') || 
-                          combined.includes('idle for') || 
-                          combined.includes('hesitation') || 
-                          combined.includes('inactivity alert') ||
-                          (insight?.type === 'idle') ||
-                          (insight?.state === 'idle');
-
-      if (isIdleAlert) {
-        wMin = 15;
-        bMin = 5;
-        targetSessions = 2;
-        cadenceTitle = "Gentle Focus (Inactivity Kickstart)";
-        detectedState = "Inactivity Kickstart";
-      } else if (combined.includes('15m') || combined.includes('15 minute') || combined.includes('15-minute') || combined.includes('stress') || combined.includes('tension') || combined.includes('fatigue')) {
-        wMin = 15;
-        bMin = 5;
-        targetSessions = 2;
-        cadenceTitle = "Gentle Focus (Stressed)";
-        detectedState = "Stressed";
-      } else if (combined.includes('20m') || combined.includes('20 minute') || combined.includes('20-minute') || combined.includes('distract') || combined.includes('drift')) {
-        wMin = 20;
-        bMin = 5;
-        targetSessions = 3;
-        cadenceTitle = "Strict Pomodoro (Distracted)";
-        detectedState = "Distracted";
-      } else if (combined.includes('50m') || combined.includes('50 minute') || combined.includes('50-minute') || combined.includes('peak') || combined.includes('motivated')) {
-        wMin = 50;
-        bMin = 10;
-        targetSessions = 4;
-        cadenceTitle = "Flow State (Motivated)";
-        detectedState = "Motivated";
-      } else {
-        const match = rhythmTitle.match(/(\d+)m Work \/ (\d+)m Gate/i);
-        if (match) {
-          wMin = parseInt(match[1], 10) || 25;
-          bMin = parseInt(match[2], 10) || 5;
-        }
-      }
+      const detectedState = telemetryDiagnostics.studyState || 'Engaged';
+      const pacing = STUDY_PACING[detectedState] || STUDY_PACING.Engaged;
+      const wMin = pacing.workMinutes;
+      const bMin = pacing.breakMinutes;
+      const targetSessions = coachCycles;
+      const cadenceTitle = 'Suggested Study Pace (' + detectedState + ')';
 
       // 2. Persist custom timer schedule so it actually applies to the dashboard
       const customTimer = {
@@ -925,6 +856,12 @@ export default function CoachPage() {
                   </span>
                 </div>
 
+                <div className="reflection-cycle-selection">
+                  <label htmlFor="coach-cycles">Study cycles</label>
+                  <select id="coach-cycles" value={coachCycles} onChange={event => setCoachCycles(Number(event.target.value))}>
+                    {[1, 2, 3, 4, 5].map(count => <option key={count} value={count}>{count} cycles</option>)}
+                  </select>
+                </div>
                 {/* Dynamically Generated Adaptive Coaching Protocols based on BreakGate & Telemetry */}
                 {adaptiveStrategies.map((strat, idx) => (
                   <div 
@@ -1255,6 +1192,7 @@ export default function CoachPage() {
         </div>
 
       </div>
+      <LocalSupportOptions />
 
     </div>
   );

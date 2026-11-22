@@ -74,7 +74,7 @@ function getApiKeys() {
 }
 
 export async function callGemini({ parts, generationConfig = {}, preferredModel = null, timeoutMs = 25000,
-  totalTimeoutMs = Infinity, maxRetries = 1, cache = true }) {
+  totalTimeoutMs = Infinity, maxRetries = 1, cache = true, onResponse }) {
   const deadline = Date.now() + totalTimeoutMs;
   const keys = getApiKeys();
   if (keys.length === 0) {
@@ -99,6 +99,7 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
     const cacheKey = getCacheKey(model, payload);
     const cachedResult = cache ? getFromCache(cacheKey) : null;
     if (cachedResult) {
+      onResponse?.({ model, cacheHit: true });
       return cachedResult;
     }
 
@@ -130,6 +131,7 @@ export async function callGemini({ parts, generationConfig = {}, preferredModel 
           }
 
           if (response.ok) {
+            onResponse?.({ model: data.modelVersion || model, cacheHit: false });
             let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
             if (generationConfig.responseMimeType === 'application/json') {

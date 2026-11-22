@@ -25,6 +25,7 @@ export async function GET(req) {
         createdAt: true,
         verificationStatus: true,
         yearLevel: true,
+        genderIdentity: true,
         yearSection: true,
         _count: {
           select: {
@@ -64,7 +65,8 @@ export async function GET(req) {
         image: user.image || null,
         createdAt: user.createdAt,
         verificationStatus: user.verificationStatus ?? 'PENDING',
-        yearLevel: studentYearLevel(user)
+        yearLevel: studentYearLevel(user),
+        genderIdentity: user.genderIdentity,
       },
       stats: {
         totalSessions: user._count.studySessions || 0,

@@ -5,6 +5,7 @@ import { generateCognitiveFallback, normalizeReflectionPlan, generateSafetySuppo
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { AI_VERIFICATION_MESSAGE, canUseStudyAI } from '@/lib/aiVerification';
+import { reserveDailyAIRequest } from '@/lib/aiDailyUsage';
 
 export const maxDuration = 60;
 
@@ -35,7 +36,7 @@ async function callOpenAICoach(prompt, apiKey) {
     .filter(part => part.type === 'output_text')
     .map(part => part.text)
     .join('');
-  return { parsed: JSON.parse(outputText), serviceTier: result.service_tier, usage: result.usage };
+  return { parsed: JSON.parse(outputText), serviceTier: result.service_tier, usage: result.usage, model: result.model || 'gpt-6-luna' };
 }
 
 export async function POST(request) {
@@ -45,12 +46,13 @@ export async function POST(request) {
   let aiMs = 0;
   let usage;
   let serviceTier;
+  let actualModel;
   const openAIKey = process.env.OPENAI_API_KEY?.trim();
   const provider = openAIKey ? 'openai' : 'gemini';
   const respond = (data, options = {}) => {
     const totalMs = Date.now() - startedAt;
     console.info('AI Coach timing', {
-      provider, responseSource: data.responseSource || (data.error ? 'error' : 'ai'),
+      provider, model: actualModel, responseSource: data.responseSource || (data.error ? 'error' : 'ai'),
       authMs, aiMs, totalMs, serviceTier,
       inputTokens: usage?.input_tokens,
       cachedInputTokens: usage?.input_tokens_details?.cached_tokens,
@@ -59,6 +61,7 @@ export async function POST(request) {
     });
     return NextResponse.json(data, { ...options, headers: {
       ...options.headers,
+      ...(actualModel ? { 'X-iFocus-AI-Model': actualModel } : {}),
       'Server-Timing': `auth;dur=${authMs}, ai;dur=${aiMs}, total;dur=${totalMs}`,
     } });
   };
@@ -77,6 +80,10 @@ export async function POST(request) {
   }
 
   const { text, recentAdvice } = body;
+  const selectedCycles = Number(body.targetSessions ?? 2);
+  if (!Number.isInteger(selectedCycles) || selectedCycles < 1 || selectedCycles > 5) {
+    return respond({ error: 'Choose between 1 and 5 study cycles.' }, { status: 422 });
+  }
   const tasks = Array.isArray(body.tasks) ? body.tasks.filter(task => task && task.id != null && typeof task.text === 'string').slice(0, 100) : [];
   const userText = (text && typeof text === 'string') ? text.trim() : '';
   const safety = generateSafetySupport(userText);
@@ -98,24 +105,28 @@ Other safety categories: suspected overdose, poisoning, or severe acute symptoms
 Rest takes precedence over every study cadence: when the student reports mental tiredness, exhaustion, feeling drained or burned out, being unable to absorb or process what they read, or asks to rest/stop, return {"safetyConcern":"rest"}. Do not convert these disclosures into Stressed with 15-minute work blocks, a quick-win task, target sessions, or a scheduled return to studying. Acknowledge their limits and allow them to stop. Rest alone does not imply a diagnosis or crisis. Clearly denied/resolved fatigue and purely academic discussions of fatigue do not trigger this rule. Ordinary exam stress without fatigue or a rest request can still receive manageable coaching.
 After applying the safety rules above, identify the cause of reported stress. For explicit personal or non-academic stress return {"stressContext":"personal"}, even if they also mention needing to study. If the source is unclear and the student has not asked for a specific study step, return {"stressContext":"clarify"}. For academic stress or a clear request for study help without a personal stressor, continue with normal coaching.
 The student's reflection may describe a subject or quiz absent from their saved tasks. Do not equate an unrelated saved task (for example, Writing) with anatomy, terminology, or practice questions. When the saved tasks are unrelated, preserve their supplied IDs in their current order, describe the student's actual study goal instead of telling them to start an unrelated saved task, and suggest adding the relevant task without claiming it already exists. This is an exception to the first-task narration rule below. Never invent task IDs. Acknowledge reported nervousness as a feeling without inferring a disorder. Easier/easiest/simpler/simplest are easy-first preferences.
-Task preferences alone are not reports of motivation or energy. If the student reports only a task preference, use Engaged with the balanced 25/5 rhythm unless a duration is requested; do not invent positive energy or enthusiasm.
+Task preferences alone are not reports of motivation or energy. If the student reports only a task preference, use Engaged with the balanced 35/10 rhythm unless a duration is requested; do not invent positive energy or enthusiasm.
 
-Return JSON only: {"state":"Stressed|Distracted|Motivated|Engaged","orderedIds":["exact task IDs"],"taskPreference":null,"targetSessions":2,"workMinutes":15,"breakMinutes":5,"actionPlan":"One balanced paragraph of personalized coaching"}.
+Return JSON only: {"state":"Stressed|Distracted|Motivated|Engaged","orderedIds":["exact task IDs"],"taskPreference":null,"targetSessions":2,"workMinutes":35,"breakMinutes":10,"actionPlan":"One balanced paragraph of personalized coaching"}.
 If the reflection is meaningless or only a greeting, return {"needsContext":true} instead.
 Understand the student's intent semantically in English, Tagalog, or mixed language; do not require fixed keywords or a specific question format. If they request an order, fill taskPreference with {"evidence":"an exact quote from this reflection expressing that preference","priorityOrder":["low","medium","high"],"taskIds":["IDs explicitly requested first, in order"],"deferredTaskIds":["IDs requested last, in order"]}. Include only categories or tasks actually requested; use empty arrays for unspecified parts. A preference such as "ease in with the simplest things" means low first. Negated preferences must not be treated as requests to start with that task. "I feel stressed" alone has taskPreference:null; never invent an ordering preference from a mood. When unsure what should follow, choose a sensible order for the rest without ignoring the first preference.
 Examples: "I want to start with low then IDK" means priorityOrder:["low"], taskIds:[], deferredTaskIds:[]. "Pinakagaan muna" also means priorityOrder:["low"], taskIds:[], deferredTaskIds:[]. Do not put the ID of a task you selected into taskIds unless the student explicitly named that task in the quoted evidence. Only put a task in deferredTaskIds if the student explicitly named it and asked to postpone it. Preferences describe what the student asked, not the rest of the plan you chose.
 Order all supplied tasks once: explicit task/category preferences take precedence over mood defaults. Put ALL tasks from a requested priority group together, not just one of them. By default, Stressed/Distracted use low then medium then high effort; Motivated/Engaged use high then medium then low. Keep ties in the supplied order unless there is a reason tied to the reflection to change them. Named tasks explicitly requested first or last override category defaults. The actionPlan must describe the SAME first task as orderedIds. With no tasks use [].
-Default rhythm: Stressed 15/5 minutes, 2 sessions; Distracted 20/5, 3 sessions; Engaged 25/5, 4 sessions; Motivated 50/10, 4 sessions. Honor explicitly requested minutes (5-120) and sessions (1-5).
+Default rhythm: Stressed 12/3 minutes; Distracted 25/5; Engaged 35/10; Motivated 50/10. These state mappings are adjustable design suggestions, not scientifically validated prescriptions. Use the student's selected cycle count below, regardless of state. Honor explicitly requested focus minutes (5-120), break minutes (1-60), and sessions (1-5). Explain the SAME rhythm that you return. The application enforces these timer rules.
+Support motivation through one specific, achievable next action tied to the student's stated goal. Use warm, natural language matching the student's English or Taglish. Acknowledge only what they actually reported. Encourage small progress and choice without guilt, pressure, guaranteed results, invented accomplishments, or claims about their health. Avoid generic repeated praise.
 Write one warm, useful paragraph of 3-4 sentences, roughly 60-90 words. Acknowledge the student's specific situation, explain the first task priority, give one concrete study step, and briefly explain the recommended rhythm. Do not list or explain every remaining task, repeat the same encouragement, or add a second paragraph. Refer to actual task names when tasks exist; avoid claiming to reorder tasks when none were supplied. Do not diagnose conditions or invent facts about the student. Mention flashcards only when relevant to the student's actual request or tasks. When useful, suggest retrieval practice (answer from memory, then check the answer) or spaced practice (revisit the material on another day). Offer these as options and avoid claims about guaranteed improvement or an optimal timer duration.
 
 Reflection: ${JSON.stringify(userText)}
 Current tasks (use these exact IDs):
 ${taskListStr}
 Previous advice (avoid repeating it without a reason):
-${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'string').slice(0, 2).map(item => item.slice(0, 600)).join('\n') : 'None'}`;
+${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'string').slice(0, 2).map(item => item.slice(0, 600)).join('\n') : 'None'}
+Student-selected study cycles: ${selectedCycles}`;
 
 
-    const headers = { 'X-iFocus-AI-Provider': provider };
+    const allowance = await reserveDailyAIRequest(session.user.id, 'reflection');
+    if (!allowance.allowed) return respond({ error: 'You have used your 10 Quick Reflection AI requests today. Try again after midnight, Philippine time.' }, { status: 429 });
+    const headers = { 'X-iFocus-AI-Provider': provider, 'X-iFocus-AI-Remaining': String(allowance.limit - allowance.used) };
     let parsed;
     aiStartedAt = Date.now();
     if (openAIKey) {
@@ -123,11 +134,13 @@ ${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'str
       parsed = result.parsed;
       usage = result.usage;
       serviceTier = result.serviceTier;
+      actualModel = result.model;
       if (result.serviceTier) headers['X-iFocus-AI-Service-Tier'] = result.serviceTier;
     } else {
       parsed = await callGemini({
         parts: [{ text: prompt }],
         preferredModel: 'gemini-2.5-flash',
+        onResponse: metadata => { actualModel = metadata.model; },
         timeoutMs: 18000,
         totalTimeoutMs: 45000,
         maxRetries: 0,
@@ -144,13 +157,13 @@ ${Array.isArray(recentAdvice) ? recentAdvice.filter(item => typeof item === 'str
       return respond({ error: 'Please describe how you feel or what you want to study so the coach has enough context.' }, { status: 422, headers });
     }
     if (parsed && typeof parsed === 'object' && (parsed.actionPlan || parsed.stressContext === 'personal' || parsed.stressContext === 'clarify' || parsed.supportOnly === true || parsed.healthSupport === true || (typeof parsed.safetyConcern === 'string' && parsed.safetyConcern.trim()))) {
-      return respond(normalizeReflectionPlan(parsed, userText, tasks), { headers });
+      return respond(normalizeReflectionPlan(parsed, userText, tasks, selectedCycles), { headers });
     }
   } catch (error) {
     if (aiStartedAt !== null) aiMs = Date.now() - aiStartedAt;
     console.warn(`AI Coach ${provider} call failed; using cognitive fallback:`, error.message);
   }
-  return respond(generateCognitiveFallback(userText, tasks), {
+  return respond(generateCognitiveFallback(userText, tasks, undefined, null, selectedCycles), {
     headers: { 'X-iFocus-AI-Provider': 'fallback' },
   });
 }

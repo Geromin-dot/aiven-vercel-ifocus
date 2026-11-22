@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { detectDeviceType } from '@/lib/deviceContext';
 import { prisma } from '../../../../lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
@@ -124,7 +125,11 @@ export async function POST(req) {
           }
           merged.resolvedTimerSessions = mergeResolvedSessions(existingTelemetry.resolvedTimerSessions, incoming.resolvedTimerSessions);
           const savedPrefs = JSON.parse(currentUser?.timerPreferences || '{}');
-          merged.focusClock = advanceFocusClock(existingTelemetry.focusClock, incoming.activeTimerState,
+          const timerState = incoming.activeTimerState ? { ...incoming.activeTimerState,
+            deviceType: ['pc', 'mobile'].includes(incoming.activeTimerState.deviceType) ? incoming.activeTimerState.deviceType
+              : detectDeviceType(req.headers?.get('user-agent') || '', req.headers?.get('sec-ch-ua-mobile') || ''),
+          } : undefined;
+          merged.focusClock = advanceFocusClock(existingTelemetry.focusClock, timerState,
             savedPrefs, session.user.sessionId, Date.now());
           merged.focusClock = resolveFocusClock(merged.focusClock, merged.resolvedTimerSessions);
 

@@ -13,6 +13,7 @@ import GlobalTimer from "@/components/GlobalTimer";
 import PwaRegistrar from "@/components/PwaRegistrar";
 import BackgroundPushSync from "@/components/BackgroundPushSync";
 import ProtectedSessionBoundary from '@/components/ProtectedSessionBoundary';
+import GenderIdentityNotice from '@/components/GenderIdentityNotice';
 
 export const metadata = {
   title: "iFocus | Smart Flash Cards",
@@ -62,6 +63,7 @@ export default function RootLayout({ children }) {
             <div className="app-container">
               <Sidebar />
               <main>
+                <GenderIdentityNotice />
                 {children}
               </main>
             </div>

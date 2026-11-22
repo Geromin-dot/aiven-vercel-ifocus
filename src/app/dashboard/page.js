@@ -3,6 +3,11 @@
 // BreakGateModal is managed globally in GlobalTimer
 
 import AppDialog from '@/components/AppDialog';
+import LocalSupportOptions from '@/components/LocalSupportOptions';
+import { TaskEffortGuide } from '@/components/StudyGuides';
+import AIUsageNotice from '@/components/AIUsageNotice';
+import { browserDeviceType } from '@/lib/deviceContext';
+import { TIMER_PRESETS, STUDY_PACING } from '@/lib/reflectionPlan';
 import CoachDisclaimer from '@/components/CoachDisclaimer';
 import CoachNotice from '@/components/CoachNotice';
 import { playNotificationChime } from '@/lib/coachNoticeSound';
@@ -74,6 +79,7 @@ export default function CommandCenterPage() {
 
   // AI Coach State
   const [reflectionInput, setReflectionInput] = useState('');
+  const [reflectionCycles, setReflectionCycles] = useState(2);
   const [aiFeedback, setAiFeedback] = useState(null);
   const [reflectionError, setReflectionError] = useState('');
   const [stressFeedback, setStressFeedback] = useState(null);
@@ -124,40 +130,11 @@ export default function CommandCenterPage() {
     const isDistracted = s.toLowerCase().includes('distract');
     const isMotivated = s.toLowerCase().includes('motivat') || s.toLowerCase().includes('energetic');
 
-    if (isStressed) {
-      return {
-        title: "Gentle Focus (Stressed)",
-        state: "Stressed",
-        rhythm: "15m Focus / 5m Rest",
-        sessions: 2,
-        message: "Coach recommended a calming 15-minute gentle focus interval across 2 short cycles with lighter tasks first to ease mental tension."
-      };
-    }
-    if (isDistracted) {
-      return {
-        title: "Strict Pomodoro (Distracted)",
-        state: "Distracted",
-        rhythm: "20m Focus / 5m Rest",
-        sessions: 3,
-        message: "Coach recommended 20-minute structured single-task intervals across 3 paced sessions to eliminate task-switching."
-      };
-    }
-    if (isMotivated) {
-      return {
-        title: "Flow State (Motivated)",
-        state: "Motivated",
-        rhythm: "50m Focus / 10m Rest",
-        sessions: 4,
-        message: "Coach recommended tackling high-impact priority tasks across 4 deep work cycles to capitalize on peak alertness."
-      };
-    }
-    return {
-      title: "Balanced Cadence (Engaged)",
-      state: "Engaged",
-      rhythm: "25m Focus / 5m Rest",
-      sessions: 4,
-      message: "Coach recommended steady 25-minute Pomodoro intervals across 4 cycles with active BreakGate pacing."
-    };
+    const state = isStressed ? 'Stressed' : isDistracted ? 'Distracted' : isMotivated ? 'Motivated' : 'Engaged';
+    const pacing = STUDY_PACING[state];
+    return { title: `Suggested pace (${state})`, state,
+      rhythm: `${pacing.workMinutes}m Focus / ${pacing.breakMinutes}m Rest`, sessions: 2,
+      message: 'An adjustable study suggestion. Choose a pace that fits your needs.' };
   };
 
   const applyEntryAiRhythm = (reply) => {
@@ -165,13 +142,11 @@ export default function CommandCenterPage() {
     setIsFocus(true);
     setTimerPreset('Custom');
 
-    let wMin = 25, bMin = 5;
-    if (reply?.rhythm?.includes('15m')) { wMin = 15; bMin = 5; }
-    else if (reply?.rhythm?.includes('20m')) { wMin = 20; bMin = 5; }
-    else if (reply?.rhythm?.includes('50m')) { wMin = 50; bMin = 10; }
-    else if (reply?.rhythm?.includes('60m')) { wMin = 60; bMin = 10; }
-
-    const targetSess = Math.min(5, Math.max(1, reply?.sessions || (reply?.state === 'Stressed' ? 2 : 4)));
+    const cadence = reply?.rhythm?.match(/(\d+)m Focus \/ (\d+)m Rest/);
+    const pacing = STUDY_PACING[reply?.state] || STUDY_PACING.Engaged;
+    const wMin = cadence ? Math.min(120, Math.max(5, Number(cadence[1]))) : pacing.workMinutes;
+    const bMin = cadence ? Math.min(60, Math.max(1, Number(cadence[2]))) : pacing.breakMinutes;
+    const targetSess = Math.min(5, Math.max(1, reply?.sessions || reflectionCycles));
     setCustomWorkTime({ min: wMin, sec: 0 });
     setCustomBreakTime({ min: bMin, sec: 0 });
     setCustomSessions(targetSess);
@@ -1164,7 +1139,7 @@ export default function CommandCenterPage() {
 
     const breakTime = timerPreset === 'Custom' 
       ? customBreakDuration 
-      : timerPreset === '50/10' ? 10 * 60 : timerPreset === '15/3' ? 3 * 60 : timerPreset === '90/20' ? 20 * 60 : 5 * 60;
+      : (parseInt(timerPreset.split('/')[1]) || 5) * 60;
     
     setIsActive(true);
     setIsFocus(false);
@@ -1336,7 +1311,7 @@ export default function CommandCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         telemetryState: {
-          activeTimerState: nextState,
+          activeTimerState: { ...nextState, deviceType: browserDeviceType() },
           updatedAt: new Date().toISOString()
         }
       })
@@ -1441,7 +1416,7 @@ export default function CommandCenterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telemetryState: {
-            activeTimerState: nextState,
+            activeTimerState: { ...nextState, deviceType: browserDeviceType() },
             updatedAt: new Date().toISOString()
           },
           timerPreferences: {
@@ -1540,7 +1515,7 @@ export default function CommandCenterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         telemetryState: {
-          activeTimerState: nextState,
+          activeTimerState: { ...nextState, deviceType: browserDeviceType() },
           customTimer: {
             customWorkTime,
             customBreakTime,
@@ -1979,25 +1954,26 @@ export default function CommandCenterPage() {
       try {
         const response = await fetch('/api/ai/coach', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-          body: JSON.stringify({ text, tasks: activeTasks, recentAdvice: pastEntries.slice(0, 2).map(entry => entry.aiReply?.message || '') }),
+          body: JSON.stringify({ text, tasks: activeTasks, targetSessions: reflectionCycles, recentAdvice: pastEntries.slice(0, 2).map(entry => entry.aiReply?.message || '') }),
         });
+        window.dispatchEvent(new Event('ifocus_ai_usage_updated'));
         const result = await response.json();
         if (response.status === 401 || response.status === 403) {
           setReflectionError(result.error || (response.status === 403 ? AI_VERIFICATION_MESSAGE : 'Please sign in to use the AI Coach.'));
           return;
         }
-        if (response.status === 422) {
+        if (response.status === 422 || response.status === 429) {
           setReflectionError(result.error || 'Please describe how you feel or what you want to study.');
           return;
         }
         if (!response.ok) throw new Error('Coach is temporarily unavailable');
-        data = normalizeReflectionPlan(result, text, activeTasks);
+        data = normalizeReflectionPlan(result, text, activeTasks, reflectionCycles);
         if (result.responseSource === 'fallback') {
           data.responseSource = 'fallback';
           data.fallbackReason = result.fallbackReason;
         }
       } catch {
-        data = generateCognitiveFallback(text, activeTasks);
+        data = generateCognitiveFallback(text, activeTasks, undefined, null, reflectionCycles);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -2150,6 +2126,8 @@ export default function CommandCenterPage() {
             </div>
           </div>
         </div>
+
+        <TaskEffortGuide />
 
         {/* Quick Add Bar */}
         <div className="task-quick-add" style={{
@@ -2887,7 +2865,7 @@ export default function CommandCenterPage() {
 
         {/* Presets Row */}
         <div className="pomodoro-settings" style={{ margin: 0 }}>
-          {['25/5', '50/10', '15/3', '90/20'].map(preset => (
+          {TIMER_PRESETS.map(preset => (
             <button 
               key={preset}
               className={`pomodoro-preset ${timerPreset === preset ? 'active' : ''}`}
@@ -3109,6 +3087,7 @@ export default function CommandCenterPage() {
             </div>
             <CoachDisclaimer />
           </div>
+          <AIUsageNotice feature="reflection" />
           <p className={aiAvailable ? 'subtitle' : 'account-verification-warning'} style={{ fontSize: '0.78rem', marginBottom: '0.6rem', lineHeight: '1.3' }}>
             {aiAvailable ? 'Clear your mind. AI coach will adapt your plan.' : AI_VERIFICATION_MESSAGE}
           </p>
@@ -3172,6 +3151,13 @@ export default function CommandCenterPage() {
             }}
           ></textarea>
           {reflectionError && <p id="reflection-input-error" role="alert" className="reflection-input-error">{reflectionError}</p>}
+          <div className="reflection-cycle-selection">
+            <label htmlFor="reflection-cycles">Study cycles</label>
+            <select id="reflection-cycles" value={reflectionCycles} onChange={event => setReflectionCycles(Number(event.target.value))} disabled={isSubmittingReflection}>
+              {[1, 2, 3, 4, 5].map(count => <option key={count} value={count}>{count} {count === 1 ? 'cycle' : 'cycles'}</option>)}
+            </select>
+            <small>Choose what fits your time. You can adjust the suggested timer.</small>
+          </div>
           
           {/* Submit Button */}
           <button 
@@ -3352,6 +3338,7 @@ export default function CommandCenterPage() {
         <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(15, 23, 42, 0.72)' }}>
           <div role="dialog" aria-modal="true" aria-labelledby="safety-support-title" style={{ background: '#fff', borderRadius: '20px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto' }}>
             <h2 id="safety-support-title" style={{ fontSize: '1.3rem', marginBottom: '1rem' }}>{aiFeedback.title}</h2>
+            <LocalSupportOptions />
             <p style={{ lineHeight: 1.65 }}>{aiFeedback.message}</p>
             {aiFeedback.contacts?.length > 0 && (
               <div role="group" aria-label="Philippines support contacts" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
